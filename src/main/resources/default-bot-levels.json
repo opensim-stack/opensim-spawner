@@ -1,0 +1,244 @@
+{
+  "GOVERNOR": {
+    "level": 0,
+    "appearance": "Professional",
+    "containers": {
+      "%env.OPENSIM_OPENCODE_IMAGE%": {
+        "name": "opensim-opencode-%bot.first%-%bot.last%",
+        "environment": {
+          "OPENCODE_HOST": "%env.OPENCODE_HOST%",
+          "OPENCODE_PORT": "%env.OPENCODE_PORT%",
+          "OPENSIM_BOT_HANDLER_FIRSTNAME": "%env.OPENSIM_BOT_HANDLER_FIRSTNAME%",
+          "OPENSIM_BOT_HANDLER_LASTNAME": "%env.OPENSIM_BOT_HANDLER_LASTNAME%",
+          "OPENCODE_PROJECT_DIR": "/workspace/bots/%bot.first%-%bot.last%",
+          "OPENCODE_CONFIG" : "/config/bots/%bot.first%-%bot.last%/opencode.json",
+          "OPENCODE_SERVER_PASSWORD": "%bot.password%",
+          "OPENCODE_SERVER_USERNAME": "%bot.first%%bot.last%",
+          "OPENCODE_DEFAULT_PROMPT_PATH":  "/config/bots/%bot.first%-%bot.last%/AGENTS.md"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
+          "opencode-state-%bot.first%-%bot.last%": "/root/.local/state/opencode",
+          "opencode-tool-output-%bot.first%-%bot.last%": "/root/.local/share/opencode/tool-output",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-config": "/root/.config/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-data": "/root/.local/share/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-cache": "/root/.cache/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
+        },
+        "files": {
+          "/config/bots/%bot.first%-%bot.last%/opencode.json": "governor-opencode.json",
+          "/config/bots/%bot.first%-%bot.last%/AGENTS.md": "agent-md/GOVERNOR.md"
+        }
+      },
+      "%env.OPENSIM_METAVERSE2MCP_IMAGE%": {
+        "name": "opensim-metaverse2mcp-%bot.first%-%bot.last%",
+        "environment": {
+          "METAVERSE_MCP_TRANSPORT": "%env.METAVERSE_MCP_TRANSPORT%",
+          "METAVERSE_MCP_HOST": "%env.METAVERSE_MCP_HOST%",
+          "METAVERSE_MCP_PORT": "%env.METAVERSE_MCP_PORT%",
+          "METAVERSE_MCP_HTTP_ENDPOINT": "%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+          "METAVERSE_MCP_DIAGNOSTICS": "%env.METAVERSE_MCP_DIAGNOSTICS%",
+          "METAVERSE_MCP_HTTP_BEARER_TOKEN": "%bot.token%",
+          "SPAWNER_HOST": "%env.SPAWNER_HOST%",
+          "SPAWNER_PORT": "%env.OPENSIM_SPAWNER_HTTP_PORT%",
+          "SPAWNER_TOKEN": "%env.OPENSIM_SPAWNER_TOKEN%",
+          "OPENSIM_NETWORK": "%env.OPENSIM_NETWORK%",
+          "OPENCODE_SERVER_PASSWORD": "%bot.password%",
+          "OPENCODE_SERVER_USERNAME": "%bot.first%%bot.last%",
+          "OPENCODE_PORT": "%env.OPENCODE_PORT%",
+          "OPENCODE_HOST": "opensim-opencode-%bot.first%-%bot.last%",
+          "OPENCODE_SCHEME": "%env.OPENCODE_SCHEME%",
+          "OPENCODE_INITIAL_PROVIDER": "%env.OPENCODE_INITIAL_PROVIDER%",
+          "OPENCODE_INITIAL_MODEL": "%env.OPENCODE_INITIAL_MODEL%",
+          "OPENCODE_REQUEST_TIMEOUT_SECONDS": "%env.OPENCODE_REQUEST_TIMEOUT_SECONDS%",
+          "OPENSIM_BOT_HANDLER_FIRSTNAME": "%env.OPENSIM_BOT_HANDLER_FIRSTNAME%",
+          "OPENSIM_BOT_HANDLER_LASTNAME": "%env.OPENSIM_BOT_HANDLER_LASTNAME%",
+          "OPENSIM_SPAWNER_PARENT": "%bot.parent%",
+          "OPENSIM_SPAWNER_LEVEL": "%bot.level%",
+          "OPENSIM_LOGIN_FIRSTNAME": "%bot.first%",
+          "OPENSIM_LOGIN_LASTNAME": "%bot.last%",
+          "OPENSIM_LOGIN_PASSWORD": "%bot.password%",
+          "OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
+          "OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
+          "VOICE_ROUTING_ENABLED": "%env.VOICE_ROUTING_ENABLED%",
+          "VOICE_BACKEND": "%env.VOICE_BACKEND%",
+          "PIPER_HOST": "%env.PIPER_HOST%",
+          "PIPER_PORT": "%env.PIPER_PORT%",
+          "PIPER_SCHEME": "%env.PIPER_SCHEME%",
+          "PIPER_TTS_PATH": "%env.PIPER_TTS_PATH%",
+          "PIPER_VOICE_PATH": "%env.PIPER_VOICE_PATH%",
+          "PIPER_RESAMPLE_PATH": "%env.PIPER_RESAMPLE_PATH%",
+          "PIPER_DEFAULT_VOICE": "%env.PIPER_DEFAULT_VOICE%",
+          "PROMPT_HANDLING_ENABLED": "%env.PROMPT_HANDLING_ENABLED%",
+          "PROMPT_PROJECT_AGENTS_ENABLED": "%env.PROMPT_PROJECT_AGENTS_ENABLED%",
+          "PROMPT_NOTECARD_REQUIRE_HANDLER": "%env.PROMPT_NOTECARD_REQUIRE_HANDLER%",
+          "PROMPT_PROJECT_AGENTS_FILE": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
+          "OPENCODE_DEFAULT_PROMPT_PATH": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
+          "WEAR_FOLDER_NAME": "%env.WEAR_FOLDER_NAME%"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
+        }
+      }
+    }
+  },
+  "BUILDER": {
+    "level": 1,
+    "appearance": "Construction",
+    "containers": {
+      "%env.OPENSIM_OPENCODE_IMAGE%": {
+        "name": "opensim-opencode-%bot.first%-%bot.last%",
+        "environment": {
+          "OPENCODE_HOST": "%env.OPENCODE_HOST%",
+          "OPENCODE_PORT": "%env.OPENCODE_PORT%",
+          "OPENSIM_BOT_HANDLER_FIRSTNAME": "%env.OPENSIM_BOT_HANDLER_FIRSTNAME%",
+          "OPENSIM_BOT_HANDLER_LASTNAME": "%env.OPENSIM_BOT_HANDLER_LASTNAME%",
+          "OPENCODE_PROJECT_DIR": "/workspace/bots/%bot.first%-%bot.last%",
+          "OPENCODE_CONFIG" : "/config/bots/%bot.first%-%bot.last%/opencode.json",
+          "OPENCODE_SERVER_PASSWORD": "%bot.password%",
+          "OPENCODE_SERVER_USERNAME": "%bot.first%%bot.last%",
+          "OPENCODE_DEFAULT_PROMPT_PATH":  "/config/bots/%bot.first%-%bot.last%/AGENTS.md"
+        },
+       "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
+          "opencode-state-%bot.first%-%bot.last%": "/root/.local/state/opencode",
+          "opencode-tool-output-%bot.first%-%bot.last%": "/root/.local/share/opencode/tool-output",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-config": "/root/.config/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-data": "/root/.local/share/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-cache": "/root/.cache/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
+        },
+        "files": {
+          "/config/bots/%bot.first%-%bot.last%/opencode.json": "builder-opencode.json",
+          "/config/bots/%bot.first%-%bot.last%/AGENTS.md": "agent-md/BUILDER.md"
+        }
+      },
+      "%env.OPENSIM_METAVERSE2MCP_IMAGE%": {
+        "name": "opensim-metaverse2mcp-%bot.first%-%bot.last%",
+        "environment": {
+          "METAVERSE_MCP_TRANSPORT": "%env.METAVERSE_MCP_TRANSPORT%",
+          "METAVERSE_MCP_HOST": "%env.METAVERSE_MCP_HOST%",
+          "METAVERSE_MCP_PORT": "%env.METAVERSE_MCP_PORT%",
+          "METAVERSE_MCP_HTTP_ENDPOINT": "%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+          "METAVERSE_MCP_DIAGNOSTICS": "%env.METAVERSE_MCP_DIAGNOSTICS%",
+          "METAVERSE_MCP_HTTP_BEARER_TOKEN": "%bot.token%",
+          "SPAWNER_HOST": "%env.SPAWNER_HOST%",
+          "SPAWNER_PORT": "%env.OPENSIM_SPAWNER_HTTP_PORT%",
+          "SPAWNER_TOKEN": "%env.OPENSIM_SPAWNER_TOKEN%",
+          "OPENSIM_NETWORK": "%env.OPENSIM_NETWORK%",
+          "OPENCODE_SERVER_PASSWORD": "%bot.password%",
+          "OPENCODE_SERVER_USERNAME": "%bot.first%%bot.last%",
+          "OPENCODE_PORT": "%env.OPENCODE_PORT%",
+          "OPENCODE_HOST": "opensim-opencode-%bot.first%-%bot.last%",
+          "OPENCODE_SCHEME": "%env.OPENCODE_SCHEME%",
+          "OPENCODE_REQUEST_TIMEOUT_SECONDS": "%env.OPENCODE_REQUEST_TIMEOUT_SECONDS%",
+          "OPENCODE_INITIAL_PROVIDER": "%env.OPENCODE_INITIAL_PROVIDER%",
+          "OPENCODE_INITIAL_MODEL": "%env.OPENCODE_INITIAL_MODEL%",
+          "OPENSIM_BOT_HANDLER_FIRSTNAME": "%env.OPENSIM_BOT_HANDLER_FIRSTNAME%",
+          "OPENSIM_BOT_HANDLER_LASTNAME": "%env.OPENSIM_BOT_HANDLER_LASTNAME%",
+          "OPENSIM_SPAWNER_PARENT": "%bot.parent%",
+          "OPENSIM_SPAWNER_LEVEL": "%bot.level%",
+          "OPENSIM_LOGIN_FIRSTNAME": "%bot.first%",
+          "OPENSIM_LOGIN_LASTNAME": "%bot.last%",
+          "OPENSIM_LOGIN_PASSWORD": "%bot.password%",
+          "OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
+          "OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
+          "VOICE_ROUTING_ENABLED": "%env.VOICE_ROUTING_ENABLED%",
+          "VOICE_BACKEND": "%env.VOICE_BACKEND%",
+          "PIPER_HOST": "%env.PIPER_HOST%",
+          "PIPER_PORT": "%env.PIPER_PORT%",
+          "PIPER_SCHEME": "%env.PIPER_SCHEME%",
+          "PIPER_TTS_PATH": "%env.PIPER_TTS_PATH%",
+          "PIPER_VOICE_PATH": "%env.PIPER_VOICE_PATH%",
+          "PIPER_RESAMPLE_PATH": "%env.PIPER_RESAMPLE_PATH%",
+          "PIPER_DEFAULT_VOICE": "%env.PIPER_DEFAULT_VOICE%",
+          "PROMPT_HANDLING_ENABLED": "%env.PROMPT_HANDLING_ENABLED%",
+          "OPENCODE_DEFAULT_PROMPT_PATH": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
+          "WEAR_FOLDER_NAME": "%env.WEAR_FOLDER_NAME%"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
+        }
+      }
+    }
+  },
+  "ACTOR": {
+    "level": 2,
+    "appearance": "Actor",
+    "containers": {
+      "%env.OPENSIM_OPENCODE_IMAGE%": {
+        "name": "opensim-opencode-%bot.first%-%bot.last%",
+        "environment": {
+          "OPENCODE_HOST": "%env.OPENCODE_HOST%",
+          "OPENCODE_PORT": "%env.OPENCODE_PORT%",
+          "OPENCODE_PROJECT_DIR": "/root/.local/state/opencode",
+          "OPENCODE_CONFIG" : "/config/bots/%bot.first%-%bot.last%/opencode.json",
+          "OPENSIM_BOT_HANDLER_FIRSTNAME": "%env.OPENSIM_BOT_HANDLER_FIRSTNAME%",
+          "OPENSIM_BOT_HANDLER_LASTNAME": "%env.OPENSIM_BOT_HANDLER_LASTNAME%",
+          "OPENCODE_SERVER_PASSWORD": "%bot.password%",
+          "OPENCODE_SERVER_USERNAME": "%bot.first%%bot.last%",
+          "OPENCODE_DEFAULT_PROMPT_PATH":  "/config/bots/%bot.first%-%bot.last%/AGENTS.md"
+        },
+       "volumes": {
+          "opencode-state-%bot.first%-%bot.last%": "/root/.local/state/opencode",
+          "opencode-tool-output-%bot.first%-%bot.last%": "/root/.local/share/opencode/tool-output",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-config": "/root/.config/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-data": "/root/.local/share/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opencode-cache": "/root/.cache/opencode",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
+        },
+        "files": {
+          "/config/bots/%bot.first%-%bot.last%/opencode.json": "actor-opencode.json",
+          "/config/bots/%bot.first%-%bot.last%/AGENTS.md": "agent-md/ACTOR.md"
+        }
+      },
+      "%env.OPENSIM_METAVERSE2MCP_IMAGE%": {
+        "name": "opensim-metaverse2mcp-%bot.first%-%bot.last%",
+        "environment": {
+          "METAVERSE_MCP_TRANSPORT": "%env.METAVERSE_MCP_TRANSPORT%",
+          "METAVERSE_MCP_HOST": "%env.METAVERSE_MCP_HOST%",
+          "METAVERSE_MCP_PORT": "%env.METAVERSE_MCP_PORT%",
+          "METAVERSE_MCP_HTTP_ENDPOINT": "%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+          "METAVERSE_MCP_DIAGNOSTICS": "%env.METAVERSE_MCP_DIAGNOSTICS%",
+          "METAVERSE_MCP_HTTP_BEARER_TOKEN": "%bot.token%",
+          "SPAWNER_HOST": "%env.SPAWNER_HOST%",
+          "SPAWNER_PORT": "%env.OPENSIM_SPAWNER_HTTP_PORT%",
+          "SPAWNER_TOKEN": "%env.OPENSIM_SPAWNER_TOKEN%",
+          "OPENSIM_NETWORK": "%env.OPENSIM_NETWORK%",
+          "OPENCODE_SERVER_PASSWORD": "%bot.password%",
+          "OPENCODE_SERVER_USERNAME": "%bot.first%%bot.last%",
+          "OPENCODE_PORT": "%env.OPENCODE_PORT%",
+          "OPENCODE_HOST": "opensim-opencode-%bot.first%-%bot.last%",
+          "OPENCODE_SCHEME": "%env.OPENCODE_SCHEME%",
+          "OPENCODE_REQUEST_TIMEOUT_SECONDS": "%env.OPENCODE_REQUEST_TIMEOUT_SECONDS%",
+          "OPENCODE_INITIAL_PROVIDER": "%env.OPENCODE_INITIAL_PROVIDER%",
+          "OPENCODE_INITIAL_MODEL": "%env.OPENCODE_INITIAL_MODEL%",
+          "OPENSIM_BOT_HANDLER_FIRSTNAME": "%env.OPENSIM_BOT_HANDLER_FIRSTNAME%",
+          "OPENSIM_BOT_HANDLER_LASTNAME": "%env.OPENSIM_BOT_HANDLER_LASTNAME%",
+          "OPENSIM_SPAWNER_PARENT": "%bot.parent%",
+          "OPENSIM_SPAWNER_LEVEL": "%bot.level%",
+          "OPENSIM_LOGIN_FIRSTNAME": "%bot.first%",
+          "OPENSIM_LOGIN_LASTNAME": "%bot.last%",
+          "OPENSIM_LOGIN_PASSWORD": "%bot.password%",
+          "OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
+          "OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
+          "VOICE_ROUTING_ENABLED": "%env.VOICE_ROUTING_ENABLED%",
+          "VOICE_BACKEND": "%env.VOICE_BACKEND%",
+          "PIPER_HOST": "%env.PIPER_HOST%",
+          "PIPER_PORT": "%env.PIPER_PORT%",
+          "PIPER_SCHEME": "%env.PIPER_SCHEME%",
+          "PIPER_TTS_PATH": "%env.PIPER_TTS_PATH%",
+          "PIPER_VOICE_PATH": "%env.PIPER_VOICE_PATH%",
+          "PIPER_RESAMPLE_PATH": "%env.PIPER_RESAMPLE_PATH%",
+          "PIPER_DEFAULT_VOICE": "%env.PIPER_DEFAULT_VOICE%",
+          "PROMPT_HANDLING_ENABLED": "%env.PROMPT_HANDLING_ENABLED%",
+          "OPENCODE_DEFAULT_PROMPT_PATH": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
+          "WEAR_FOLDER_NAME": "%env.WEAR_FOLDER_NAME%"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
+        }
+      }
+    }
+  }
+}

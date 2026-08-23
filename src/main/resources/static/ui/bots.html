@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Bots</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <div class="relative z-10 min-h-screen flex">
+    <spawner-side-menu data-active="bots"></spawner-side-menu>
+
+    <main class="flex-1 p-6 lg:p-10">
+      <div class="max-w-7xl mx-auto">
+        <div class="mb-8 flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-3xl lg:text-4xl font-bold text-white">Bots</h1>
+            <p class="text-gray-400">Manage bot lifecycle and monitor container state.</p>
+          </div>
+          <button id="refresh-bots" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">
+            Refresh
+          </button>
+        </div>
+
+        <div id="bots-grid" class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3"></div>
+        <div id="bots-empty" class="hidden bg-dark-800/80 backdrop-blur border border-neon-primary/20 rounded-xl p-8 text-gray-300">
+          No bots found.
+        </div>
+      </div>
+
+      <button id="open-create-bot" aria-label="Add bot"
+        class="fixed bottom-8 right-8 z-30 w-14 h-14 rounded-full bg-neon-primary text-white text-3xl leading-none shadow-[0_0_25px_rgba(139,92,246,0.55)] hover:bg-violet-500 transition-colors btn-glow">
+        +
+      </button>
+
+      <div id="create-bot-modal" class="hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm p-4">
+        <div class="max-w-lg mx-auto mt-16 bg-dark-800/95 border border-neon-primary/30 rounded-2xl p-6 neon-border">
+          <div class="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 id="create-bot-title" class="text-2xl font-bold text-white">Create Governor Bot</h2>
+              <p id="create-bot-subtitle" class="text-sm text-gray-300 mt-1"></p>
+            </div>
+            <button id="close-create-bot" class="text-gray-300 hover:text-white text-xl" aria-label="Close">x</button>
+          </div>
+
+          <form id="create-bot-form" class="space-y-4">
+            <input type="hidden" id="create-mode" value="governor">
+            <input type="hidden" id="create-parent" value="">
+
+            <div id="create-bot-level-row" class="hidden">
+              <label for="create-level" class="block text-sm text-gray-300">Child bot level</label>
+              <select id="create-level" name="level"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </select>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="block">
+                <span class="text-sm text-gray-300">First name</span>
+                <input id="create-first" name="first" required
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                  type="text">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Last name</span>
+                <input id="create-last" name="last" required
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                  type="text">
+              </label>
+            </div>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Email (optional)</span>
+              <input id="create-email" name="email"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                type="email">
+            </label>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Model (optional)</span>
+              <input id="create-model" name="model"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                type="text" placeholder="Ruth">
+            </label>
+
+            <p id="create-bot-info" class="text-xs text-gray-400"></p>
+            <p id="create-bot-error" class="hidden text-sm text-rose-300"></p>
+
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" id="cancel-create-bot"
+                class="px-4 py-2 rounded-lg border border-gray-500/40 text-gray-200 hover:bg-dark-700 transition-colors">Cancel</button>
+              <button id="submit-create-bot" type="submit"
+                class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Create Bot</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="toast-container" class="fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 pointer-events-none"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/ui/menu-component.js"></script>
+  <script src="/ui/ui-common.js"></script>
+  <script type="module" src="/ui/bots.js"></script>
+</body>
+</html>

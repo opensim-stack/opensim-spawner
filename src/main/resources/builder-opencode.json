@@ -1,0 +1,41 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "read": {
+      "/workspace/bots/%bot.first%-%bot.last%/**": "allow",
+      "/workspace/bots/%bot.first%-%bot.last%": "allow",
+      "*": "deny"
+    },
+    "write": {
+      "/workspace/bots/%bot.first%-%bot.last%/**": "allow",
+      "/workspace/bots/%bot.first%-%bot.last%": "allow",
+      "*": "deny"
+    },
+    "edit": {
+      "*": "deny"
+    },
+    "bash": {
+      "*": "deny"
+    },
+    "external_directory": {
+      "/root/.local/share/opencode/tool-output": "allow",
+      "/root/.local/share/opencode/tool-output/*": "allow",
+      "*": "deny"
+    }
+  },
+  "mcp": {
+    "metaverse_mcp": {
+      "type": "remote",
+      "url": "http://opensim-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer %bot.token%"
+      }
+    },
+    "blender_mcp": {
+      "type": "remote",
+      "url": "http://opensim-blender:%env.BLENDER_MCP_PORT%%env.CONSOLE_MCP_HTTP_ENDPOINT%",
+      "enabled": true
+    }
+  }
+}

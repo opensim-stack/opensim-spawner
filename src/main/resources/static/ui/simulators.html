@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Simulators</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <div class="relative z-10 min-h-screen flex">
+    <spawner-side-menu data-active="simulators"></spawner-side-menu>
+
+    <main class="flex-1 p-6 lg:p-10">
+      <div class="max-w-5xl mx-auto">
+        <h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Simulators</h1>
+        <p class="text-gray-400 mb-8">Simulator controls are coming next.</p>
+
+        <section class="feature-card bg-dark-800/80 backdrop-blur p-8 rounded-xl">
+          <h2 class="text-xl font-semibold text-white mb-2">Coming Soon</h2>
+          <p class="text-gray-300">This page is reserved for simulator-level operations and status views.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/ui/menu-component.js"></script>
+  <script src="/ui/ui-common.js"></script>
+</body>
+</html>

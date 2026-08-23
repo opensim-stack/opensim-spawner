@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <main class="relative z-10 min-h-screen p-[5vh]">
+    <section class="h-[90vh] w-full bg-dark-800/90 border border-neon-primary/30 rounded-2xl neon-border flex flex-col overflow-hidden">
+      <div class="px-5 py-3 border-b border-neon-primary/20 flex items-center justify-between gap-3">
+        <h1 class="text-lg font-semibold text-white truncate">Container Console: <span id="console-container-name" class="text-neon-accent"></span></h1>
+      </div>
+
+      <div class="px-5 py-3 border-b border-neon-primary/20 flex items-center gap-2">
+        <input id="console-command" type="text" value="/bin/bash"
+          class="flex-1 rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary font-mono text-sm">
+        <button id="console-execute" class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Execute</button>
+      </div>
+
+      <div class="flex-1 min-h-0 p-4">
+        <div id="terminal" class="h-full w-full rounded-lg border border-neon-primary/20 bg-black/55"></div>
+      </div>
+    </section>
+
+    <div id="toast-container" class="fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 pointer-events-none"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="/ui/ui-common.js"></script>
+  <script src="/ui/console.js"></script>
+</body>
+</html>
