@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Users</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <div class="relative z-10 min-h-screen flex">
+    <spawner-side-menu data-active="users"></spawner-side-menu>
+
+    <main class="flex-1 p-6 lg:p-10">
+      <div class="max-w-5xl mx-auto space-y-8">
+        <div>
+          <h1 class="text-3xl lg:text-4xl font-bold text-white">Users</h1>
+          <p class="text-gray-400">Create OpenSim users, find account details, and reset passwords.</p>
+          <div id="users-grid-service-pill" class="mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs border-amber-400/40 bg-amber-500/10 text-amber-200">
+            <span class="w-2 h-2 rounded-full bg-amber-300"></span>
+            <span>Grid Login: Unavailable</span>
+          </div>
+          <p id="users-grid-service-warning" class="hidden mt-2 text-sm text-amber-300">User management is disabled until a ROBUST or STANDALONE simulator is active.</p>
+        </div>
+
+        <section class="feature-card bg-dark-800/80 backdrop-blur rounded-xl p-6 border border-neon-primary/20">
+          <h2 class="text-xl font-semibold text-white mb-4">Create User</h2>
+          <form id="create-user-form" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="block">
+                <span class="text-sm text-gray-300">First name</span>
+                <input id="create-first" required type="text"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Last name</span>
+                <input id="create-last" required type="text"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+            </div>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Email</span>
+              <input id="create-email" required type="email"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Model user (first + last)</span>
+              <input id="create-model" required type="text" placeholder="Governor Bot"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="block">
+                <span class="text-sm text-gray-300">Password</span>
+                <input id="create-password" required type="password"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Confirm password</span>
+                <input id="create-password-confirm" required type="password"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+            </div>
+
+            <p id="create-user-error" class="hidden text-sm text-rose-300"></p>
+
+            <div class="flex justify-end">
+              <button id="create-user-submit" type="submit"
+                class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Create</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="feature-card bg-dark-800/80 backdrop-blur rounded-xl p-6 border border-neon-primary/20">
+          <h2 class="text-xl font-semibold text-white mb-4">Find User</h2>
+
+          <form id="find-user-form" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="block">
+                <span class="text-sm text-gray-300">First name</span>
+                <input id="find-first" required type="text"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Last name</span>
+                <input id="find-last" required type="text"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+            </div>
+
+            <div class="flex justify-end">
+              <button type="submit"
+                class="px-4 py-2 rounded-lg border border-neon-primary/40 text-gray-100 hover:bg-neon-primary/10 transition-colors">Find</button>
+            </div>
+          </form>
+
+          <div id="find-result" class="hidden mt-5 pt-5 border-t border-neon-primary/20">
+            <h3 class="text-lg font-semibold text-white">Account Details</h3>
+            <div id="find-result-content" class="mt-3 text-sm text-gray-200 space-y-2"></div>
+
+            <div id="reset-password-section" class="hidden mt-6 pt-5 border-t border-neon-primary/20">
+              <h4 class="text-base font-semibold text-white">Reset Password</h4>
+              <form id="reset-password-form" class="mt-3 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <label class="block">
+                    <span class="text-sm text-gray-300">New password</span>
+                    <input id="reset-password" required type="password"
+                      class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+                  </label>
+                  <label class="block">
+                    <span class="text-sm text-gray-300">Confirm password</span>
+                    <input id="reset-password-confirm" required type="password"
+                      class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+                  </label>
+                </div>
+                <p id="reset-password-error" class="hidden text-sm text-rose-300"></p>
+                <div class="flex justify-end">
+                  <button id="reset-password-submit" type="submit"
+                    class="px-4 py-2 rounded-lg bg-amber-600/20 border border-amber-400/40 text-amber-100 hover:bg-amber-600/30 transition-colors">Reset</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="toast-container" class="fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 pointer-events-none"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/ui/menu-component.js"></script>
+  <script src="/ui/ui-common.js"></script>
+  <script type="module" src="/ui/users.js"></script>
+</body>
+</html>

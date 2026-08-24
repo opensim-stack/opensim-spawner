@@ -1,30 +1,11 @@
 # opensim-spawner
 
-[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-bithatch%2Fopensim--spawner-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/repository/docker/bithatch/opensim-spawner)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-bithatch%2Fopensim--spawner-latest?logo=docker&logoColor=white)](https://hub.docker.com/repository/docker/bithatch/opensim-spawner)
 
-HTTP API service that creates and coordinates OpenSim bot-side containers from a strict bot-level profile.
+HTTP API service that creates and coordinates OpenSim simulators and bot containers from a strict profilse.
 
 *This is part of the [opensim-stack](https://opensim-stack.github.io/) and is intended to be used in conjunction with other parts of the stack. See [Docs](https://opensim-stack.github.io/docs/index.html) for full details.*
 
-## What is implemented
-
-- Spring Web HTTP API:
-  - `GET /api/bot` lists bots
-  - `GET /api/bot/{first}/{last}` returns current associated container status JSON including `parent` and `children`
-  - `POST /api/bot/{first}/{last}` creates bot from form or multipart fields (requires `parent`, blank allowed temporarily)
-  - `PATCH /api/bot/{first}/{last}` performs bot action(s), currently `action=start|stop|restart`
-  - `DELETE /api/bot/{first}/{last}` shuts down bot containers and deletes container volumes
-- Web UI:
-  - `/` -> `/index.html` -> `/ui/index.html` -> `/ui/bots.html`
-  - UI pages are under `/ui/*` and require login at `/ui/login.html`
-  - UI login validates `OPENSIM_CONSOLE_USER` and `OPENSIM_CONSOLE_PASS`
-- Optional bearer auth via `OPENSIM_SPAWNER_TOKEN`
-- Bot state persistence in `/data/<first>-<last>.json`
-- Startup dynamic-port resume from existing state files
-- Profile loading from `/config/bot-levels.json` or bundled `default-bot-levels.json`
-- Template substitution for `%bot.*`, `%ports.*`, `%env.*`
-- Docker orchestration using Docker Java SDK
-- OpenSim user creation through copied `OpensimRESTConsole`
 
 ## Build
 
@@ -44,9 +25,24 @@ mvn test
 OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-boot:run
 ```
 
+## Default container volumes:
+
+- `/config`
+- `/data`
+- `/workspace`
+
+
+## Image Names
+
+| Name | Default Value |
+| `OPENSIM_OPENCODE_IMAGE` | `bithatch/opensim-opencode:latest` |
+| `OPENSIM_METAVERSE2MCP_IMAGE` | `bithatch/opensim-metaverse2mcp:latest` |
+| `OPENSIM_SIMULATOR_IMAGE` | `bithatch/opensim-simulator:latest` |
+
 ## Main environment variables
 
 | Name | Default Value |
+| `COMPOSE_PROJECT_NAME`| `opensim-ai` |
 | `OPENSIM_SPAWNER_HTTP_HOST`| `0.0.0.0` |
 | `OPENSIM_SPAWNER_HTTP_PORT`| `8993` |
 | `OPENSIM_SPAWNER_TOKEN` |  |
@@ -65,6 +61,33 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `BOT_APPEARNCE` | `Cube Bot` |
 | `BOT_GENDER` | `neutral` |
 
+## Environment Variables Passed To `simulator`
+
+| Name | Default Value |
+| `MARIADB_HOST` | `mariadb` |
+| `MARIADB_DATABASE` | `opensim` |
+| `MARIADB_USER` | `opensim` |
+| `MARIADB_PASSWORD` | `opensimpassword` |
+| `OPENSIM_WEBRTC_VOICE_ENABLED` | `true` |
+| `OPENSIM_JANUS_PUBLIC_HOST` | `$OPENSIM_HOSTNAME` |
+| `JANUS_HTTP_PORT` | `14223` |
+| `JANUS_HTTP_BASEPATH` | `/voice` |
+| `JANUS_API_TOKEN` | `` |
+| `JANUS_HTTP_ADMIN_PORT` | `14225` |
+| `JANUS_HTTP_ADMIN_BASEPATH` | `/voiceAdmin` |
+| `JANUS_ADMIN_TOKEN` | `` |
+| `OPENSIM_HOSTNAME` | `opensim` |
+| `OPENSIM_ESTATE_NAME` | `Botland` |
+| `OPENSIM_ESTATE_OWNER_FIRST` | `Bot` |
+| `OPENSIM_ESTATE_OWNER_LAST` | `Handler` |
+| `OPENSIM_ESTATE_OWNER_PASSWORD` | `changeme` |
+| `OPENSIM_ESTATE_OWNER_UUID` | `00000000-0000-0000-0000-000000000000` |
+| `OPENSIM_ROBUST_PUBLIC_PORT` | `8002` |
+| `OPENSIM_ROBUST_PRIVATE_PORT` | `8003` |
+| `OPENSIMGRID_NAME` | `Bot Grid` |
+| `OPENSIMGRID_NICK` | `botgrid` |
+| `OPENSIM_WELCOME_MESSAGE` | `Welcome to Botgrid!` |
+
 
 ## Environment Variables Passed To `opencode`
 
@@ -80,8 +103,6 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `OPENSIM_LOGIN_START` | `last` |
 | `OPENSIM_LOGIN_URI` | `http://opensim:9000` |
 | `SPAWNER_HOST` | `opensim-spawner` |
-| `OPENSIM_METAVERSE2MCP_IMAGE` | |
-| `OPENSIM_OPENCODE_IMAGE` | |
 | `OPENSIM_BOT_HANDLER_FIRSTNAME` | `$OPENSIM_ESTATE_OWNER_FIRST` |
 | `OPENSIM_BOT_HANDLER_LASTNAME` | `$OPENSIM_ESTATE_OWNER_LAST` |
 | `VOICE_ROUTING_ENABLED` | `true` |
@@ -112,128 +133,3 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `PROMPT_PROJECT_AGENTS_FILE` | /app/AGENTS.md |
 | `PROMPT_NOTECARD_REQUIRE_HANDLER` | `true` |
 
-
-## API examples (curl)
-
-```bash
-BASE_URL="http://127.0.0.1:8993"
-BOT_API_BASE="${BASE_URL}/api/bot"
-TOKEN=""
-AUTH_HEADER=()
-if [ -n "$TOKEN" ]; then AUTH_HEADER=(-H "Authorization: Bearer $TOKEN"); fi
-```
-
-List bots:
-
-```bash
-curl -sS "${AUTH_HEADER[@]}" "${BOT_API_BASE}"
-```
-
-Query one bot's container status:
-
-```bash
-curl -sS "${AUTH_HEADER[@]}" "${BOT_API_BASE}/Alice/Bot"
-```
-
-Create a bot:
-
-```bash
-curl -sS -X POST "${AUTH_HEADER[@]}" "${BOT_API_BASE}/Alice/Bot" \
-  -d "level=actor" \
-  -d "parent=Governor Bot" \
-  -d "email=alice.bot@localhost" \
-  -d "model=Ruth" \
-  -d "EXAMPLE_FIELD=example-value"
-```
-
-If omitted, `email` defaults to `<first>.<last>@localhost` and `model` defaults to `Ruth`.
-`parent` is the full bot name (`<first> <last>`). For debugging, blank parent is currently allowed.
-When parent is non-blank, parent level must be lower-numbered than child level (for example `GOVERNOR` can create `BUILDER`/`ACTOR`, `BUILDER` can create `ACTOR`).
-
-Delete a bot (container shutdown + volume delete):
-
-```bash
-curl -sS -X DELETE "${AUTH_HEADER[@]}" "${BOT_API_BASE}/Alice/Bot"
-```
-
-Start a bot (all tracked containers):
-
-```bash
-curl -sS -X PATCH "${AUTH_HEADER[@]}" "${BOT_API_BASE}/Alice/Bot" \
-  -d "action=start"
-```
-
-Stop a bot (all tracked containers):
-
-```bash
-curl -sS -X PATCH "${AUTH_HEADER[@]}" "${BOT_API_BASE}/Alice/Bot" \
-  -d "action=stop"
-```
-
-Restart a bot (all tracked containers):
-
-```bash
-curl -sS -X PATCH "${AUTH_HEADER[@]}" "${BOT_API_BASE}/Alice/Bot" \
-  -d "action=restart"
-```
-
-## Docker (multiarch Java runtime image)
-
-- `Dockerfile` (multi-stage Maven build, JVM runtime image)
-- `docker/entrypoint.sh` (standard Java startup wrapper)
-
-Default container volumes:
-
-- `/config`
-- `/data`
-- `/workspace`
-
-### Build local image
-
-```bash
-docker build -t opensim-spawner:local .
-```
-
-### Run local image
-
-```bash
-docker run --rm \
-  -e DOCKER_HOST=unix:///var/run/docker.sock \
-  -e OPENSIM_SPAWNER_HTTP_HOST=0.0.0.0 \
-  -e OPENSIM_SPAWNER_HTTP_PORT=8993 \
-  -e OPENSIM_SPAWNER_TOKEN= \
-  -e OPENSIM_SPAWNER_FIRST_PORT=12345 \
-  -e OPENSIM_CONSOLE_URL=http://host.docker.internal:9000 \
-  -e OPENSIM_CONSOLE_USER=ConsoleUser \
-  -e OPENSIM_CONSOLE_PASS=ConsolePass \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v $(pwd)/.local/config:/config \
-  -v $(pwd)/.local/data:/data \
-  -v $(pwd)/.local/workspace:/workspace \
-  -p 8993:8993 \
-  opensim-spawner:local
-```
-
-Note: if your host uses rootless Docker, mount your user socket instead (for example
-`-v /run/user/1000/docker.sock:/var/run/docker.sock`) and keep `DOCKER_HOST` set to
-`unix:///var/run/docker.sock`.
-
-### Build and publish multiarch image
-
-Create/use a buildx builder once:
-
-```bash
-docker buildx create --name multiarch --use
-docker buildx inspect --bootstrap
-```
-
-Build and push Linux AMD64 + ARM64:
-
-```bash
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t bithatch/opensim-spawner:latest \
-  -t bithatch/opensim-spawner:$(date +%Y%m%d) \
-  --push \
-  .
-```

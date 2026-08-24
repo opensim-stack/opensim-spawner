@@ -42,19 +42,124 @@
     <spawner-side-menu data-active="simulators"></spawner-side-menu>
 
     <main class="flex-1 p-6 lg:p-10">
-      <div class="max-w-5xl mx-auto">
-        <h1 class="text-3xl lg:text-4xl font-bold text-white mb-2">Simulators</h1>
-        <p class="text-gray-400 mb-8">Simulator controls are coming next.</p>
+      <div class="max-w-7xl mx-auto">
+        <div class="mb-8 flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-3xl lg:text-4xl font-bold text-white">Simulators</h1>
+            <p class="text-gray-400">Manage simulator lifecycle and monitor container state.</p>
+          </div>
+          <button id="refresh-simulators" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">
+            Refresh
+          </button>
+        </div>
 
-        <section class="feature-card bg-dark-800/80 backdrop-blur p-8 rounded-xl">
-          <h2 class="text-xl font-semibold text-white mb-2">Coming Soon</h2>
-          <p class="text-gray-300">This page is reserved for simulator-level operations and status views.</p>
-        </section>
+        <div id="simulators-grid" class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3"></div>
+        <div id="simulators-empty" class="hidden bg-dark-800/80 backdrop-blur border border-neon-primary/20 rounded-xl p-8 text-gray-300">
+          No simulators found.
+        </div>
       </div>
+
+      <button id="open-create-simulator" aria-label="Add simulator"
+        class="fixed bottom-8 right-8 z-30 w-14 h-14 rounded-full bg-neon-primary text-white text-3xl leading-none shadow-[0_0_25px_rgba(139,92,246,0.55)] hover:bg-violet-500 transition-colors btn-glow">
+        +
+      </button>
+
+      <div id="create-simulator-modal" class="hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm p-4">
+        <div class="max-w-lg mx-auto mt-16 bg-dark-800/95 border border-neon-primary/30 rounded-2xl p-6 neon-border">
+          <div class="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 id="create-simulator-title" class="text-2xl font-bold text-white">Create Simulator</h2>
+              <p id="create-simulator-subtitle" class="text-sm text-gray-300 mt-1"></p>
+            </div>
+            <button id="close-create-simulator" class="text-gray-300 hover:text-white text-xl" aria-label="Close">x</button>
+          </div>
+
+          <form id="create-simulator-form" class="space-y-4">
+            <label class="block">
+              <span class="text-sm text-gray-300">Simulator name</span>
+              <input id="create-sim-name" name="name" required
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                type="text" placeholder="Botland">
+            </label>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Port (optional)</span>
+              <input id="create-sim-port" name="port"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                type="number" min="1" max="65535" placeholder="Empty = next free port">
+            </label>
+
+            <label id="create-simulator-level-row" class="block hidden">
+              <span class="text-sm text-gray-300">Simulator level</span>
+              <select id="create-sim-level" name="level"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </select>
+            </label>
+
+            <div id="create-owner-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4 hidden">
+              <label class="block">
+                <span class="text-sm text-gray-300">Owner first name</span>
+                <input id="create-owner-first" name="ownerFirst"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                  type="text">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Owner last name</span>
+                <input id="create-owner-last" name="ownerLast"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                  type="text">
+              </label>
+            </div>
+
+            <label id="create-owner-email-row" class="block hidden">
+              <span class="text-sm text-gray-300">Owner email (optional)</span>
+              <input id="create-owner-email" name="ownerEmail"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                type="email">
+            </label>
+
+            <div id="create-region-fields" class="grid grid-cols-1 sm:grid-cols-2 gap-4 hidden">
+              <label class="block">
+                <span class="text-sm text-gray-300">Region X</span>
+                <input id="create-region-x" name="regionX"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                  type="number" value="1000">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Region Y</span>
+                <input id="create-region-y" name="regionY"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                  type="number" value="1000">
+              </label>
+            </div>
+
+            <label id="create-sim-oar-row" class="block hidden">
+              <span class="text-sm text-gray-300">OAR name (optional)</span>
+              <select id="create-sim-oar" name="oar"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+                <option value="">None</option>
+              </select>
+            </label>
+
+            <p id="create-simulator-info" class="text-xs text-gray-400"></p>
+            <p id="create-simulator-error" class="hidden text-sm text-rose-300"></p>
+
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" id="cancel-create-simulator"
+                class="px-4 py-2 rounded-lg border border-gray-500/40 text-gray-200 hover:bg-dark-700 transition-colors">Cancel</button>
+              <button id="submit-create-simulator" type="submit"
+                class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Create Simulator</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div id="toast-container" class="fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 pointer-events-none"></div>
     </main>
   </div>
 
   <script type="module" src="/ui/menu-component.js"></script>
   <script src="/ui/ui-common.js"></script>
+  <script type="module" src="/ui/simulators.js"></script>
 </body>
 </html>

@@ -47,6 +47,11 @@
           <div>
             <h1 class="text-3xl lg:text-4xl font-bold text-white">Bots</h1>
             <p class="text-gray-400">Manage bot lifecycle and monitor container state.</p>
+            <div id="bots-grid-service-pill" class="mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs border-amber-400/40 bg-amber-500/10 text-amber-200">
+              <span class="w-2 h-2 rounded-full bg-amber-300"></span>
+              <span>Grid Login: Unavailable</span>
+            </div>
+            <p id="bots-grid-service-warning" class="hidden mt-2 text-sm text-amber-300">Bot management is disabled until a ROBUST or STANDALONE simulator is active.</p>
           </div>
           <button id="refresh-bots" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">
             Refresh

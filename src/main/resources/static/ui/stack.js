@@ -1,62 +1,15 @@
+import { actionIconSvg, consoleTargetForContainer, showToast } from '/ui/ui-helpers.js';
+
 const stackList = document.getElementById('stack-list');
 const stackEmpty = document.getElementById('stack-empty');
 const refreshButton = document.getElementById('refresh-stack');
 const toastContainer = document.getElementById('toast-container');
-
-const showToast = (message, tone = 'info') => {
-  if (!toastContainer || !message) {
-    return;
-  }
-
-  const toneClass = tone === 'error'
-    ? 'border-rose-400/60 text-rose-100 bg-rose-900/45'
-    : tone === 'success'
-      ? 'border-emerald-400/60 text-emerald-100 bg-emerald-900/35'
-      : 'border-neon-primary/50 text-gray-100 bg-dark-800/90';
-
-  const toast = document.createElement('div');
-  toast.className = `pointer-events-auto border ${toneClass} backdrop-blur rounded-lg px-4 py-3 shadow-lg transition-all duration-300 opacity-0 translate-y-2`;
-  toast.textContent = message;
-  toastContainer.appendChild(toast);
-
-  requestAnimationFrame(() => {
-    toast.classList.remove('opacity-0', 'translate-y-2');
-  });
-
-  setTimeout(() => {
-    toast.classList.add('opacity-0', 'translate-y-2');
-    setTimeout(() => toast.remove(), 260);
-  }, 3200);
-};
 
 const buttonClassesByAction = {
   start: 'text-emerald-200 border-emerald-400/40 hover:bg-emerald-600/20',
   stop: 'text-amber-200 border-amber-400/40 hover:bg-amber-600/20',
   restart: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20',
   console: 'text-neon-accent border-neon-primary/40 hover:bg-neon-primary/10'
-};
-
-const icon = (action) => {
-  switch (action) {
-    case 'start':
-      return '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7 5v10l8-5-8-5Z"></path></svg>';
-    case 'stop':
-      return '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="1.5"></rect></svg>';
-    case 'restart':
-      return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15.5 9a5.5 5.5 0 1 0 1.3 3.6"></path><path d="M15.5 4.5V9h-4.5"></path></svg>';
-    case 'console':
-      return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="1.5"></rect><path d="M6 8.2 8.8 10 6 11.8"></path><path d="M10.3 12h3.7"></path></svg>';
-    default:
-      return '';
-  }
-};
-
-const sanitizeTarget = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return 'console-generic';
-  }
-  return `console-${raw.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
 };
 
 const callAction = async (containerName, action) => {
@@ -85,11 +38,11 @@ const actionButton = (action, containerName) => {
   button.dataset.action = action;
   button.setAttribute('title', action.charAt(0).toUpperCase() + action.slice(1));
   button.setAttribute('aria-label', `${action} ${containerName}`);
-  button.innerHTML = `<span class="h-4 w-4">${icon(action)}</span>`;
+  button.innerHTML = `<span class="h-4 w-4 shrink-0">${actionIconSvg(action)}</span>`;
 
   if (action === 'console') {
     button.href = `/ui/console.html?container=${encodeURIComponent(containerName)}`;
-    button.target = sanitizeTarget(containerName);
+    button.target = consoleTargetForContainer(containerName);
     button.rel = 'noopener';
   }
 
@@ -137,10 +90,10 @@ const renderRow = (container) => {
       button.disabled = true;
       try {
         const result = await callAction(container.containerName, button.dataset.action || '');
-        showToast(`Container ${result.container}: ${result.action} requested (${result.status}).`, 'success');
+        showToast(toastContainer, `Container ${result.container}: ${result.action} requested (${result.status}).`, 'success');
         await loadStack();
       } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Action failed.', 'error');
+        showToast(toastContainer, err instanceof Error ? err.message : 'Action failed.', 'error');
       } finally {
         button.disabled = false;
       }
@@ -192,13 +145,13 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshButton?.addEventListener('click', async () => {
     try {
       await loadStack();
-      showToast('Stack list refreshed.', 'success');
+      showToast(toastContainer, 'Stack list refreshed.', 'success');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Refresh failed.', 'error');
+      showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');
     }
   });
 
   loadStack().catch((err) => {
-    showToast(err instanceof Error ? err.message : 'Failed to load stack containers.', 'error');
+    showToast(toastContainer, err instanceof Error ? err.message : 'Failed to load stack containers.', 'error');
   });
 });

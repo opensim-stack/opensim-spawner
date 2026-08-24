@@ -52,6 +52,15 @@ public class UiController {
         return response;
     }
 
+    @GetMapping(path = "/ui/api/config", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> uiConfig() {
+        var response = new LinkedHashMap<String, Object>();
+        response.put("gridName", normalize(properties.getOpensimGridName()));
+        response.put("gridNick", normalize(properties.getOpensimGridNick()));
+        return response;
+    }
+
     @PostMapping(path = "/ui/api/auth/login", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public ResponseEntity<Map<String, Object>> login(@RequestParam String username,

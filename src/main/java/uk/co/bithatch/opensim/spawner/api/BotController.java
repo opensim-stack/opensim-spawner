@@ -1,5 +1,7 @@
 package uk.co.bithatch.opensim.spawner.api;
 
+import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,12 +37,12 @@ public class BotController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public List<String> listBots() {
-        return provisioningService.listBotNames();
+        return provisioningService.listNames();
     }
 
     @GetMapping(path = "/{first}/{last}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> getBotStatus(@PathVariable String first, @PathVariable String last) {
-        return provisioningService.getBotContainerStatus(first, last);
+        return provisioningService.getContainerGroupStatus(key(first, last));
     }
 
     @PostMapping(path = "/{first}/{last}", consumes = {
@@ -62,7 +64,7 @@ public class BotController {
 
     @DeleteMapping(path = "/{first}/{last}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> deleteBot(@PathVariable String first, @PathVariable String last) {
-        provisioningService.deleteBot(first, last);
+        provisioningService.deleteContainerGroup(key(first, last));
         var response = new LinkedHashMap<String, Object>();
         response.put("first", first);
         response.put("last", last);
@@ -79,9 +81,9 @@ public class BotController {
             @RequestParam String action) {
         var normalizedAction = action == null ? "" : action.trim().toLowerCase();
         switch (normalizedAction) {
-            case "restart" -> provisioningService.restartBot(first, last);
-            case "start" -> provisioningService.startBot(first, last);
-            case "stop" -> provisioningService.stopBot(first, last);
+            case "restart" -> provisioningService.restart(key(first, last));
+            case "start" -> provisioningService.start(key(first, last));
+            case "stop" -> provisioningService.stop(key(first, last));
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Unsupported action '" + action + "'. Supported actions: start, stop, restart.");
         }

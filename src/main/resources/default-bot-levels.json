@@ -4,7 +4,7 @@
     "appearance": "Professional",
     "containers": {
       "%env.OPENSIM_OPENCODE_IMAGE%": {
-        "name": "opensim-opencode-%bot.first%-%bot.last%",
+        "name": "%env.COMPOSE_PROJECT_NAME%-opencode-%bot.first%-%bot.last%",
         "environment": {
           "OPENCODE_HOST": "%env.OPENCODE_HOST%",
           "OPENCODE_PORT": "%env.OPENCODE_PORT%",
@@ -31,7 +31,7 @@
         }
       },
       "%env.OPENSIM_METAVERSE2MCP_IMAGE%": {
-        "name": "opensim-metaverse2mcp-%bot.first%-%bot.last%",
+        "name": "%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%",
         "environment": {
           "METAVERSE_MCP_TRANSPORT": "%env.METAVERSE_MCP_TRANSPORT%",
           "METAVERSE_MCP_HOST": "%env.METAVERSE_MCP_HOST%",
@@ -87,7 +87,7 @@
     "appearance": "Construction",
     "containers": {
       "%env.OPENSIM_OPENCODE_IMAGE%": {
-        "name": "opensim-opencode-%bot.first%-%bot.last%",
+        "name": "%env.COMPOSE_PROJECT_NAME%-opencode-%bot.first%-%bot.last%",
         "environment": {
           "OPENCODE_HOST": "%env.OPENCODE_HOST%",
           "OPENCODE_PORT": "%env.OPENCODE_PORT%",
@@ -114,7 +114,7 @@
         }
       },
       "%env.OPENSIM_METAVERSE2MCP_IMAGE%": {
-        "name": "opensim-metaverse2mcp-%bot.first%-%bot.last%",
+        "name": "%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%",
         "environment": {
           "METAVERSE_MCP_TRANSPORT": "%env.METAVERSE_MCP_TRANSPORT%",
           "METAVERSE_MCP_HOST": "%env.METAVERSE_MCP_HOST%",
@@ -167,7 +167,7 @@
     "appearance": "Actor",
     "containers": {
       "%env.OPENSIM_OPENCODE_IMAGE%": {
-        "name": "opensim-opencode-%bot.first%-%bot.last%",
+        "name": "%env.COMPOSE_PROJECT_NAME%-opencode-%bot.first%-%bot.last%",
         "environment": {
           "OPENCODE_HOST": "%env.OPENCODE_HOST%",
           "OPENCODE_PORT": "%env.OPENCODE_PORT%",
@@ -193,7 +193,7 @@
         }
       },
       "%env.OPENSIM_METAVERSE2MCP_IMAGE%": {
-        "name": "opensim-metaverse2mcp-%bot.first%-%bot.last%",
+        "name": "%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%",
         "environment": {
           "METAVERSE_MCP_TRANSPORT": "%env.METAVERSE_MCP_TRANSPORT%",
           "METAVERSE_MCP_HOST": "%env.METAVERSE_MCP_HOST%",

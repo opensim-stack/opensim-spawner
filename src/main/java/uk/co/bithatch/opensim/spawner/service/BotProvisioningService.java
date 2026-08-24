@@ -1,9 +1,7 @@
 package uk.co.bithatch.opensim.spawner.service;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -13,17 +11,15 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Consumer;
-
-import jakarta.annotation.PreDestroy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
@@ -32,22 +28,20 @@ import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
 import uk.co.bithatch.opensim.spawner.state.BotStateRepository;
 
 @Service
-public class BotProvisioningService {
+public class BotProvisioningService extends AbstractContainerGroupProvisioningService<BotStateRepository, BotInstanceData> {
 	
 	private static final int RETRY_COUNT = 10;
 	private static final int RETRY_INTERVAL_MS = 5000;
 
     private static final Logger LOG = LoggerFactory.getLogger(BotProvisioningService.class);
 
-    private final BotStateRepository stateRepository;
     private final BotLevelProfileService profileService;
     private final OpenSimService openSimService;
-    private final DockerService dockerService;
     private final RandomPasswordService passwordService;
-    private final TemplateResolver templateResolver;
-    private final SpawnerProperties properties;
     private final Appearances appearances;
+    private final SimulatorProvisioningService simulatorProvisioningService;
 
+    @Autowired
     public BotProvisioningService(BotStateRepository stateRepository,
             BotLevelProfileService profileService,
             OpenSimService openSimService,
@@ -55,19 +49,22 @@ public class BotProvisioningService {
             RandomPasswordService passwordService,
             TemplateResolver templateResolver,
             SpawnerProperties properties,
-            Appearances appearances) {
-        this.stateRepository = stateRepository;
+            Appearances appearances,
+            SimulatorProvisioningService simulatorProvisioningService) {
+    	super(stateRepository, dockerService, templateResolver, properties);
         this.profileService = profileService;
         this.openSimService = openSimService;
-        this.dockerService = dockerService;
         this.passwordService = passwordService;
-        this.templateResolver = templateResolver;
-        this.properties = properties;
         this.appearances = appearances;
+        this.simulatorProvisioningService = simulatorProvisioningService;
         
 
         if(properties.isOpensimCreateBotUser()) {
-        	if(botExists(properties.getOpensimLoginFirstname(), properties.getOpensimLoginLastname())) {
+      if (!hasGridLoginService()) {
+        LOG.warn("Skipping auto-create login bot because no active ROBUST/STANDALONE simulator is available.");
+      }
+      else {
+        	if(exists(key(properties.getOpensimLoginFirstname(), properties.getOpensimLoginLastname()))) {
 				LOG.info("Bot {} {} already exists. Skipping creation.", properties.getOpensimLoginFirstname(), properties.getOpensimLoginLastname());
 			}
         	else {
@@ -108,12 +105,32 @@ public class BotProvisioningService {
 					throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to create bot after " + RETRY_COUNT + " attempts.");
 				}
         	}
+      }
 		} else {
 			LOG.info("Spawner is NOT configured to create OpenSimulator users for bots.");
 		}
 
         reconnectKnownBotsOnStartup();
         
+    }
+
+    BotProvisioningService(BotStateRepository stateRepository,
+            BotLevelProfileService profileService,
+            OpenSimService openSimService,
+            DockerService dockerService,
+            RandomPasswordService passwordService,
+            TemplateResolver templateResolver,
+            SpawnerProperties properties,
+            Appearances appearances) {
+        this(stateRepository,
+                profileService,
+                openSimService,
+                dockerService,
+                passwordService,
+                templateResolver,
+                properties,
+                appearances,
+                null);
     }
 
     private void reconnectKnownBotsOnStartup() {
@@ -152,10 +169,14 @@ public class BotProvisioningService {
                             bot.getLast());
                 }
 
-                if (!notRunning.isEmpty()) {
+                if (!notRunning.isEmpty() && hasGridLoginService()) {
                     dockerService.startContainers(notRunning);
                     LOG.info("Started {} non-running container(s) for bot {} {} during startup reconnect.",
                             notRunning.size(),
+                            bot.getFirst(),
+                            bot.getLast());
+                } else if (!notRunning.isEmpty()) {
+                    LOG.warn("Skipping startup reconnect start for bot {} {} because grid login service is unavailable.",
                             bot.getFirst(),
                             bot.getLast());
                 }
@@ -166,7 +187,8 @@ public class BotProvisioningService {
     }
 
     public synchronized BotInstanceData createBot(String first, String last, String levelName, Map<String, String> requestFields) {
-        if (stateRepository.exists(first, last)) {
+        ensureGridLoginServiceAvailable("create bots");
+        if (stateRepository.exists(key(first, last))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bot already exists.");
         }
         
@@ -252,7 +274,7 @@ public class BotProvisioningService {
             return bot;
         } catch (RuntimeException e) {
             LOG.error("Provisioning failed for bot {} {}. Starting rollback.", first, last, e);
-            rollbackFailedProvision(first, last, createdContainerIds, materializedFiles);
+            rollbackFailedProvision(key(first, last), createdContainerIds, materializedFiles);
             throw e;
         }
     }
@@ -270,68 +292,9 @@ public class BotProvisioningService {
 	}
 
     private void materializeFiles(ResolvedBotPlan plan, BotInstanceData bot, List<java.nio.file.Path> writtenFiles) {
-        var variables = new LinkedHashMap<String, String>();
-        variables.put("bot.first", bot.getFirst());
-        variables.put("bot.last", bot.getLast());
-        variables.put("bot.password", bot.getPassword());
-        variables.put("bot.token", bot.getToken());
-        variables.put("bot.parent", bot.getParent() == null ? "" : bot.getParent());
-        variables.put("bot.level", bot.getLevel() == null ? "" : bot.getLevel().name());
-        for (var env : System.getenv().entrySet()) {
-            variables.put("env." + env.getKey(), env.getValue());
-        }
-
-        for (var container : plan.containers()) {
-            for (var fileEntry : container.getFiles().entrySet()) {
-                var targetPath = java.nio.file.Path.of(fileEntry.getKey());
-                var templateName = fileEntry.getValue();
-                var content = loadFileTemplate(templateName);
-                var resolved = templateResolver.resolve(content, variables);
-                try {
-                    var parent = targetPath.getParent();
-                    if (parent != null) {
-                        Files.createDirectories(parent);
-                    }
-                    Files.writeString(targetPath, resolved, StandardCharsets.UTF_8);
-                    writtenFiles.add(targetPath);
-                } catch (IOException e) {
-                    throw new IllegalStateException("Failed to materialize bot file " + targetPath + ".", e);
-                }
-            }
-        }
+    	materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot));
     }
-
-    private String loadFileTemplate(String name) {
-        var configFile = properties.getConfigDir().resolve(name);
-        try {
-            if (Files.exists(configFile)) {
-                return Files.readString(configFile, StandardCharsets.UTF_8);
-            }
-            var resource = new ClassPathResource(name);
-            try (var input = resource.getInputStream()) {
-                return new String(input.readAllBytes(), StandardCharsets.UTF_8);
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load template file " + name + ".", e);
-        }
-    }
-
-    private static String defaultEmail(String first, String last, String requestedEmail) {
-        var trimmed = requestedEmail == null ? "" : requestedEmail.trim();
-        if (!trimmed.isEmpty()) {
-            return trimmed;
-        }
-        return first + "." + last + "@localhost";
-    }
-
-    private static String defaultValue(String requestedValue, String fallbackValue) {
-        var trimmed = requestedValue == null ? "" : requestedValue.trim();
-        if (!trimmed.isEmpty()) {
-            return trimmed;
-        }
-        return fallbackValue;
-    }
-
+    
     private String resolveRequestedAppearance(BotLevel level, Map<String, String> requestFields) {
         var requested = nonBlankOrNull(requestFields.get("appearance"));
         if (requested != null) {
@@ -365,14 +328,6 @@ public class BotProvisioningService {
         return values[ThreadLocalRandom.current().nextInt(values.length)];
     }
 
-    private static String nonBlankOrNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        var trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
     private static Gender parseGender(String value) {
         try {
             return Gender.fromNullable(value);
@@ -381,208 +336,56 @@ public class BotProvisioningService {
         }
     }
 
-    private java.nio.file.Path copyArchiveToWorkspace(String resourcePath, List<java.nio.file.Path> writtenFiles) {
-        var classpathPath = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
-        if (classpathPath.isBlank()) {
-            throw new IllegalArgumentException("Appearance archive path is blank.");
-        }
+  @Override
+  public synchronized void start(String name) {
+    ensureGridLoginServiceAvailable("start bots");
+    super.start(name);
+  }
 
-        var fileName = java.nio.file.Path.of(classpathPath).getFileName();
-        if (fileName == null || fileName.toString().isBlank()) {
-            throw new IllegalArgumentException("Appearance archive path '" + resourcePath + "' does not contain a file name.");
-        }
+  @Override
+  public synchronized void stop(String name) {
+    ensureGridLoginServiceAvailable("change bot status");
+    super.stop(name);
+  }
 
-        var targetPath = properties.getWorkspaceDir().resolve(fileName.toString());
-        try {
-            Files.createDirectories(properties.getWorkspaceDir());
-            if (!Files.exists(targetPath)) {
-                var resource = new ClassPathResource(classpathPath);
-                try (var input = resource.getInputStream()) {
-                    Files.copy(input, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                }
-                writtenFiles.add(targetPath);
-                LOG.info("Copied appearance archive resource '{}' to '{}'.", resourcePath, targetPath);
-            }
-            return targetPath.toAbsolutePath();
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to copy appearance archive '" + resourcePath + "' to workspace.", e);
-        }
+  @Override
+  public synchronized void restart(String name) {
+    ensureGridLoginServiceAvailable("restart bots");
+    super.restart(name);
+  }
+
+  private boolean hasGridLoginService() {
+    if (simulatorProvisioningService == null) {
+      return true;
     }
+    return simulatorProvisioningService.hasActiveGridLoginService();
+  }
 
-    private void waitForStartupWindow(List<String> containerIds, Duration startupWindow, Duration pollInterval) {
-        if (containerIds.isEmpty()) {
-            return;
-        }
-
-        var deadlineMillis = System.currentTimeMillis() + startupWindow.toMillis();
-        while (System.currentTimeMillis() < deadlineMillis) {
-            try {
-                var statuses = dockerService.getContainerStatuses(containerIds);
-                if (!statuses.isEmpty() && statuses.stream().allMatch(ContainerStatus::running)) {
-                    LOG.info("All {} container(s) report running before startup timeout.", statuses.size());
-                    return;
-                }
-            } catch (RuntimeException e) {
-                LOG.warn("Container status poll failed during startup window. Will retry.", e);
-            }
-
-            var remainingMillis = deadlineMillis - System.currentTimeMillis();
-            if (remainingMillis <= 0) {
-                break;
-            }
-            var sleepMillis = Math.min(pollInterval.toMillis(), remainingMillis);
-            try {
-                Thread.sleep(sleepMillis);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupted while waiting for containers to start.", e);
-            }
-        }
-
-        LOG.info("Startup window elapsed before all containers reported running.");
+  private void ensureGridLoginServiceAvailable(String action) {
+    if (hasGridLoginService()) {
+      return;
     }
+    throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+        "Cannot " + action + " because no active ROBUST/STANDALONE simulator is providing grid login services.");
+  }
 
-    public List<String> listBotNames() {
-        return stateRepository.list().stream().map(BotInstanceData::displayName).toList();
-    }
-
-    public boolean botExists(String first, String last) {
-        return stateRepository.exists(first, last);
-    }
-
-    public synchronized void deleteBot(String first, String last) {
-        LOG.info("Deleting bot {} {}.", first, last);
-        var bot = stateRepository.load(first, last)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
-
+    @Override
+    protected synchronized void onDeleteContainerGroup(String name) {
+        LOG.info("Deleting bot {}.", name);
+    	var arr = name.split("-", 2);
         try {
-            dockerService.removeContainers(bot.getContainerIds());
-            var botVolumeSuffix = "-" + bot.getFirst() + "-" + bot.getLast();
-            dockerService.removeVolumesBySuffix(botVolumeSuffix);
-            LOG.info("Removed {} container(s) and named volumes with suffix '{}' for bot {} {}.",
-                    bot.getContainerIds().size(),
-                    botVolumeSuffix,
-                    first,
-                    last);
-        } catch (RuntimeException e) {
-            LOG.error("Failed deleting containers for bot {} {}.", first, last, e);
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Failed to remove bot containers: " + e.getMessage(), e);
-        }
-
-        try {
-            stateRepository.delete(first, last);
-            LOG.info("Deleted persisted state for bot {} {}.", first, last);
-        } catch (RuntimeException e) {
-            LOG.error("Failed deleting state for bot {} {}.", first, last, e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "Failed to remove bot state: " + e.getMessage(), e);
-        }
-
-        try {
-            openSimService.deleteUser(first, last);
+            openSimService.deleteUser(arr[0], arr[1]);
         } catch (RuntimeException ignored) {
             // OpenSimulator user delete is currently unsupported and intentionally ignored.
-            LOG.warn("OpenSim delete user skipped for bot {} {} (currently unsupported).", first, last);
+            LOG.warn("OpenSim delete user skipped for bot {} {} (currently unsupported).", arr[0], arr[1]);
         }
     }
 
-    public synchronized void restartBot(String first, String last) {
-        LOG.info("Restarting bot {} {}.", first, last);
-        var bot = stateRepository.load(first, last)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
-
-        applyContainerAction(bot, first, last, dockerService::restartContainers, "restart", "Restarted");
-    }
-
-    public synchronized void startBot(String first, String last) {
-        LOG.info("Starting bot {} {}.", first, last);
-        var bot = stateRepository.load(first, last)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
-
-        applyContainerAction(bot, first, last, dockerService::startContainers, "start", "Started");
-    }
-
-    public synchronized void stopBot(String first, String last) {
-        LOG.info("Stopping bot {} {}.", first, last);
-        var bot = stateRepository.load(first, last)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
-
-        applyContainerAction(bot, first, last, dockerService::stopContainers, "stop", "Stopped");
-    }
-
-    private void applyContainerAction(BotInstanceData bot,
-            String first,
-            String last,
-            Consumer<List<String>> operation,
-            String actionVerb,
-            String actionPastTense) {
-        try {
-            operation.accept(bot.getContainerIds());
-            LOG.info("{} {} container(s) for bot {} {}.",
-                    actionPastTense,
-                    bot.getContainerIds().size(),
-                    first,
-                    last);
-        } catch (RuntimeException e) {
-            LOG.error("Failed {}ing containers for bot {} {}.", actionVerb, first, last, e);
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Failed to " + actionVerb + " bot containers: " + e.getMessage(), e);
-        }
-    }
-
-    public Map<String, Object> getBotContainerStatus(String first, String last) {
-        LOG.info("Fetching bot status for {} {}.", first, last);
-        var bot = stateRepository.load(first, last)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
-        var children = stateRepository.list().stream()
-                .filter(candidate -> bot.displayName().equals(candidate.getParent()))
-                .map(BotInstanceData::displayName)
-                .toList();
-
-        var status = new LinkedHashMap<String, Object>();
-        status.put("first", bot.getFirst());
-        status.put("last", bot.getLast());
-        status.put("level", bot.getLevel() == null ? null : bot.getLevel().name());
-        status.put("parent", bot.getParent());
-        status.put("children", children);
-        status.put("email", bot.getEmail());
-        status.put("uuid", bot.getUuid());
-        status.put("model", bot.getModel());
-        try {
-            status.put("containerStatus", dockerService.getContainerStatuses(bot.getContainerIds()));
-        } catch (RuntimeException e) {
-            LOG.error("Failed to fetch container status for bot {} {}.", first, last, e);
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Failed to query Docker container status: " + e.getMessage(), e);
-        }
-        return status;
-    }
-
-    private void rollbackFailedProvision(String first, String last, List<String> containerIds, List<java.nio.file.Path> files) {
-        try {
-            dockerService.removeContainers(containerIds);
-        } catch (RuntimeException ignored) {
-            // Rollback is best effort.
-            LOG.warn("Rollback could not remove all containers for bot {} {}.", first, last);
-        }
-
-        for (var path : files.reversed()) {
-            try {
-                Files.deleteIfExists(path);
-            } catch (IOException ignored) {
-                // Rollback is best effort.
-                LOG.warn("Rollback could not delete file {} for bot {} {}.", path, first, last);
-            }
-        }
-
-        try {
-            stateRepository.delete(first, last);
-        } catch (RuntimeException ignored) {
-            // Rollback is best effort.
-            LOG.warn("Rollback could not delete state for bot {} {}.", first, last);
-        }
-
+    @Override
+    protected void onRollbackFailedProvision(String name, List<String> containerIds, List<java.nio.file.Path> files) {
+    	var arr = name.split("-", 2);
+    	String first = arr[0];
+    	String last = arr[1];
         try {
             openSimService.deleteUser(first, last);
         } catch (RuntimeException ignored) {
@@ -652,4 +455,23 @@ public class BotProvisioningService {
                 stopped,
                 failed);
     }
+
+	@Override
+	protected Map<String, Object> toResponse(BotInstanceData bot) {
+		 var children = stateRepository.list().stream()
+	                .filter(candidate -> bot.displayName().equals(candidate.getParent()))
+	                .map(BotInstanceData::displayName)
+	                .toList();
+
+        var status = new LinkedHashMap<String, Object>();
+        status.put("first", bot.getFirst());
+        status.put("last", bot.getLast());
+        status.put("level", bot.getLevel() == null ? null : bot.getLevel().name());
+        status.put("parent", bot.getParent());
+        status.put("children", children);
+        status.put("email", bot.getEmail());
+        status.put("uuid", bot.getUuid());
+        status.put("model", bot.getModel());
+        return status;
+	}
 }

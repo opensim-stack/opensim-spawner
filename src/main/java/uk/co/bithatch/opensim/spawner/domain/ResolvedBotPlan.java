@@ -4,5 +4,5 @@ import java.util.List;
 
 public record ResolvedBotPlan(
         BotLevel level,
-        List<ContainerSpec> containers) {
+        List<ContainerSpec> containers) implements Plan {
 }

@@ -2,6 +2,7 @@ package uk.co.bithatch.opensim.spawner.state;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
 
 import java.nio.file.Path;
 
@@ -30,8 +31,9 @@ class BotStateRepositoryTest {
 
         repo.save(bot);
 
-        assertTrue(repo.exists("Ada", "Builder"));
-        var loaded = repo.load("Ada", "Builder").orElseThrow();
+        String key = key("Ada", "Builder");
+		assertTrue(repo.exists(key));
+        var loaded = repo.load(key).orElseThrow();
         assertEquals(BotLevel.BUILDER, loaded.getLevel());
         assertEquals(1, repo.list().size());
     }

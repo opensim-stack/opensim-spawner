@@ -2,6 +2,7 @@ package uk.co.bithatch.opensim.spawner.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -109,7 +110,7 @@ class BotProvisioningServiceTest {
                 props,
                 new Appearances());
 
-        service.restartBot("Ada", "Actor");
+        service.restart(key("Ada", "Actor"));
 
         assertEquals(List.of("container-1", "container-2"), dockerService.restarted);
     }
@@ -138,7 +139,7 @@ class BotProvisioningServiceTest {
                 props,
                 new Appearances());
 
-        service.startBot("Ada", "Actor");
+        service.start(key("Ada", "Actor"));
 
         assertEquals(List.of("container-1", "container-2"), dockerService.started);
     }
@@ -229,7 +230,7 @@ class BotProvisioningServiceTest {
                 props,
                 new Appearances());
 
-        service.stopBot("Ada", "Actor");
+        service.stop(key("Ada", "Actor"));
 
         assertEquals(List.of("container-1", "container-2"), dockerService.stopped);
     }
@@ -250,7 +251,7 @@ class BotProvisioningServiceTest {
                 props,
                 new Appearances());
 
-        var ex = assertThrows(ResponseStatusException.class, () -> service.restartBot("No", "Bot"));
+        var ex = assertThrows(ResponseStatusException.class, () -> service.restart(key("No", "Bot")));
         assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
     }
 
@@ -278,7 +279,7 @@ class BotProvisioningServiceTest {
                 props,
                 new Appearances());
 
-        service.deleteBot("Ada", "Actor");
+        service.deleteContainerGroup(key("Ada", "Actor"));
 
         assertEquals(List.of("container-1", "container-2"), dockerService.removed);
         assertEquals("-Ada-Actor", dockerService.removedVolumeSuffix);

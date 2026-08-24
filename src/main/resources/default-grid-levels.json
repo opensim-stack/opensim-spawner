@@ -1,0 +1,82 @@
+{
+  "ROBUST": {
+    "containers": {
+      "%env.OPENSIM_SIMULATOR_IMAGE%": {
+        "name": "%env.COMPOSE_PROJECT_NAME%-robust-%sim.normalisedName%",
+        "environment": {
+            "CONFIG_DIR": "/config/sims/%sim.name%",
+            "OPENSIM_SERVER_DLL": "Robust.dll"
+        },
+        "hostname": "%env.COMPOSE_PROJECT_NAME%-grid-services%",
+        "ports" : {
+          "8002" : "%sim.port%"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
+        },
+        "files": {
+          "/config/sims/%sim.name%/Robust.ini": "configuration/robust/Robust.ini"
+        }
+      }
+    }
+  },
+  "STANDALONE": {
+    "containers": {
+      "%env.OPENSIM_SIMULATOR_IMAGE%": {
+        "name": "%env.COMPOSE_PROJECT_NAME%-standalone-%sim.normalisedName%",
+        "environment": {
+            "CONFIG_DIR": "/config/sims/%sim.name%"
+        },
+        "hostname": "%env.COMPOSE_PROJECT_NAME%-grid-services%",
+        "ports" : {
+          "9000/tcp" : "%sim.port%",
+          "9000/udp" : "%sim.port%"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
+        },
+        "files": {
+          "/config/sims/%sim.name%/OpenSim.ini": "configuration/standalone/OpenSim.ini",
+          "/config/sims/%sim.name%/config-include/Standalone.ini": "configuration/standalone/config-include/Standalone.ini",
+          "/config/sims/%sim.name%/config-include/StandaloneCommon.ini": "configuration/standalone/config-include/StandaloneCommon.ini",
+          "/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
+          "/config/sims/%sim.name%/Regions/os-webrtc-janus.ini": "configuration/standalone/config-include/os-webrtc-janus.ini",
+          "/config/sims/%sim.name%/Regions/Region.ini": "configuration/standalone/Regions/Region.ini"
+        }
+      }
+    }
+  },
+  "GRID": {
+    "containers": {
+      "%env.OPENSIM_SIMULATOR_IMAGE%": {
+        "name": "%env.COMPOSE_PROJECT_NAME%-grid-%sim.normalisedName%",
+        "environment": {
+            "CONFIG_DIR": "/config/sims/%sim.name%"
+        },
+        "ports" : {
+          "9000/udp" : "%sim.port%"
+        },
+        "volumes": {
+          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
+          "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
+        },
+        "files": {
+          "/config/sims/%sim.name%/OpenSim.ini": "configuration/grid/OpenSim.ini",
+          "/config/sims/%sim.name%/config-include/Grid.ini": "configuration/grid/config-include/Grid.ini",
+          "/config/sims/%sim.name%/config-include/GridCommon.ini": "configuration/grid/config-include/GridCommon.ini",
+          "/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
+          "/config/sims/%sim.name%/Regions/os-webrtc-janus.ini": "configuration/grid/config-include/os-webrtc-janus.ini",
+          "/config/sims/%sim.name%/Regions/Region.ini": "configuration/grid/Regions/Region.ini"
+        }
+      }
+    }
+  }
+}

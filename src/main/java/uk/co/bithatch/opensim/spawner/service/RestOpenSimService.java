@@ -1,5 +1,8 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.slf4j.Logger;
@@ -24,14 +27,7 @@ public class RestOpenSimService implements OpenSimService {
     public void createUser(String first, String last, String password, String email, String uuid, String model) {
         try (var console = openConsole()) {
             LOG.info("Creating OpenSim user {} {} (email={}, uuid={}, model={}).", first, last, email, uuid, model);
-            var command = String.format("create user %s %s %s %s %s %s",
-                    first,
-                    last,
-                    password,
-                    email,
-                    uuid,
-                    model);
-            console.execute(command).toList();
+            console.executeCommand("create", "user", first, last, password, email, uuid, model).toList();
             LOG.info("Created OpenSim user {} {}.", first, last);
         } catch (RuntimeException e) {
             throw new ExternalDependencyException("Failed to create OpenSimulator user via REST console. " + e.getMessage(), e);
@@ -39,6 +35,21 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     @Override
+	public void loadRegionArchive(String archivePath) {
+    	 try (var console = openConsole()) {
+             LOG.info("Loading opensimulator archive '{}''.", archivePath);
+             console.executeCommand(
+             		"load", "oar", 
+             		archivePath).toList();
+             LOG.info("Loaded opensimulator archive '{}'.", archivePath);
+         } catch (RuntimeException e) {
+             LOG.error("Failed to load opensimulator archive '{}.", archivePath,  e);
+             throw new ExternalDependencyException("Failed to load OpenSimulator inventory archive via REST console. " + e.getMessage(), e);
+         }
+		
+	}
+
+	@Override
     public void loadInventoryArchive(String first, String last, String inventoryPath, String password, String archivePath) {
         try (var console = openConsole()) {
             LOG.info("Loading inventory archive '{}' into {} {} at '{}'.", archivePath, first, last, inventoryPath);
@@ -61,6 +72,53 @@ public class RestOpenSimService implements OpenSimService {
         // OpenSimulator user deletion is intentionally not implemented yet.
         LOG.warn("OpenSim delete user requested for {} {}, but deletion is not implemented.", first, last);
         throw new UnsupportedOperationException("OpenSimulator user deletion is not currently supported.");
+    }
+
+    @Override
+    public Map<String, String> showAccount(String first, String last) {
+        try (var console = openConsole()) {
+            LOG.info("Looking up OpenSim account {} {}.", first, last);
+            var output = console.executeCommand("show", "account", first, last).toList();
+            return parseAccountDetails(output);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException("Failed to query OpenSimulator user via REST console. " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void resetUserPassword(String first, String last, String password) {
+        try (var console = openConsole()) {
+            LOG.info("Resetting OpenSim password for {} {}.", first, last);
+            console.executeCommand("reset", "user", "password", first, last, password).toList();
+            LOG.info("Reset OpenSim password for {} {}.", first, last);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException("Failed to reset OpenSimulator password via REST console. " + e.getMessage(), e);
+        }
+    }
+
+    private static Map<String, String> parseAccountDetails(List<String> lines) {
+        var details = new LinkedHashMap<String, String>();
+        for (var rawLine : lines) {
+            if (rawLine == null || rawLine.isBlank()) {
+                continue;
+            }
+            for (var line : rawLine.split("\\R")) {
+                var trimmed = line.trim();
+                if (trimmed.isEmpty()) {
+                    continue;
+                }
+                var delimiter = trimmed.indexOf(':');
+                if (delimiter <= 0) {
+                    continue;
+                }
+                var key = trimmed.substring(0, delimiter).trim();
+                var value = trimmed.substring(delimiter + 1).trim();
+                if (!key.isEmpty()) {
+                    details.put(key, value);
+                }
+            }
+        }
+        return details;
     }
 
     private OpensimRESTConsole openConsole() {

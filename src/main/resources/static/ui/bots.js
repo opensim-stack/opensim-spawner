@@ -1,3 +1,11 @@
+import {
+  buildConsoleIconLink,
+  iconSpan,
+  renderContainerStatusRows,
+  resolvePreferredConsole,
+  showToast
+} from '/ui/ui-helpers.js';
+
 const botsGrid = document.getElementById('bots-grid');
 const botsEmpty = document.getElementById('bots-empty');
 const refreshButton = document.getElementById('refresh-bots');
@@ -20,40 +28,15 @@ const createEmail = document.getElementById('create-email');
 const createModel = document.getElementById('create-model');
 const submitCreateBot = document.getElementById('submit-create-bot');
 const toastContainer = document.getElementById('toast-container');
+const botsGridServiceWarning = document.getElementById('bots-grid-service-warning');
+const botsGridServicePill = document.getElementById('bots-grid-service-pill');
+
+let gridServiceAvailable = false;
+const gridServiceUnavailableMessage = 'Bot management is disabled until a ROBUST or STANDALONE simulator is active.';
 
 const childLevelsByParentLevel = {
   GOVERNOR: ['BUILDER', 'ACTOR'],
   BUILDER: ['ACTOR']
-};
-
-const showToast = (message, tone = 'info') => {
-  if (!toastContainer || !message) {
-    return;
-  }
-
-  const toneClass = tone === 'error'
-    ? 'border-rose-400/60 text-rose-100 bg-rose-900/45'
-    : tone === 'success'
-      ? 'border-emerald-400/60 text-emerald-100 bg-emerald-900/35'
-      : 'border-neon-primary/50 text-gray-100 bg-dark-800/90';
-
-  const toast = document.createElement('div');
-  toast.className = `pointer-events-auto border ${toneClass} backdrop-blur rounded-lg px-4 py-3 shadow-lg transition-all duration-300 opacity-0 translate-y-2`;
-  toast.textContent = message;
-
-  toastContainer.appendChild(toast);
-  requestAnimationFrame(() => {
-    toast.classList.remove('opacity-0', 'translate-y-2');
-  });
-
-  const removeToast = () => {
-    toast.classList.add('opacity-0', 'translate-y-2');
-    setTimeout(() => {
-      toast.remove();
-    }, 260);
-  };
-
-  setTimeout(removeToast, 3200);
 };
 
 const levelIcon = (level) => {
@@ -82,15 +65,6 @@ const splitBotName = (displayName) => {
     first: trimmed.slice(0, firstSpace),
     last: trimmed.slice(firstSpace + 1)
   };
-};
-
-const consoleTargetForContainer = (containerIdOrName) => {
-  const raw = String(containerIdOrName || '').trim();
-  if (!raw) {
-    return 'console-generic';
-  }
-  const safe = raw.replace(/[^a-zA-Z0-9_-]+/g, '-');
-  return `console-${safe}`;
 };
 
 const callAction = async (first, last, action) => {
@@ -138,6 +112,39 @@ const createBot = async ({ first, last, level, parent, email, model }) => {
   }
 };
 
+const fetchGridServiceAvailability = async () => {
+  const response = await fetch('/api/simulator/grid-service');
+  if (!response.ok) {
+    throw new Error(`Could not determine grid service availability (${response.status}).`);
+  }
+  const payload = await response.json();
+  return !!payload?.available;
+};
+
+const toggleButtonDisabledVisual = (button, disabled) => {
+  if (!button) {
+    return;
+  }
+  button.disabled = !!disabled;
+  button.classList.toggle('opacity-50', !!disabled);
+  button.classList.toggle('cursor-not-allowed', !!disabled);
+};
+
+const applyGridServiceUiState = () => {
+  toggleButtonDisabledVisual(openCreateBotButton, !gridServiceAvailable);
+  if (botsGridServiceWarning) {
+    botsGridServiceWarning.classList.toggle('hidden', gridServiceAvailable);
+  }
+  if (botsGridServicePill) {
+    botsGridServicePill.className = `mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${gridServiceAvailable
+      ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+      : 'border-amber-400/40 bg-amber-500/10 text-amber-200'}`;
+    botsGridServicePill.innerHTML = gridServiceAvailable
+      ? '<span class="w-2 h-2 rounded-full bg-emerald-300"></span><span>Grid Login: Available</span>'
+      : '<span class="w-2 h-2 rounded-full bg-amber-300"></span><span>Grid Login: Unavailable</span>';
+  }
+};
+
 const resetCreateDialog = () => {
   if (!createBotForm) {
     return;
@@ -156,6 +163,10 @@ const closeCreateDialog = () => {
 };
 
 const openGovernorDialog = () => {
+  if (!gridServiceAvailable) {
+    showToast(toastContainer, gridServiceUnavailableMessage, 'error');
+    return;
+  }
   if (!createBotModal || !createMode || !createParent || !createBotTitle || !createBotSubtitle || !createBotInfo || !createLevelRow) {
     return;
   }
@@ -172,6 +183,10 @@ const openGovernorDialog = () => {
 };
 
 const openChildDialog = (parentStatus) => {
+  if (!gridServiceAvailable) {
+    showToast(toastContainer, gridServiceUnavailableMessage, 'error');
+    return;
+  }
   if (!createBotModal || !createMode || !createParent || !createBotTitle || !createBotSubtitle || !createBotInfo || !createLevelRow || !createLevel) {
     return;
   }
@@ -209,54 +224,24 @@ const createCard = (status) => {
   const first = status.first || '';
   const last = status.last || '';
   const level = status.level || 'UNKNOWN';
-  const parent = status.parent || '-';
+  const parent = String(status.parent || '').trim();
   const containers = Array.isArray(status.containerStatus) ? status.containerStatus : [];
   const normalizedLevel = String(level).toUpperCase();
   const canSpawnChild = normalizedLevel === 'GOVERNOR' || normalizedLevel === 'BUILDER';
-  const preferredConsoleContainer = containers.find((container) =>
-    String(container?.containerName || '').startsWith('opensim-metaverse2mcp-'))
-    || containers.find((container) => String(container?.containerName || '').length > 0)
-    || null;
-  const preferredConsoleName = preferredConsoleContainer
-    ? (preferredConsoleContainer.containerName || preferredConsoleContainer.containerId || '')
+  const preferredConsole = resolvePreferredConsole(containers, 'opensim-metaverse2mcp-');
+  const preferredConsoleLink = preferredConsole
+    ? buildConsoleIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred console', 'text-neon-accent hover:text-neon-secondary')
     : '';
-  const preferredConsoleUrl = preferredConsoleName
-    ? `/ui/console.html?container=${encodeURIComponent(preferredConsoleName)}`
-    : '';
-  const preferredConsoleTarget = preferredConsoleContainer
-    ? consoleTargetForContainer(preferredConsoleContainer.containerId || preferredConsoleName)
-    : 'console-generic';
-
-  const containerRows = containers
-    .map((container) => {
-      const running = !!container.running;
-      const dotColor = running ? 'bg-emerald-400' : 'bg-rose-400';
-      const text = running ? 'Running' : (container.status || 'Stopped');
-      const containerName = container.containerName || container.containerId;
-      const containerParam = encodeURIComponent(containerName || '');
-      const containerTarget = consoleTargetForContainer(container.containerId || containerName);
-      return `
-        <div class="flex items-center justify-between text-sm gap-3">
-          <div class="min-w-0">
-            <div class="text-gray-300 truncate" title="${containerName}">${containerName}</div>
-            <a href="/ui/console.html?container=${containerParam}" target="${containerTarget}" rel="noopener" class="text-xs text-neon-accent hover:text-neon-secondary">Open console</a>
-          </div>
-          <span class="inline-flex items-center gap-2 text-gray-200 whitespace-nowrap"><span class="w-2 h-2 rounded-full ${dotColor}"></span>${text}</span>
-        </div>
-      `;
-    })
-    .join('');
+  const containerRows = renderContainerStatusRows(containers);
 
   card.innerHTML = `
     <div class="flex items-start justify-between gap-3">
       <div>
         <h2 class="text-xl font-semibold text-white">${first} ${last}</h2>
-        <p class="text-sm text-gray-400">Parent: ${parent}</p>
+        ${parent ? `<p class="text-sm text-gray-400">Parent: ${parent}</p>` : ''}
       </div>
       <div class="flex items-start gap-2">
-        ${preferredConsoleUrl
-      ? `<a href="${preferredConsoleUrl}" target="${preferredConsoleTarget}" rel="noopener" class="px-2 py-1 rounded-md text-xs border border-neon-primary/40 text-neon-accent hover:text-neon-secondary hover:bg-neon-primary/10">Open Console</a>`
-      : ''}
+        ${preferredConsoleLink}
         <div class="w-14 h-14 rounded-xl bg-neon-primary/20 border border-neon-primary/40 flex items-center justify-center text-neon-primary font-bold">
           ${levelIcon(level)}
         </div>
@@ -270,18 +255,26 @@ const createCard = (status) => {
     </div>
 
     <div class="grid grid-cols-2 gap-2 mt-auto">
-      <button data-action="start" class="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600/30">Start</button>
-      <button data-action="stop" class="px-3 py-2 rounded-lg bg-amber-600/20 border border-amber-400/40 text-amber-200 hover:bg-amber-600/30">Stop</button>
-      <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30">Restart</button>
-      <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30">Delete</button>
+      <button data-action="start" class="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600/30 inline-flex items-center justify-center gap-2">${iconSpan('start', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Start</span></button>
+      <button data-action="stop" class="px-3 py-2 rounded-lg bg-amber-600/20 border border-amber-400/40 text-amber-200 hover:bg-amber-600/30 inline-flex items-center justify-center gap-2">${iconSpan('stop', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Stop</span></button>
+      <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30 inline-flex items-center justify-center gap-2">${iconSpan('restart', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Restart</span></button>
+      <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('delete', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Delete</span></button>
     </div>
-    ${canSpawnChild ? '<button data-spawn-child class="mt-2 text-sm text-neon-accent hover:text-neon-secondary text-left">Spawn child bot</button>' : ''}
+    ${canSpawnChild ? `<button data-spawn-child class="mt-2 text-sm text-neon-accent hover:text-neon-secondary text-left inline-flex items-center gap-1">${iconSpan('plus', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Spawn child bot</span></button>` : ''}
   `;
 
   card.querySelectorAll('button[data-action]').forEach((button) => {
+    const action = button.getAttribute('data-action');
+    const shouldDisable = !gridServiceAvailable && (action === 'start' || action === 'stop' || action === 'restart');
+    toggleButtonDisabledVisual(button, shouldDisable);
     button.addEventListener('click', async () => {
       const action = button.getAttribute('data-action');
       if (!action) {
+        return;
+      }
+
+      if (!gridServiceAvailable && (action === 'start' || action === 'stop' || action === 'restart')) {
+        showToast(toastContainer, gridServiceUnavailableMessage, 'error');
         return;
       }
 
@@ -292,14 +285,14 @@ const createCard = (status) => {
             return;
           }
           await deleteBot(first, last);
-          showToast(`Deleted bot ${first} ${last}.`, 'success');
+          showToast(toastContainer, `Deleted bot ${first} ${last}.`, 'success');
         } else {
           await callAction(first, last, action);
-          showToast(`Sent '${action}' for ${first} ${last}.`, 'success');
+          showToast(toastContainer, `Sent '${action}' for ${first} ${last}.`, 'success');
         }
         await loadBots();
       } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Request failed.', 'error');
+        showToast(toastContainer, err instanceof Error ? err.message : 'Request failed.', 'error');
       } finally {
         button.disabled = false;
       }
@@ -308,6 +301,7 @@ const createCard = (status) => {
 
   const spawnChildButton = card.querySelector('button[data-spawn-child]');
   if (spawnChildButton) {
+    toggleButtonDisabledVisual(spawnChildButton, !gridServiceAvailable);
     spawnChildButton.addEventListener('click', () => {
       openChildDialog(status);
     });
@@ -323,6 +317,14 @@ const loadBots = async () => {
 
   botsGrid.innerHTML = '';
   botsEmpty.classList.add('hidden');
+
+  try {
+    gridServiceAvailable = await fetchGridServiceAvailability();
+  } catch (err) {
+    gridServiceAvailable = false;
+    showToast(toastContainer, err instanceof Error ? err.message : 'Failed to query grid service availability.', 'error');
+  }
+  applyGridServiceUiState();
 
   const listResponse = await fetch('/api/bot');
   if (!listResponse.ok) {
@@ -374,6 +376,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (!gridServiceAvailable) {
+      createBotError.textContent = gridServiceUnavailableMessage;
+      createBotError.classList.remove('hidden');
+      return;
+    }
+
     const first = createFirst.value.trim();
     const last = createLast.value.trim();
     const email = createEmail.value.trim();
@@ -400,11 +408,11 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       closeCreateDialog();
       await loadBots();
-      showToast(`Created bot ${first} ${last}.`, 'success');
+      showToast(toastContainer, `Created bot ${first} ${last}.`, 'success');
     } catch (err) {
       createBotError.textContent = err instanceof Error ? err.message : 'Failed to create bot.';
       createBotError.classList.remove('hidden');
-      showToast(createBotError.textContent, 'error');
+      showToast(toastContainer, createBotError.textContent, 'error');
     } finally {
       submitCreateBot.disabled = false;
     }
@@ -414,14 +422,14 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshButton.addEventListener('click', async () => {
       try {
         await loadBots();
-        showToast('Bot list refreshed.', 'success');
+        showToast(toastContainer, 'Bot list refreshed.', 'success');
       } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Refresh failed.', 'error');
+        showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');
       }
     });
   }
 
   loadBots().catch((err) => {
-    showToast(err instanceof Error ? err.message : 'Failed to load bots.', 'error');
+    showToast(toastContainer, err instanceof Error ? err.message : 'Failed to load bots.', 'error');
   });
 });

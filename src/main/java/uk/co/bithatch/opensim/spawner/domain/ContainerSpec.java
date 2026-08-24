@@ -10,6 +10,8 @@ public class ContainerSpec {
     private Map<String, String> environment = new LinkedHashMap<>();
     private Map<String, String> volumes = new LinkedHashMap<>();
     private Map<String, String> files = new LinkedHashMap<>();
+    private Map<String, String> ports = new LinkedHashMap<>();
+    private Map<String, String> extraHosts = new LinkedHashMap<>();
 
     public String getImage() {
         return image;
@@ -50,4 +52,20 @@ public class ContainerSpec {
     public void setFiles(Map<String, String> files) {
         this.files = files;
     }
+
+	public Map<String, String> getPorts() {
+		return ports;
+	}
+
+	public void setPorts(Map<String, String> ports) {
+		this.ports = ports;
+	}
+
+	public Map<String, String> getExtraHosts() {
+		return extraHosts;
+	}
+
+	public void setExtraHosts(Map<String, String> extraHosts) {
+		this.extraHosts = extraHosts;
+	}
 }

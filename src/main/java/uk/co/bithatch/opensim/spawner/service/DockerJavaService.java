@@ -8,26 +8,28 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import jakarta.annotation.PreDestroy;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.async.ResultCallback;
+import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.RestartPolicy;
 import com.github.dockerjava.api.model.Volume;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 
+import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 
@@ -62,13 +64,19 @@ public class DockerJavaService implements DockerService {
             var hostConfig = HostConfig.newHostConfig();
             var binds = toBinds(spec.getVolumes());
             if (!binds.isEmpty()) {
-                hostConfig = HostConfig.newHostConfig().withBinds(binds);
+                hostConfig.withBinds(binds);
             }
-            hostConfig = hostConfig.withRestartPolicy(RestartPolicy.parse(properties.getOpensimRestartPolicy()));
+            hostConfig.withRestartPolicy(RestartPolicy.parse(properties.getOpensimRestartPolicy()));
             var configuredNetwork = normalizeNetworkName(properties.getOpensimNetwork());
             if (configuredNetwork != null) {
-                hostConfig = hostConfig.withNetworkMode(configuredNetwork);
+                hostConfig.withNetworkMode(configuredNetwork);
             }
+            spec.getExtraHosts().forEach((host, ip) -> hostConfig.withExtraHosts(host + ":" + ip));
+            hostConfig.withPortBindings(spec.getPorts().entrySet().stream()
+					.map(entry -> new PortBinding(
+							Ports.Binding.bindPortSpec(entry.getValue()),
+							ExposedPort.parse(entry.getKey())))
+					.toList());
 
             var createCommand = dockerClient.createContainerCmd(spec.getImage())
                     .withName(spec.getName())
