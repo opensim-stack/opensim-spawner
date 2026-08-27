@@ -195,7 +195,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
         		LOG.info("Sim {} requires a region, importing OAR {}.", name, oarName);
 	            var workspaceArchivePath = copyArchiveToWorkspace(oar.archivePath(), materializedFiles);
 	            
-	            for(int i = 0 ; i < 5 ; i++) {
+	            for(int i = 0 ; i < 18 ; i++) {
 	            	try {
 	            		openSimService.loadRegionArchive(workspaceArchivePath.toString());
 	            		break;
@@ -206,7 +206,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 	            		}
  	            		else {
  	            			try {
- 	            				Thread.sleep(5000); // wait a bit for the region to be fully loade
+ 	            				Thread.sleep(10000); // wait a bit for the region to be fully loade
  	            			} catch (InterruptedException e2) {
  	       	            		throw new RuntimeException("Interrupted while waiting for region to load.", e2);
  	       					}
