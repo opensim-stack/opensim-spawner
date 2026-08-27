@@ -90,7 +90,7 @@ public class SetupWizardService {
         var botEmail = stringValue(bot.get("email"));
         var botAppearance = stringValue(bot.get("appearance"));
         var botGender = stringValue(bot.get("gender"));
-        var botLevel = firstNonBlank(stringValue(bot.get("level")), BotLevel.GOVERNOR.name());
+        var botLevel = BotLevel.GOVERNOR.name();
 
         var userFirst = firstNonBlank(stringValue(user.get("first")), normalizeNameFromSimulator(primarySimulatorName));
         var userLast = firstNonBlank(stringValue(user.get("last")), "User");

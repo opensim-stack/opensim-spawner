@@ -14,6 +14,10 @@ RUN mvn -q -DskipTests -Dspring-boot.repackage.skip=true package dependency:copy
 FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /opt/opensim-spawner
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /workspace/target/opensim-spawner-*.jar /opt/opensim-spawner/app.jar
 COPY --from=build /workspace/target/dependency /opt/opensim-spawner/lib
 COPY docker/entrypoint.sh /usr/local/bin/opensim-spawner-entrypoint.sh
