@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
+import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.OARs;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 
@@ -30,10 +32,18 @@ public class SimulatorController {
 
     private final SimulatorProvisioningService provisioningService;
     private final OARs oars;
+    private final BotProvisioningService botProvisioningService;
+    private final SpawnerProperties properties;
 
-    public SimulatorController(SimulatorProvisioningService provisioningService, OARs oars) {
+    public SimulatorController(
+    		SimulatorProvisioningService provisioningService, 
+    		BotProvisioningService botProvisioningService, 
+    		OARs oars,
+    		SpawnerProperties properties) {
         this.provisioningService = provisioningService;
+        this.botProvisioningService = botProvisioningService;
         this.oars = oars;
+        this.properties = properties;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -87,8 +97,21 @@ public class SimulatorController {
             @RequestParam(required = false) String level,
             @RequestParam Map<String, String> fields) {
         try {
-            var bot = provisioningService.createSim(name, level, fields);
-            return provisioningService.toResponse(bot);
+            var sim = provisioningService.createSim(name, level, fields);
+
+	        var createBot = "true".equalsIgnoreCase(fields.get("createBot"));
+        	if(createBot) {
+        		botProvisioningService.createBot(sim.getOwnerFirst(), sim.getOwnerLast(), 
+        				"GOVERNOR", 
+	            		Map.of(
+	        			  "email", sim.getOwnerEmail(),
+	        			  "password", sim.getOwnerPassword(),
+	                      "model", "",
+	                      "appearance", properties.getOpensimBotAppearance(),
+	                      "gender", properties.getOpensimBotGender()
+	        			));
+        	}
+            return provisioningService.toResponse(sim);
         } catch (IllegalArgumentException e) {
             LOG.error("Failed to create OpenSim user {}.", name, e);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);

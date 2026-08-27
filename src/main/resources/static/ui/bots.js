@@ -1,9 +1,11 @@
 import {
   buildConsoleIconLink,
+  fetchWithTimeout,
   iconSpan,
   renderContainerStatusRows,
   resolvePreferredConsole,
-  showToast
+  showToast,
+  withWorkingOverlay
 } from '/ui/ui-helpers.js';
 
 const botsGrid = document.getElementById('bots-grid');
@@ -25,18 +27,38 @@ const createLevel = document.getElementById('create-level');
 const createFirst = document.getElementById('create-first');
 const createLast = document.getElementById('create-last');
 const createEmail = document.getElementById('create-email');
-const createModel = document.getElementById('create-model');
+const createAppearance = document.getElementById('create-appearance');
+const createGenderGroup = document.getElementById('create-gender-group');
 const submitCreateBot = document.getElementById('submit-create-bot');
 const toastContainer = document.getElementById('toast-container');
 const botsGridServiceWarning = document.getElementById('bots-grid-service-warning');
 const botsGridServicePill = document.getElementById('bots-grid-service-pill');
 
 let gridServiceAvailable = false;
+let cachedAppearanceNames = [];
 const gridServiceUnavailableMessage = 'Bot management is disabled until a ROBUST or STANDALONE simulator is active.';
+const REQUEST_RECOVERY_WINDOW_MS = 180000;
+const REQUEST_RECOVERY_POLL_MS = 3000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const childLevelsByParentLevel = {
   GOVERNOR: ['BUILDER', 'ACTOR'],
   BUILDER: ['ACTOR']
+};
+
+const actionVerb = (action) => {
+  switch (String(action || '').toLowerCase()) {
+    case 'start':
+      return 'Starting';
+    case 'stop':
+      return 'Stopping';
+    case 'restart':
+      return 'Restarting';
+    case 'delete':
+      return 'Deleting';
+    default:
+      return 'Working on';
+  }
 };
 
 const levelIcon = (level) => {
@@ -70,7 +92,7 @@ const splitBotName = (displayName) => {
 const callAction = async (first, last, action) => {
   const payload = new URLSearchParams();
   payload.set('action', action);
-  const response = await fetch(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`, {
+  const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload.toString()
@@ -81,7 +103,7 @@ const callAction = async (first, last, action) => {
 };
 
 const deleteBot = async (first, last) => {
-  const response = await fetch(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`, {
+  const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`, {
     method: 'DELETE'
   });
   if (!response.ok) {
@@ -89,18 +111,21 @@ const deleteBot = async (first, last) => {
   }
 };
 
-const createBot = async ({ first, last, level, parent, email, model }) => {
+const createBot = async ({ first, last, level, parent, email, appearance, gender }) => {
   const payload = new URLSearchParams();
   payload.set('level', level);
   payload.set('parent', parent || '');
   if (email) {
     payload.set('email', email);
   }
-  if (model) {
-    payload.set('model', model);
+  if (appearance) {
+    payload.set('appearance', appearance);
+  }
+  if (gender) {
+    payload.set('gender', gender);
   }
 
-  const response = await fetch(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`, {
+  const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload.toString()
@@ -113,12 +138,75 @@ const createBot = async ({ first, last, level, parent, email, model }) => {
 };
 
 const fetchGridServiceAvailability = async () => {
-  const response = await fetch('/api/simulator/grid-service');
+  const response = await fetchWithTimeout('/api/simulator/grid-service');
   if (!response.ok) {
     throw new Error(`Could not determine grid service availability (${response.status}).`);
   }
   const payload = await response.json();
   return !!payload?.available;
+};
+
+const fetchAppearanceNames = async () => {
+  const response = await fetchWithTimeout('/api/bot/appearances');
+  if (!response.ok) {
+    throw new Error(`Could not load appearances (${response.status}).`);
+  }
+  const payload = await response.json();
+  return Array.isArray(payload) ? payload : [];
+};
+
+const populateAppearanceOptions = () => {
+  if (!createAppearance) {
+    return;
+  }
+
+  createAppearance.innerHTML = '';
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'Default';
+  createAppearance.appendChild(defaultOption);
+
+  cachedAppearanceNames.forEach((name) => {
+    const value = String(name || '').trim();
+    if (!value) {
+      return;
+    }
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    createAppearance.appendChild(option);
+  });
+};
+
+const ensureAppearanceOptionsLoaded = async () => {
+  if (cachedAppearanceNames.length > 0) {
+    populateAppearanceOptions();
+    return;
+  }
+  cachedAppearanceNames = await fetchAppearanceNames();
+  populateAppearanceOptions();
+};
+
+const renderGenderOptions = () => {
+  if (!createGenderGroup) {
+    return;
+  }
+
+  const options = [
+    { value: 'male', label: 'Male', icon: 'male' },
+    { value: 'female', label: 'Female', icon: 'female' },
+    { value: 'neutral', label: 'Neutral', icon: 'neutral' }
+  ];
+
+  createGenderGroup.innerHTML = options.map((option) => `
+    <label class="cursor-pointer">
+      <input class="peer sr-only" type="radio" name="create-gender" value="${option.value}" ${option.value === 'neutral' ? 'checked' : ''}>
+      <span class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-neon-primary/30 bg-dark-700 px-3 py-2 text-gray-200 transition-colors peer-checked:border-neon-accent peer-checked:bg-neon-accent/20 peer-checked:text-neon-accent hover:border-neon-primary/60">
+        ${iconSpan(option.icon, 'h-6 w-6 inline-block align-middle shrink-0')}
+        <span class="text-sm">${option.label}</span>
+      </span>
+    </label>
+  `).join('');
 };
 
 const toggleButtonDisabledVisual = (button, disabled) => {
@@ -154,6 +242,10 @@ const resetCreateDialog = () => {
     createBotError.textContent = '';
     createBotError.classList.add('hidden');
   }
+  const defaultGender = createGenderGroup?.querySelector('input[name="create-gender"][value="neutral"]');
+  if (defaultGender instanceof HTMLInputElement) {
+    defaultGender.checked = true;
+  }
 };
 
 const closeCreateDialog = () => {
@@ -162,12 +254,19 @@ const closeCreateDialog = () => {
   }
 };
 
-const openGovernorDialog = () => {
+const openGovernorDialog = async () => {
   if (!gridServiceAvailable) {
     showToast(toastContainer, gridServiceUnavailableMessage, 'error');
     return;
   }
   if (!createBotModal || !createMode || !createParent || !createBotTitle || !createBotSubtitle || !createBotInfo || !createLevelRow) {
+    return;
+  }
+
+  try {
+    await ensureAppearanceOptionsLoaded();
+  } catch (err) {
+    showToast(toastContainer, err instanceof Error ? err.message : 'Failed to load appearance options.', 'error');
     return;
   }
 
@@ -182,12 +281,19 @@ const openGovernorDialog = () => {
   createFirst?.focus();
 };
 
-const openChildDialog = (parentStatus) => {
+const openChildDialog = async (parentStatus) => {
   if (!gridServiceAvailable) {
     showToast(toastContainer, gridServiceUnavailableMessage, 'error');
     return;
   }
   if (!createBotModal || !createMode || !createParent || !createBotTitle || !createBotSubtitle || !createBotInfo || !createLevelRow || !createLevel) {
+    return;
+  }
+
+  try {
+    await ensureAppearanceOptionsLoaded();
+  } catch (err) {
+    showToast(toastContainer, err instanceof Error ? err.message : 'Failed to load appearance options.', 'error');
     return;
   }
 
@@ -280,18 +386,33 @@ const createCard = (status) => {
 
       button.disabled = true;
       try {
-        if (action === 'delete') {
-          if (!window.confirm(`Delete bot ${first} ${last}?`)) {
-            return;
+        await withWorkingOverlay(async () => {
+          if (action === 'delete') {
+            if (!window.confirm(`Delete bot ${first} ${last}?`)) {
+              return;
+            }
+            await deleteBot(first, last);
+            showToast(toastContainer, `Deleted bot ${first} ${last}.`, 'success');
+          } else {
+            await callAction(first, last, action);
+            showToast(toastContainer, `Sent '${action}' for ${first} ${last}.`, 'success');
           }
-          await deleteBot(first, last);
-          showToast(toastContainer, `Deleted bot ${first} ${last}.`, 'success');
-        } else {
-          await callAction(first, last, action);
-          showToast(toastContainer, `Sent '${action}' for ${first} ${last}.`, 'success');
-        }
-        await loadBots();
+          await loadBots();
+        }, `${actionVerb(action)} bot ${first} ${last} ...`);
       } catch (err) {
+        const recovered = await withWorkingOverlay(
+          async () => waitForBotActionOutcome(first, last, action),
+          `Verifying ${actionVerb(action).toLowerCase()} result for bot ${first} ${last} ...`
+        );
+        if (recovered) {
+          await loadBots();
+          if (action === 'delete') {
+            showToast(toastContainer, `Deleted bot ${first} ${last}.`, 'success');
+          } else {
+            showToast(toastContainer, `Completed '${action}' for ${first} ${last}.`, 'success');
+          }
+          return;
+        }
         showToast(toastContainer, err instanceof Error ? err.message : 'Request failed.', 'error');
       } finally {
         button.disabled = false;
@@ -302,8 +423,8 @@ const createCard = (status) => {
   const spawnChildButton = card.querySelector('button[data-spawn-child]');
   if (spawnChildButton) {
     toggleButtonDisabledVisual(spawnChildButton, !gridServiceAvailable);
-    spawnChildButton.addEventListener('click', () => {
-      openChildDialog(status);
+    spawnChildButton.addEventListener('click', async () => {
+      await openChildDialog(status);
     });
   }
 
@@ -326,7 +447,7 @@ const loadBots = async () => {
   }
   applyGridServiceUiState();
 
-  const listResponse = await fetch('/api/bot');
+  const listResponse = await fetchWithTimeout('/api/bot');
   if (!listResponse.ok) {
     throw new Error(`Could not list bots (${listResponse.status}).`);
   }
@@ -339,7 +460,7 @@ const loadBots = async () => {
 
   const statuses = await Promise.all(botNames.map(async (name) => {
     const parts = splitBotName(name);
-    const response = await fetch(`/api/bot/${encodeURIComponent(parts.first)}/${encodeURIComponent(parts.last)}`);
+    const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(parts.first)}/${encodeURIComponent(parts.last)}`);
     if (!response.ok) {
       throw new Error(`Could not load bot '${name}' (${response.status}).`);
     }
@@ -351,9 +472,79 @@ const loadBots = async () => {
   });
 };
 
+const waitForBotVisible = async (first, last, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
+      if (response.ok) {
+        return true;
+      }
+    } catch (_ignored) {
+      // Ignore transient errors while waiting for eventual consistency after create.
+    }
+    await new Promise((resolve) => setTimeout(resolve, REQUEST_RECOVERY_POLL_MS));
+  }
+  return false;
+};
+
+const fetchBotStatusOrNull = async (first, last) => {
+  try {
+    const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch (_ignored) {
+    return null;
+  }
+};
+
+const waitForBotActionOutcome = async (first, last, action, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+  const normalizedAction = String(action || '').toLowerCase();
+  const deadline = Date.now() + maxWaitMs;
+  const expectedName = `${first} ${last}`.trim();
+
+  while (Date.now() < deadline) {
+    if (normalizedAction === 'delete') {
+      try {
+        const listResponse = await fetchWithTimeout('/api/bot');
+        if (listResponse.ok) {
+          const names = await listResponse.json();
+          if (Array.isArray(names) && !names.includes(expectedName)) {
+            return true;
+          }
+        }
+      } catch (_ignored) {
+        // Keep polling through transient failures.
+      }
+      await sleep(REQUEST_RECOVERY_POLL_MS);
+      continue;
+    }
+
+    const status = await fetchBotStatusOrNull(first, last);
+    const containers = Array.isArray(status?.containerStatus) ? status.containerStatus : [];
+    if (containers.length > 0) {
+      if ((normalizedAction === 'start' || normalizedAction === 'restart')
+        && containers.every((container) => !!container.running)) {
+        return true;
+      }
+      if (normalizedAction === 'stop' && containers.every((container) => !container.running)) {
+        return true;
+      }
+    }
+
+    await sleep(REQUEST_RECOVERY_POLL_MS);
+  }
+
+  return false;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
-  openCreateBotButton?.addEventListener('click', () => {
-    openGovernorDialog();
+  renderGenderOptions();
+
+  openCreateBotButton?.addEventListener('click', async () => {
+    await openGovernorDialog();
   });
 
   closeCreateBotButton?.addEventListener('click', () => {
@@ -372,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   createBotForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!createMode || !createParent || !createFirst || !createLast || !createEmail || !createModel || !submitCreateBot || !createBotError) {
+    if (!createMode || !createParent || !createFirst || !createLast || !createEmail || !createAppearance || !submitCreateBot || !createBotError) {
       return;
     }
 
@@ -385,7 +576,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const first = createFirst.value.trim();
     const last = createLast.value.trim();
     const email = createEmail.value.trim();
-    const model = createModel.value.trim();
+    const appearance = createAppearance.value.trim();
+    const selectedGender = createGenderGroup?.querySelector('input[name="create-gender"]:checked');
+    const gender = selectedGender instanceof HTMLInputElement ? selectedGender.value : 'neutral';
     const level = createMode.value === 'child' ? String(createLevel?.value || '').toUpperCase() : 'GOVERNOR';
 
     if (!first || !last || !level) {
@@ -398,18 +591,32 @@ document.addEventListener('DOMContentLoaded', () => {
     submitCreateBot.disabled = true;
 
     try {
-      await createBot({
-        first,
-        last,
-        level,
-        parent: createParent.value,
-        email,
-        model
-      });
-      closeCreateDialog();
-      await loadBots();
-      showToast(toastContainer, `Created bot ${first} ${last}.`, 'success');
+      await withWorkingOverlay(async () => {
+        await createBot({
+          first,
+          last,
+          level,
+          parent: createParent.value,
+          email,
+          appearance,
+          gender
+        });
+        closeCreateDialog();
+        await loadBots();
+        showToast(toastContainer, `Created bot ${first} ${last}.`, 'success');
+      }, `Creating bot ${first} ${last} ...`);
     } catch (err) {
+      const recovered = await withWorkingOverlay(
+        async () => waitForBotVisible(first, last),
+        `Verifying bot ${first} ${last} ...`
+      );
+      if (recovered) {
+        closeCreateDialog();
+        await loadBots();
+        showToast(toastContainer, `Created bot ${first} ${last}.`, 'success');
+        return;
+      }
+
       createBotError.textContent = err instanceof Error ? err.message : 'Failed to create bot.';
       createBotError.classList.remove('hidden');
       showToast(toastContainer, createBotError.textContent, 'error');
@@ -421,7 +628,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (refreshButton) {
     refreshButton.addEventListener('click', async () => {
       try {
-        await loadBots();
+        await withWorkingOverlay(async () => {
+          await loadBots();
+        }, 'Refreshing bots ...');
         showToast(toastContainer, 'Bot list refreshed.', 'success');
       } catch (err) {
         showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');

@@ -9,19 +9,26 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import jakarta.servlet.http.HttpServletRequest;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.service.ApprovalService;
+import uk.co.bithatch.opensim.spawner.service.SetupWizardService;
 
 @Controller
 public class UiController {
 
     private final SpawnerProperties properties;
+    private final ApprovalService approvalService;
+    private final SetupWizardService setupWizardService;
 
-    public UiController(SpawnerProperties properties) {
+    public UiController(SpawnerProperties properties, ApprovalService approvalService, SetupWizardService setupWizardService) {
         this.properties = properties;
+        this.approvalService = approvalService;
+        this.setupWizardService = setupWizardService;
     }
 
     @GetMapping("/")
@@ -85,6 +92,24 @@ public class UiController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping(path = "/ui/api/auth/register", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> register(@RequestParam String first,
+            @RequestParam String last,
+            @RequestParam String email,
+            @RequestParam String password) {
+        var approval = approvalService.createApproval(first, last, email, password);
+        var response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("first", approval.getFirst());
+        response.put("last", approval.getLast());
+        response.put("email", approval.getEmail());
+        return response;
+    }
+
     @PostMapping(path = "/ui/api/auth/logout", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public Map<String, Object> logout(HttpServletRequest request) {
@@ -96,6 +121,12 @@ public class UiController {
         var response = new LinkedHashMap<String, Object>();
         response.put("ok", true);
         return response;
+    }
+
+    @PostMapping(path = "/ui/api/setup/run", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> runSetupWizard(@RequestBody(required = false) Map<String, Object> payload) {
+        return setupWizardService.runSetup(payload);
     }
 
     private static String normalize(String value) {

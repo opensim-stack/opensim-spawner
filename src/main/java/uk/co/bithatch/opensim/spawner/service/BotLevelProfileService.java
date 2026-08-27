@@ -33,8 +33,6 @@ public class BotLevelProfileService extends AbstractProfileService<BotInstanceDa
         variables.put("bot.level", bot.getLevel() == null ? "" : bot.getLevel().name());
         variables.put("env.OPENSIM_OPENCODE_IMAGE", properties.getOpencodeImage());
         variables.put("env.OPENSIM_METAVERSE2MCP_IMAGE", properties.getMetaverse2mcpImage());
-        variables.put("env.OPENSIM_BOT_HANDLER_FIRSTNAME", properties.getOpenCodeHandlerFirstname());
-        variables.put("env.OPENSIM_BOT_HANDLER_LASTNAME", properties.getOpenCodeHandlerLastname());
         for (var envEntry : System.getenv().entrySet()) {
             variables.put("env." + envEntry.getKey(), envEntry.getValue());
         }

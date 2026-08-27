@@ -1,0 +1,91 @@
+From the client (libremetaverse), using `docker logs opensim-ai-metaverse2mcp-TerraSim-Bot|egrep -i "janus|webrtc|voice"` ....
+
+[voice] routing requested on startup; backend=webrtc piper=http://opensim-ai-piper:8995/
+[voice][trace:000001] backend.connect.begin requested=webrtc active=none
+[Voice.WebRTC] SoundFlow initialized successfully
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] ConnectPrimaryRegionAsync started
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Using parcel voice for parcel local_id=1
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Requesting voice capability...
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] ==> Attempting to POST for voice provision...
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Received provisioning response
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Keeping remote ICE candidate: a=candidate:1 1 udp 2015363327 172.18.0.4 37938 typ host
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Remote SDP candidate summary: 1 kept, 0 dropped, 1 total
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Skipping ICE send - no answer received yet
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] ICE connection state: checking
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Sending 1 ICE candidates
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Sent 1 ICE candidates successfully
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Local voice provisioned: session=f97a1213-485e-4750-9df2-a818a617ded5
+[voice][trace:000001] backend.connect.ok elapsedMs=361 active=webrtc
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] ICE connection state: connected
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Peer connection state changed to connecting.
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] ICE gathering state completed
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Sending 1 ICE candidates
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Sent 1 ICE candidates successfully
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Peer connection state changed to connected.
+[Voice.WebRTC] Playback started
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Playback started
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Data channel opened (primary=True)
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] [WebRTC] data channel ready
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Voice data channel ready for session f97a1213-485e-4750-9df2-a818a617ded5
+[TerraSim Bot] [Voice.WebRTC] [TerraSim Bot] Sending ICE Signaling Complete for f97a1213-485e-4750-9df2-a818a617ded5
+[WARNING]: Tile dimensions (512x512) exceed image dimensions (128x128). This
+           will result in a single tile.
+[WARNING]: Tile dimensions (512x512) exceed image dimensions (128x128). This
+           will result in a single tile.
+
+           
+From the simulator, using `docker logs opensim-ai-standalone-TerraSim|egrep -i "janus|webrtc|voice"` ....
+           
+           
+09:00:40 - [CONFIG]: Reading configuration file /opt/opensim/bin/config-include/os-webrtc-janus.ini
+09:00:41 - [PLUGINS]: Plugin Loaded: WebRtcVoiceServiceModule
+09:00:41 - [REGIONMODULES]: Found unknown type of module WebRtcVoiceServiceModule, class osWebRtcVoice.WebRtcVoiceServiceModule
+09:00:41 - [PLUGINS]: Plugin Loaded: WebRtcVoiceRegionModule
+09:00:41 - [REGIONMODULES]: From plugin WebRtcVoiceServiceModule, (version 1.0), loaded 1 modules, 0 shared, 0 non-shared 1 unknown
+09:00:41 - [REGIONMODULES]: From plugin WebRtcVoiceRegionModule, (version 1.0), loaded 1 modules, 1 shared, 0 non-shared 0 unknown
+09:00:43 - [REGION WEBRTC VOICE] Loading SpatialVoiceService from WebRtcJanusService.dll:WebRtcJanusService
+09:00:43 - [JANUS WEBRTC SERVICE] StartConnectionToJanus
+09:00:43 - [JANUS VIEWER SESSION] JanusViewerSession created c8ae09b6-e37d-45b4-8b9f-732061e074bf
+09:00:43 - [JANUS SESSION] JanusSession constructor
+09:00:43 - [JANUS SESSION] CreateSession. Created. ID=2066206116044148, URL=http://blue:14223/voice/2066206116044148
+09:00:43 - [JANUS SESSION] EventLongPoll
+09:00:43 - [JANUS WEBRTC SERVICE] JanusSession created
+09:00:43 - [JANUS PLUGIN] Activate. Plugin attached. ID=1628921021295735, URL=http://blue:14223/voice/2066206116044148/1628921021295735
+09:00:43 - [JANUS WEBRTC SERVICE] AudioBridgePluginHandle created
+09:00:43 - [JANUS WEBRTC SERVICE] Enabled
+09:00:43 - [REGION WEBRTC VOICE] Loading NonSpatialVoiceService from WebRtcJanusService.dll:WebRtcJanusService
+09:00:43 - [REGION WEBRTC VOICE] WebRtcVoiceService enabled
+09:00:52 - [REGION WEBRTC VOICE]: OnRegisterCaps called with agentID 03678d01-1bdb-4f29-9d8b-9c7d8dc143e1 in scene TerraSim
+09:00:53 - [REGION WEBRTC VOICE][ProvisionVoice] BodyToMap: Request: {"jsep":{"type":"offer","sdp":"v=0\r\no=- 62815 0 IN IP4 127.0.0.1\r\ns=LibreMetaVoice\r\nt=0 0\r\na=group:BUNDLE 0 1\r\nm=audio 9 UDP/TLS/RTP/SAVP 0 8 9 18 111 101\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:PXOR\r\na=ice-pwd:PGRRXRGYDIRBHPBBTVOLFLXM\r\na=fingerprint:sha-256 71:87:89:01:4A:09:1F:52:0F:5C:53:9E:B4:E4:FE:34:D4:E7:9D:3F:1E:0C:6F:2D:07:85:16:C1:3C:28:09:03\r\na=setup:actpass\r\na=candidate:3430350470 1 udp 2113937663 172.18.0.8 49152 typ host generation 0\r\na=mid:0\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:9 G722/8000\r\na=rtpmap:18 G729/8000\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxplaybackrate=48000\r\na=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-16\r\na=ice-options:ice2,trickle\r\na=rtcp-mux\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=sendrecv\r\na=ssrc:1334757042 cname:2e071fb0-dac9-4fdd-b6ff-98cc48c30cbd\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:PXOR\r\na=ice-pwd:PGRRXRGYDIRBHPBBTVOLFLXM\r\na=fingerprint:sha-256 71:87:89:01:4A:09:1F:52:0F:5C:53:9E:B4:E4:FE:34:D4:E7:9D:3F:1E:0C:6F:2D:07:85:16:C1:3C:28:09:03\r\na=setup:actpass\r\na=mid:1\r\na=ice-options:ice2,trickle\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"},"parcel_local_id":1,"channel_type":"local","voice_server_type":"webrtc"}
+09:00:53 - [REGION WEBRTC VOICE][ProvisionVoice]: request: {"jsep":{"type":"offer","sdp":"v=0\r\no=- 62815 0 IN IP4 127.0.0.1\r\ns=LibreMetaVoice\r\nt=0 0\r\na=group:BUNDLE 0 1\r\nm=audio 9 UDP/TLS/RTP/SAVP 0 8 9 18 111 101\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:PXOR\r\na=ice-pwd:PGRRXRGYDIRBHPBBTVOLFLXM\r\na=fingerprint:sha-256 71:87:89:01:4A:09:1F:52:0F:5C:53:9E:B4:E4:FE:34:D4:E7:9D:3F:1E:0C:6F:2D:07:85:16:C1:3C:28:09:03\r\na=setup:actpass\r\na=candidate:3430350470 1 udp 2113937663 172.18.0.8 49152 typ host generation 0\r\na=mid:0\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:9 G722/8000\r\na=rtpmap:18 G729/8000\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1;maxplaybackrate=48000\r\na=rtpmap:101 telephone-event/8000\r\na=fmtp:101 0-16\r\na=ice-options:ice2,trickle\r\na=rtcp-mux\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=sendrecv\r\na=ssrc:1334757042 cname:2e071fb0-dac9-4fdd-b6ff-98cc48c30cbd\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:PXOR\r\na=ice-pwd:PGRRXRGYDIRBHPBBTVOLFLXM\r\na=fingerprint:sha-256 71:87:89:01:4A:09:1F:52:0F:5C:53:9E:B4:E4:FE:34:D4:E7:9D:3F:1E:0C:6F:2D:07:85:16:C1:3C:28:09:03\r\na=setup:actpass\r\na=mid:1\r\na=ice-options:ice2,trickle\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n"},"parcel_local_id":1,"channel_type":"local","voice_server_type":"webrtc"}
+09:00:53 - [JANUS VIEWER SESSION] JanusViewerSession created f97a1213-485e-4750-9df2-a818a617ded5
+09:00:53 - [JANUS SESSION] JanusSession constructor
+09:00:53 - [JANUS SESSION] CreateSession. Created. ID=4979232051009326, URL=http://blue:14223/voice/4979232051009326
+09:00:53 - [JANUS SESSION] EventLongPoll
+09:00:53 - [JANUS WEBRTC SERVICE] JanusSession created
+09:00:53 - [JANUS PLUGIN] Activate. Plugin attached. ID=4433739543896679, URL=http://blue:14223/voice/4979232051009326/4433739543896679
+09:00:53 - [JANUS WEBRTC SERVICE] AudioBridgePluginHandle created
+09:00:53 - [JANUS WEBRTC SERVICE] ProvisionVoiceAccountRequest: parcel_id=1 channel_id= channel_type=local voice_server_type=webrtc
+09:00:53 - [JANUS AUDIO BRIDGE] SelectRoom: roomNumber=1684714134
+09:00:53 - [JANUS AUDIO BRIDGE] CreateRoom. ReturnCode: 'created'
+09:00:53 - [JANUS ROOM] JoinRoom. Joined room 1684714134. Participant=5878646298546338148
+09:00:53 - [JANUS WEBRTC SERVICE] ProvisionVoiceAccountRequest: end (flow=1, viewer_session=f97a1213-485e-4750-9df2-a818a617ded5)
+09:00:53 - [REGION WEBRTC VOICE][ProvisionVoice]: response: {"jsep":{"type":"answer","sdp":"v=0\r\no=- 1787734853833538 1 IN IP4 172.18.0.4\r\ns=AudioBridge 1684714134\r\nt=0 0\r\na=group:BUNDLE 0\r\na=ice-options:trickle\r\na=fingerprint:sha-256 13:22:64:55:5B:39:CA:03:33:40:9E:6F:50:A9:94:65:34:0E:D5:A3:42:BB:56:1C:88:96:45:41:9C:D7:F8:CC\r\na=extmap-allow-mixed\r\na=msid-semantic: WMS *\r\nm=audio 9 UDP/TLS/RTP/SAVP 111\r\nc=IN IP4 172.18.0.4\r\na=sendrecv\r\na=mid:0\r\na=rtcp-mux\r\na=ice-ufrag:HoJe\r\na=ice-pwd:C6KKLlLJLLh3TA90fd3AbI\r\na=ice-options:trickle\r\na=setup:active\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 maxplaybackrate=48000; stereo=1; sprop-stereo=1; useinbandfec=1\r\na=msid:janus janus0\r\na=ssrc:764528345 cname:janus\r\na=candidate:1 1 udp 2015363327 172.18.0.4 37938 typ host\r\na=end-of-candidates\r\nm=application 0 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 172.18.0.4\r\na=inactive\r\na=mid:1\r\n"},"viewer_session":"f97a1213-485e-4750-9df2-a818a617ded5"}
+09:00:53 - [REGION WEBRTC VOICE][VoiceSignaling] BodyToMap: Request: {"voice_server_type":"webrtc","viewer_session":"f97a1213-485e-4750-9df2-a818a617ded5","candidates":[{"sdpMid":"","sdpMLineIndex":0,"candidate":"3430350470 1 udp 2113937663 172.18.0.8 49152 typ host generation 0"}]}
+09:00:53 - [JANUS WEBRTC SERVICE] VoiceSignalingRequest: 1 candidates
+09:00:53 - [REGION WEBRTC VOICE][VoiceSignalingRequest]: Response:
+09:00:53 - [REGION WEBRTC VOICE][VoiceSignaling] BodyToMap: Request: {"voice_server_type":"webrtc","viewer_session":"f97a1213-485e-4750-9df2-a818a617ded5","candidates":[{"sdpMid":"0","sdpMLineIndex":0,"candidate":"3560339011 1 udp 1677730047 77.98.109.80 49152 typ srflx raddr 0.0.0.0 rport 0 generation 0"}]}
+09:00:53 - [JANUS WEBRTC SERVICE] VoiceSignalingRequest: 1 candidates
+09:00:53 - [REGION WEBRTC VOICE][VoiceSignalingRequest]: Response:
+09:00:53 - [JANUS SESSION] EventLongPoll: webrtcup session_id=4979232051009326, sender=4433739543896679
+09:00:54 - [JANUS SESSION] EventLongPoll: media session_id=4979232051009326, sender=4433739543896679, tx=<event>
+09:00:54 - [REGION WEBRTC VOICE][VoiceSignaling] BodyToMap: Request: {"voice_server_type":"webrtc","viewer_session":"f97a1213-485e-4750-9df2-a818a617ded5","candidate":{"completed":true}}
+09:00:54 - [JANUS WEBRTC SERVICE] VoiceSignalingRequest: candidate completed
+09:00:54 - [REGION WEBRTC VOICE][VoiceSignalingRequest]: Response:
+help Webrtc
+janus info - Show Janus server information in human-readable form (use 'janus info json' for raw JSON)
+janus list - List Janus rooms and sessions (shortcut for diagnostics)
+janus list rooms - List the rooms on the Janus server
+janus list sessions - List active Janus sessions (admin API)
+janus room <roomId> - Show one room with participant details
+janus show - Alias for 'janus info'

@@ -286,6 +286,15 @@ public abstract class AbstractContainerGroupProvisioningService<
 	protected void materializeFiles(Plan plan, List<Path> writtenFiles,
 			Map<String, String> variables) {
 		for (var container : plan.containers()) {
+			for(var dir : container.getDirectories()) {
+				var targetPath = Path.of(dir);
+				try {
+					Files.createDirectories(targetPath);
+					writtenFiles.add(targetPath);
+				} catch (IOException e) {
+					throw new IllegalStateException("Failed to materialize container group directory " + targetPath + ".", e);
+				}
+			}
             for (var fileEntry : container.getFiles().entrySet()) {
                 var targetPath = java.nio.file.Path.of(fileEntry.getKey());
                 var templateName = fileEntry.getValue();

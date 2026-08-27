@@ -21,18 +21,17 @@ import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.domain.BotHandlerAssignment;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
 import uk.co.bithatch.opensim.spawner.domain.Gender;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
 import uk.co.bithatch.opensim.spawner.state.BotStateRepository;
+import uk.co.bithatch.opensim.spawner.state.HandlerStateRepository;
 
 @Service
 public class BotProvisioningService extends AbstractContainerGroupProvisioningService<BotStateRepository, BotInstanceData> {
 	
-	private static final int RETRY_COUNT = 10;
-	private static final int RETRY_INTERVAL_MS = 5000;
-
     private static final Logger LOG = LoggerFactory.getLogger(BotProvisioningService.class);
 
     private final BotLevelProfileService profileService;
@@ -40,6 +39,7 @@ public class BotProvisioningService extends AbstractContainerGroupProvisioningSe
     private final RandomPasswordService passwordService;
     private final Appearances appearances;
     private final SimulatorProvisioningService simulatorProvisioningService;
+    private final HandlerStateRepository handlerStateRepository;
 
     @Autowired
     public BotProvisioningService(BotStateRepository stateRepository,
@@ -50,65 +50,16 @@ public class BotProvisioningService extends AbstractContainerGroupProvisioningSe
             TemplateResolver templateResolver,
             SpawnerProperties properties,
             Appearances appearances,
-            SimulatorProvisioningService simulatorProvisioningService) {
+            SimulatorProvisioningService simulatorProvisioningService,
+            HandlerStateRepository handlerStateRepository) {
     	super(stateRepository, dockerService, templateResolver, properties);
         this.profileService = profileService;
         this.openSimService = openSimService;
         this.passwordService = passwordService;
         this.appearances = appearances;
         this.simulatorProvisioningService = simulatorProvisioningService;
+        this.handlerStateRepository = handlerStateRepository;
         
-
-        if(properties.isOpensimCreateBotUser()) {
-      if (!hasGridLoginService()) {
-        LOG.warn("Skipping auto-create login bot because no active ROBUST/STANDALONE simulator is available.");
-      }
-      else {
-        	if(exists(key(properties.getOpensimLoginFirstname(), properties.getOpensimLoginLastname()))) {
-				LOG.info("Bot {} {} already exists. Skipping creation.", properties.getOpensimLoginFirstname(), properties.getOpensimLoginLastname());
-			}
-        	else {
-        		BotInstanceData bot = null;
-				LOG.info("Spawner is configured to create OpenSimulator users for bots.");
-				for(int i = 0 ; i < RETRY_COUNT; i++) {
-					LOG.info("Attempting to create bot {} {} (attempt {}/{})", properties.getOpensimLoginFirstname(), properties.getOpensimLoginLastname(), i+1, RETRY_COUNT);
-					try {
-			            bot = createBot(
-		            		properties.getOpensimLoginFirstname(), 
-		            		properties.getOpensimLoginLastname(),
-		            		"GOVERNOR", 
-		            		Map.of(
-		        			  "email", properties.getOpensimLoginEmail(), 
-		                      "model", properties.getOpensimLoginModel(),
-		                      "appearance", System.getenv().getOrDefault("BOT_APPEARANCE", "Cube Bot"),
-		                      "gender", System.getenv().getOrDefault("BOT_GENDER", "neutral")
-		        			)
-		            	);
-			            LOG.info("Created bot {} - {} {} successfully.", bot.getUuid(), bot.getFirst(), bot.getLast());
-			            break;
-			        } catch (IllegalArgumentException | ResponseStatusException e) {
-			        	if(e.getMessage().contains("503 SERVICE_UNAVAILABLE") || e.getMessage().contains("Failed to parse XML: empty response body.")) {
-			        		try {
-								Thread.sleep(RETRY_INTERVAL_MS);
-							} catch (InterruptedException e1) {
-								throw new RuntimeException("Interrupted while waiting to retry bot creation.", e1);
-							}	
-			        	}
-			        	else {
-				            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
-			        	}
-			        	
-			        }
-				}
-						
-				if(bot == null) {
-					throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to create bot after " + RETRY_COUNT + " attempts.");
-				}
-        	}
-      }
-		} else {
-			LOG.info("Spawner is NOT configured to create OpenSimulator users for bots.");
-		}
 
         reconnectKnownBotsOnStartup();
         
@@ -130,7 +81,104 @@ public class BotProvisioningService extends AbstractContainerGroupProvisioningSe
                 templateResolver,
                 properties,
                 appearances,
+                null,
                 null);
+    }
+
+    public synchronized void addHandler(String botFirst, String botLast, String handlerFirst, String handlerLast) {
+        ensureHandlerRepositoryAvailable();
+        var normalizedHandlerFirst = normalizeRequiredName("handlerFirst", handlerFirst);
+        var normalizedHandlerLast = normalizeRequiredName("handlerLast", handlerLast);
+        var normalizedBotFirst = normalizeBotName(botFirst);
+        var normalizedBotLast = normalizeBotName(botLast);
+
+        var handlers = new ArrayList<>(handlerStateRepository.listHandlers());
+        var exists = handlers.stream().anyMatch((entry) ->
+            sameIgnoreCase(entry.getBotFirst(), normalizedBotFirst)
+                && sameIgnoreCase(entry.getBotLast(), normalizedBotLast)
+                && sameIgnoreCase(entry.getHandlerFirst(), normalizedHandlerFirst)
+                && sameIgnoreCase(entry.getHandlerLast(), normalizedHandlerLast));
+        if (exists) {
+            return;
+        }
+
+        var assignment = new BotHandlerAssignment();
+        assignment.setBotFirst(normalizedBotFirst);
+        assignment.setBotLast(normalizedBotLast);
+        assignment.setHandlerFirst(normalizedHandlerFirst);
+        assignment.setHandlerLast(normalizedHandlerLast);
+        handlers.add(assignment);
+        handlerStateRepository.saveHandlers(handlers);
+    }
+
+    public synchronized void removeHandler(String botFirst, String botLast, String handlerFirst, String handlerLast) {
+        ensureHandlerRepositoryAvailable();
+        var normalizedHandlerFirst = normalizeRequiredName("handlerFirst", handlerFirst);
+        var normalizedHandlerLast = normalizeRequiredName("handlerLast", handlerLast);
+        var normalizedBotFirst = normalizeBotName(botFirst);
+        var normalizedBotLast = normalizeBotName(botLast);
+        var wildcardBot = "*".equals(normalizedBotFirst) || "*".equals(normalizedBotLast);
+
+        var handlers = new ArrayList<>(handlerStateRepository.listHandlers());
+        handlers.removeIf((entry) -> {
+            if (!sameIgnoreCase(entry.getHandlerFirst(), normalizedHandlerFirst)
+                    || !sameIgnoreCase(entry.getHandlerLast(), normalizedHandlerLast)) {
+                return false;
+            }
+            if (wildcardBot) {
+                return true;
+            }
+            return sameIgnoreCase(entry.getBotFirst(), normalizedBotFirst)
+                    && sameIgnoreCase(entry.getBotLast(), normalizedBotLast);
+        });
+        handlerStateRepository.saveHandlers(handlers);
+    }
+
+    public synchronized List<BotHandlerAssignment> listHandlers() {
+        ensureHandlerRepositoryAvailable();
+        return handlerStateRepository.listHandlers();
+    }
+
+    public synchronized boolean isHandler(String handlerFirst, String handlerLast) {
+        var normalizedHandlerFirst = normalize(handlerFirst);
+        var normalizedHandlerLast = normalize(handlerLast);
+        if (normalizedHandlerFirst.isBlank() || normalizedHandlerLast.isBlank()) {
+            return false;
+        }
+        return listHandlers().stream().anyMatch((entry) ->
+            sameIgnoreCase(entry.getHandlerFirst(), normalizedHandlerFirst)
+                && sameIgnoreCase(entry.getHandlerLast(), normalizedHandlerLast));
+    }
+
+    public synchronized boolean hasAnyHandler() {
+        return !listHandlers().isEmpty();
+    }
+
+    private void ensureHandlerRepositoryAvailable() {
+        if (handlerStateRepository == null) {
+            throw new IllegalStateException("Handler repository is not available.");
+        }
+    }
+
+    private static String normalizeBotName(String value) {
+        var normalized = normalize(value);
+        return normalized.isBlank() ? "*" : normalized;
+    }
+
+    private static String normalizeRequiredName(String field, String value) {
+        var normalized = normalize(value);
+        if (normalized.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing required field: " + field + ".");
+        }
+        return normalized;
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private static boolean sameIgnoreCase(String a, String b) {
+        return String.valueOf(a).equalsIgnoreCase(String.valueOf(b));
     }
 
     private void reconnectKnownBotsOnStartup() {
@@ -200,12 +248,12 @@ public class BotProvisioningService extends AbstractContainerGroupProvisioningSe
         var level = BotLevel.fromNullable(levelName);
         var parent = defaultValue(createRequestFields.get("parent"), "");
         validateParentCanCreate(parent, level);
-        var password = passwordService.nextPassword();
+        var password = defaultValue(createRequestFields.get("password"), passwordService::nextPassword);
         var email = defaultEmail(first, last, createRequestFields.get("email"));
         var model = defaultValue(createRequestFields.get("model"), "Ruth");
         var appearance = resolveRequestedAppearance(level, createRequestFields);
         var gender = resolveRequestedGender(level, createRequestFields);
-        var uuid = UUID.randomUUID().toString();
+        var uuid = defaultValue(createRequestFields.get("uuid"), () -> UUID.randomUUID().toString());
         var token = UUID.randomUUID().toString();
         LOG.info("Creating bot {} {} (level={}, parent='{}', email={}, uuid={}, model={}, appearance={}, gender={}).",
                 first,
@@ -244,6 +292,8 @@ public class BotProvisioningService extends AbstractContainerGroupProvisioningSe
         containerRequestFields.remove("model");
         containerRequestFields.remove("appearance");
         containerRequestFields.remove("gender");
+        containerRequestFields.remove("password");
+        containerRequestFields.remove("uuid");
         try {
             var appearanceArchiveResource = appearances.getInventoryArchive(appearance, gender);
             if (appearanceArchiveResource == null) {

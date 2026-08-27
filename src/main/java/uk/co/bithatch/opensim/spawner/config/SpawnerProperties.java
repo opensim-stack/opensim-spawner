@@ -11,20 +11,24 @@ public class SpawnerProperties {
 	private int firstPort = 9000;
 	private String metaverse2mcpImage = "bithatch/opensim-metaverse2mcp:latest";
 	private String opencodeImage = "bithatch/opensim-opencode:latest";
-	private String openCodeHandlerFirstname = "";
-	private String openCodeHandlerLastname = "";
-	
+	private String opensimHandlerConfig = "/config/handlers.json";
+
+	private int opensimRegionX = 1000;
+	private int opensimRegionY = 1000;
 	private String opensimGridName = "Bot Grid";
 	private String opensimGridNick = "botgrid";
+	private String opensimEstateName = "Botland";
+	private String opensimEstateArchive = "blank";
 	private String opensimWelcomeMessage = "Welcome to Botgrid";
 	private String opensimConsoleUrl = "http://opensim:9000";
 	private String opensimConsoleUser;
 	private String opensimConsolePass;
 	private boolean opensimCreateBotUser = true;
-	private String opensimLoginFirstname = "Bot";
-	private String opensimLoginLastname = "User";
-	private String opensimLoginEmail = "bot@localhost";
-	private String opensimLoginModel = "Ruth";
+	private String opensimBotFirst = "Bot";
+	private String opensimBotLast = "User";
+	private String opensimBotEmail = "bot@localhost";
+	private String opensimBotAppearance = "Cube Bot";
+	private String opensimBotGender = "neutral";
 	private int opensimMaxBots = 10;
 	private int opensimMaxSimulators = 10;
 	private String opensimPullPolicy = "IfNotPresent";
@@ -39,6 +43,100 @@ public class SpawnerProperties {
 	private int opensimRobustPublicPort = 8002;
 	private int opensimRobustPrivatePort = 8003;
 	
+	private String opensimUserEmail = "admin@example.com";
+	private String opensimUserPassword = "changeme";
+	private String opensimUserFirst = "Bot";
+	private String opensimUserLast = "Handler";
+	private String opensimProvisionMode = "guided";
+
+	public int getOpensimRegionX() {
+		return opensimRegionX;
+	}
+
+	public void setOpensimRegionX(int opensimRegionX) {
+		this.opensimRegionX = opensimRegionX;
+	}
+
+	public int getOpensimRegionY() {
+		return opensimRegionY;
+	}
+
+	public void setOpensimRegionY(int opensimRegionY) {
+		this.opensimRegionY = opensimRegionY;
+	}
+
+	public String getOpensimEstateArchive() {
+		return opensimEstateArchive;
+	}
+
+	public void setOpensimEstateArchive(String opensimEstateArchive) {
+		this.opensimEstateArchive = opensimEstateArchive;
+	}
+
+	public String getOpensimEstateName() {
+		return opensimEstateName;
+	}
+
+	public void setOpensimEstateName(String opensimEstateName) {
+		this.opensimEstateName = opensimEstateName;
+	}
+
+	public String getOpensimBotAppearance() {
+		return opensimBotAppearance;
+	}
+
+	public void setOpensimBotAppearance(String opensimBotAppearance) {
+		this.opensimBotAppearance = opensimBotAppearance;
+	}
+
+	public String getOpensimBotGender() {
+		return opensimBotGender;
+	}
+
+	public void setOpensimBotGender(String opensimBotGender) {
+		this.opensimBotGender = opensimBotGender;
+	}
+
+	public String getOpensimProvisionMode() {
+		return opensimProvisionMode;
+	}
+
+	public void setOpensimProvisionMode(String opensimProvisionMode) {
+		this.opensimProvisionMode = opensimProvisionMode;
+	}
+
+	public String getOpensimUserEmail() {
+		return opensimUserEmail;
+	}
+
+	public void setOpensimUserEmail(String opensimUserEmail) {
+		this.opensimUserEmail = opensimUserEmail;
+	}
+
+	public String getOpensimUserPassword() {
+		return opensimUserPassword;
+	}
+
+	public void setOpensimUserPassword(String opensimUserPassword) {
+		this.opensimUserPassword = opensimUserPassword;
+	}
+
+	public String getOpensimUserFirst() {
+		return opensimUserFirst;
+	}
+
+	public void setOpensimUserFirst(String opensimUserFirst) {
+		this.opensimUserFirst = opensimUserFirst;
+	}
+
+	public String getOpensimUserLast() {
+		return opensimUserLast;
+	}
+
+	public void setOpensimUserLast(String opensimUserLast) {
+		this.opensimUserLast = opensimUserLast;
+	}
+
 	public int getOpensimRobustPublicPort() {
 		return opensimRobustPublicPort;
 	}
@@ -135,36 +233,28 @@ public class SpawnerProperties {
 		this.opensimCreateBotUser = opensimCreateBotUser;
 	}
 
-	public String getOpensimLoginFirstname() {
-		return opensimLoginFirstname;
+	public String getOpensimBotFirst() {
+		return opensimBotFirst;
 	}
 
-	public void setOpensimLoginFirstname(String opensimLoginFirstname) {
-		this.opensimLoginFirstname = opensimLoginFirstname;
+	public void setOpensimBotFirst(String opensimBotFirst) {
+		this.opensimBotFirst = opensimBotFirst;
 	}
 
-	public String getOpensimLoginLastname() {
-		return opensimLoginLastname;
+	public String getOpensimBotLast() {
+		return opensimBotLast;
 	}
 
-	public void setOpensimLoginLastname(String opensimLoginLastname) {
-		this.opensimLoginLastname = opensimLoginLastname;
+	public void setOpensimBotLast(String opensimBotLast) {
+		this.opensimBotLast = opensimBotLast;
 	}
 
-	public String getOpensimLoginEmail() {
-		return opensimLoginEmail;
+	public String getOpensimBotEmail() {
+		return opensimBotEmail;
 	}
 
-	public void setOpensimLoginEmail(String opensimLoginEmail) {
-		this.opensimLoginEmail = opensimLoginEmail;
-	}
-
-	public String getOpensimLoginModel() {
-		return opensimLoginModel;
-	}
-
-	public void setOpensimLoginModel(String opensimLoginModel) {
-		this.opensimLoginModel = opensimLoginModel;
+	public void setOpensimBotEmail(String opensimLoginEmail) {
+		this.opensimBotEmail = opensimLoginEmail;
 	}
 
 	public String getToken() {
@@ -199,20 +289,12 @@ public class SpawnerProperties {
 		this.opencodeImage = opencodeImage;
 	}
 
-	public String getOpenCodeHandlerFirstname() {
-		return openCodeHandlerFirstname;
+	public String getOpensimHandlerConfig() {
+		return opensimHandlerConfig;
 	}
 
-	public void setOpenCodeHandlerFirstname(String openCodeHandlerFirstname) {
-		this.openCodeHandlerFirstname = openCodeHandlerFirstname;
-	}
-
-	public String getOpenCodeHandlerLastname() {
-		return openCodeHandlerLastname;
-	}
-
-	public void setOpenCodeHandlerLastname(String openCodeHandlerLastname) {
-		this.openCodeHandlerLastname = openCodeHandlerLastname;
+	public void setOpensimHandlerConfig(String opensimHandlerConfig) {
+		this.opensimHandlerConfig = opensimHandlerConfig;
 	}
 
 	public String getOpensimConsoleUrl() {

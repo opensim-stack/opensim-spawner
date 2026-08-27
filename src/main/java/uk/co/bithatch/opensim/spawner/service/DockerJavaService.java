@@ -57,7 +57,7 @@ public class DockerJavaService implements DockerService {
     public List<String> createContainers(List<ContainerSpec> specs) {
         var ids = new ArrayList<String>();
         for (var spec : specs) {
-            LOG.info("Creating container {} from image {}.", spec.getName(), spec.getImage());
+            LOG.info("Creating container {}.", spec);
 
             ensureImageByPullPolicy(spec.getImage());
 
@@ -82,7 +82,12 @@ public class DockerJavaService implements DockerService {
                     .withName(spec.getName())
                     .withHostConfig(hostConfig)
                     .withEnv(toEnvList(spec.getEnvironment()));
-
+             
+            if(spec.getHostname() != null && !spec.getHostname().isBlank()) {
+				createCommand.withHostName(spec.getHostname());
+			}
+			createCommand.withAliases(spec.getAliases());
+            
             CreateContainerResponse response = createCommand.exec();
             ids.add(response.getId());
             LOG.info("Created container {} with id {}.", spec.getName(), response.getId());

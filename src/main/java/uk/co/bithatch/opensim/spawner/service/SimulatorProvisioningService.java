@@ -140,6 +140,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
                     oarName);
             
             var region = new RegionInstanceData();
+            region.setName(defaultValue(createRequestFields.get("regionName"), name));
             region.setUuid(defaultValue(createRequestFields.get("regionUuid"), () -> UUID.randomUUID().toString()));
             region.setX(Integer.parseInt(defaultValue(createRequestFields.get("regionX"), () -> "1000")));
             region.setY(Integer.parseInt(defaultValue(createRequestFields.get("regionY"), () -> "1000")));
@@ -190,14 +191,33 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
             
 
         	if(oar != null) {
+        		// TODO standalone sims .. we need to wait for the console to be ready before we can import the OAR, otherwise it will fail with "Region not found" errors
         		LOG.info("Sim {} requires a region, importing OAR {}.", name, oarName);
 	            var workspaceArchivePath = copyArchiveToWorkspace(oar.archivePath(), materializedFiles);
-	            openSimService.loadRegionArchive(workspaceArchivePath.toString());
+	            
+	            for(int i = 0 ; i < 5 ; i++) {
+	            	try {
+	            		openSimService.loadRegionArchive(workspaceArchivePath.toString());
+	            		break;
+	            	} catch(Exception e) {
+	            		LOG.warn("Failed to import OAR {} for sim {}. Attempt {}/5.", oarName, name, i+1, e);
+	            		if(i == 4) {
+	            			throw e;
+	            		}
+ 	            		else {
+ 	            			try {
+ 	            				Thread.sleep(5000); // wait a bit for the region to be fully loade
+ 	            			} catch (InterruptedException e2) {
+ 	       	            		throw new RuntimeException("Interrupted while waiting for region to load.", e2);
+ 	       					}
+ 	            		}
+	            	} 
+	            }
+	            		
         	}
-        	
             return sim;
         } catch (RuntimeException e) {
-            LOG.error("Provisioning failed for sim name. Starting rollback.", name, e);
+            LOG.error("Provisioning failed for sim {}. Starting rollback.", name, e);
             rollbackFailedProvision(name, createdContainerIds, materializedFiles);
             throw e;
         }
@@ -210,6 +230,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
         status.put("level", bot.getLevel() == null ? null : bot.getLevel().name());
         status.put("ownerUuid", bot.getOwnerUuid());
         status.put("ownerFirst", bot.getOwnerFirst());
+        status.put("ownerEmail", bot.getOwnerEmail());
         status.put("ownerLast", bot.getOwnerLast());
         status.put("port", bot.getPort());
     if (bot.getRegions() == null) {
@@ -220,6 +241,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 			regionStatus.put("uuid", region.getUuid());
 			regionStatus.put("x", region.getX());
 			regionStatus.put("y", region.getY());
+			regionStatus.put("name", region.getName());
 			regionStatus.put("oar", region.getOar());
 			status.put("region", regionStatus);
 		}
@@ -261,7 +283,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
     
     private String resolveRequestedOAR(SimulatorLevel level, Map<String, String> requestFields) {
         var value = requestFields.get("oar");
-        if("".equals(value)) {
+        if("".equals(value) || "none".equalsIgnoreCase(value)) {
 			return null;
 		}
 		var requested = nonBlankOrNull(value);

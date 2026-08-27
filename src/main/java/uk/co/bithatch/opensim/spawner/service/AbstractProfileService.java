@@ -129,6 +129,12 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
             
             spec.setEnvironment(env);
             spec.setExtraHosts(resolveMap(containerNode.get("extraHosts"), variables));
+            spec.setAliases(resolveList(containerNode.get("aliases"), variables));
+            spec.setDirectories(resolveList(containerNode.get("directories"), variables));
+            var hostnameNode = containerNode.get("hostname");
+            if(hostnameNode != null && !hostnameNode.isNull() && !hostnameNode.asText().isBlank()) {
+            	spec.setHostname(resolve(hostnameNode.asText(""), variables));
+            }
             spec.setVolumes(resolveMap(containerNode.get("volumes"), variables));
             spec.setFiles(resolveMap(containerNode.get("files"), variables));
             spec.setPorts(resolveMap(containerNode.get("ports"), variables));
@@ -137,6 +143,21 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
         return result;
     }
 
+
+    private List<String> resolveList(JsonNode node, Map<String, String> variables) {
+    	var result = new ArrayList<String>();
+		if (node == null) {
+			return result;
+		}
+		if (!node.isArray()) {
+			throw new IllegalArgumentException("Expected array field while resolving profile list.");
+		}
+		for (var itemNode : node) {
+			result.add(resolve(itemNode.asText(""), variables));
+		}
+		return result;
+    	
+    }
     private Map<String, String> resolveMap(JsonNode node, Map<String, String> variables) {
         var result = new LinkedHashMap<String, String>();
         if (node == null) {

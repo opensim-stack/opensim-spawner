@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +87,17 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     @Override
+    public List<Map<String, String>> showActiveUsers() {
+        try (var console = openConsole()) {
+            LOG.info("Listing active OpenSim users.");
+            var output = console.executeCommand("show", "users", "full").toList();
+            return parseActiveUsers(output);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException("Failed to list active OpenSimulator users via REST console. " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     public void resetUserPassword(String first, String last, String password) {
         try (var console = openConsole()) {
             LOG.info("Resetting OpenSim password for {} {}.", first, last);
@@ -119,6 +131,37 @@ public class RestOpenSimService implements OpenSimService {
             }
         }
         return details;
+    }
+
+    private static List<Map<String, String>> parseActiveUsers(List<String> lines) {
+        var users = new ArrayList<Map<String, String>>();
+        for (var rawLine : lines) {
+            if (rawLine == null || rawLine.isBlank()) {
+                continue;
+            }
+            for (var line : rawLine.split("\\R")) {
+                var trimmed = line.trim();
+                if (trimmed.isEmpty()
+                        || trimmed.startsWith("Total agents in region")
+                        || trimmed.startsWith("Firstname")) {
+                    continue;
+                }
+
+                var columns = trimmed.split("\\s{2,}");
+                if (columns.length < 5) {
+                    continue;
+                }
+
+                var user = new LinkedHashMap<String, String>();
+                user.put("first", columns[0].trim());
+                user.put("last", columns[1].trim());
+                user.put("agentId", columns[2].trim());
+                user.put("type", columns[3].trim());
+                user.put("position", columns[4].trim());
+                users.add(user);
+            }
+        }
+        return users;
     }
 
     private OpensimRESTConsole openConsole() {

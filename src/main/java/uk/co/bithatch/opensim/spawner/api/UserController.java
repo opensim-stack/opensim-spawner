@@ -1,6 +1,7 @@
 package uk.co.bithatch.opensim.spawner.api;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.spawner.service.OpenSimService;
+import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 
 @RestController
@@ -24,10 +26,14 @@ public class UserController {
 
     private final OpenSimService openSimService;
     private final SimulatorProvisioningService simulatorProvisioningService;
+    private final BotProvisioningService botProvisioningService;
 
-    public UserController(OpenSimService openSimService, SimulatorProvisioningService simulatorProvisioningService) {
+    public UserController(OpenSimService openSimService,
+            SimulatorProvisioningService simulatorProvisioningService,
+            BotProvisioningService botProvisioningService) {
         this.openSimService = openSimService;
         this.simulatorProvisioningService = simulatorProvisioningService;
+        this.botProvisioningService = botProvisioningService;
     }
 
     @PostMapping(consumes = {
@@ -38,18 +44,69 @@ public class UserController {
             @RequestParam String last,
             @RequestParam String password,
             @RequestParam String email,
-            @RequestParam String model) {
+            @RequestParam(required = false) String model,
+            @RequestParam(defaultValue = "false") boolean botHandler) {
         ensureGridLoginServiceAvailable();
+        var effectiveModel = (model == null || model.isBlank()) ? "Ruth" : model;
         var uuid = UUID.randomUUID().toString();
-        openSimService.createUser(first, last, password, email, uuid, model);
+        openSimService.createUser(first, last, password, email, uuid, effectiveModel);
+        if (botHandler) {
+            botProvisioningService.addHandler("*", "*", first, last);
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("created", true);
         response.put("first", first);
         response.put("last", last);
         response.put("email", email);
-        response.put("model", model);
+        response.put("model", effectiveModel);
+        response.put("botHandler", botHandler);
         response.put("uuid", uuid);
+        return response;
+    }
+
+    @GetMapping(path = "/active", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<Map<String, String>> listActiveUsers() {
+        ensureGridLoginServiceAvailable();
+        return openSimService.showActiveUsers();
+    }
+
+    @GetMapping(path = "/handlers", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<Map<String, String>> listHandlers() {
+        ensureGridLoginServiceAvailable();
+        return botProvisioningService.listHandlers().stream()
+                .map((handler) -> {
+                    Map<String, String> item = new LinkedHashMap<>();
+                    item.put("botFirst", handler.getBotFirst());
+                    item.put("botLast", handler.getBotLast());
+                    item.put("handlerFirst", handler.getHandlerFirst());
+                    item.put("handlerLast", handler.getHandlerLast());
+                    return item;
+                })
+                .toList();
+    }
+
+    @PatchMapping(path = "/{first}/{last}/handler", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> setHandler(@PathVariable String first,
+            @PathVariable String last,
+            @RequestParam(defaultValue = "*") String botFirst,
+            @RequestParam(defaultValue = "*") String botLast,
+            @RequestParam boolean enabled) {
+        ensureGridLoginServiceAvailable();
+        if (enabled) {
+            botProvisioningService.addHandler(botFirst, botLast, first, last);
+        } else {
+            botProvisioningService.removeHandler(botFirst, botLast, first, last);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("ok", true);
+        response.put("first", first);
+        response.put("last", last);
+        response.put("enabled", enabled);
         return response;
     }
 

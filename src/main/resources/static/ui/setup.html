@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Setup Wizard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <main class="relative z-10 min-h-screen p-4 lg:p-8">
+    <div class="mx-auto flex min-h-[calc(100vh-2rem)] lg:min-h-[calc(100vh-4rem)] w-full max-w-6xl flex-col rounded-2xl border border-neon-primary/30 bg-dark-800/85 backdrop-blur neon-border">
+      <header class="border-b border-neon-primary/20 bg-neon-primary/10 px-6 py-5 lg:px-8">
+        <p id="wizard-step-label" class="text-sm uppercase tracking-[0.2em] text-neon-accent">Step 1 of 5</p>
+        <h1 id="wizard-step-title" class="mt-2 text-3xl font-bold text-white lg:text-4xl">Grid Mode</h1>
+      </header>
+
+      <section class="flex-1 overflow-y-auto px-6 py-6 lg:px-8 lg:py-8">
+        <div id="wizard-step-1" class="wizard-step space-y-6">
+          <div id="wizard-grid-mode-group" class="grid grid-cols-1 gap-4 lg:grid-cols-2"></div>
+
+          <p id="wizard-mode-description" class="rounded-lg border border-neon-accent/30 bg-neon-accent/10 px-4 py-3 text-gray-200"></p>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Simulator name</span>
+            <input id="wizard-simulator-name" type="text" required
+              class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+              pattern="[A-Za-z0-9_-]+"
+              placeholder="MySimulator">
+          </label>
+        </div>
+
+        <div id="wizard-step-2" class="wizard-step hidden space-y-6">
+          <p class="text-gray-300">Bots are autonomous in-world agents that can act as assistants, builders, and interactive AI companions. They can run agentic workflows, integrate with AI tooling like OpenCode, and automate conversations or world tasks.</p>
+
+          <label class="inline-flex items-center gap-3 rounded-lg border border-neon-primary/30 bg-dark-700/60 px-4 py-3 text-gray-200">
+            <input id="wizard-create-bot" type="checkbox" checked class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+            <span class="font-medium">Create A Bot</span>
+          </label>
+
+          <div id="wizard-bot-fields" class="space-y-4 rounded-xl border border-neon-primary/20 bg-dark-900/40 p-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="text-sm text-gray-300">First name</span>
+                <input id="wizard-bot-first" type="text" pattern="[A-Za-z0-9]+" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+              <label class="block">
+                <span class="text-sm text-gray-300">Last name</span>
+                <input id="wizard-bot-last" type="text" pattern="[A-Za-z0-9]+" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+            </div>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Email (optional)</span>
+              <input id="wizard-bot-email" type="email" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+
+            <label class="block">
+              <span class="text-sm text-gray-300">Appearance</span>
+              <select id="wizard-bot-appearance" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+                <option value="">Default</option>
+              </select>
+            </label>
+
+            <div class="block">
+              <span class="text-sm text-gray-300">Gender</span>
+              <div id="wizard-bot-gender-group" class="mt-2 grid grid-cols-3 gap-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="wizard-step-3" class="wizard-step hidden space-y-5">
+          <div id="wizard-handler-info" class="hidden rounded-lg border border-neon-accent/30 bg-neon-accent/10 px-4 py-3 text-gray-100">
+            This account will be your Bot Handler account, and be given permission to control any bots you create.
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-sm text-gray-300">First name</span>
+              <input id="wizard-user-first" type="text" pattern="[A-Za-z0-9]+" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Last name</span>
+              <input id="wizard-user-last" type="text" pattern="[A-Za-z0-9]+" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+          </div>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Email</span>
+            <input id="wizard-user-email" required type="email" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+          </label>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-sm text-gray-300">Password</span>
+              <input id="wizard-user-password" required type="password" minlength="8" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Confirm password</span>
+              <input id="wizard-user-password-confirm" required type="password" minlength="8" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+          </div>
+        </div>
+
+        <div id="wizard-step-4" class="wizard-step hidden space-y-5">
+          <p class="text-gray-300">A region is a 256x256 parcel of virtual space. You can subdivide land inside a region into parcels for ownership and access control. One simulator can host multiple regions, but for performance and reliability, start with a small number and grow gradually.</p>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Simulator name</span>
+            <input id="wizard-region-sim-name" type="text" pattern="[A-Za-z0-9_-]+" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+          </label>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Port (optional)</span>
+            <input id="wizard-region-port" type="number" min="1" max="65535" placeholder="Next free port" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+          </label>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-sm text-gray-300">Region X</span>
+              <input id="wizard-region-x" type="number" value="1000" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Region Y</span>
+              <input id="wizard-region-y" type="number" value="1000" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+          </div>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Appearance</span>
+            <select id="wizard-region-oar" class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              <option value="">None</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="wizard-step-5" class="wizard-step hidden space-y-4">
+          <p class="text-gray-300">Review your setup choices. When you click Finish, the wizard will pass everything into a setup stub method that you can wire to real provisioning logic.</p>
+          <div id="wizard-summary" class="space-y-4 rounded-xl border border-neon-primary/20 bg-dark-900/40 p-4"></div>
+        </div>
+
+        <p id="wizard-error" class="mt-6 hidden rounded-lg border border-rose-400/50 bg-rose-900/30 px-4 py-3 text-sm text-rose-100"></p>
+      </section>
+
+      <footer class="flex items-center justify-between gap-4 border-t border-neon-primary/20 px-6 py-4 lg:px-8">
+        <div>
+          <a id="wizard-skip-link" href="/index.html" class="text-sm text-neon-accent hover:text-neon-secondary">Skip this, let me do setup myself</a>
+          <button id="wizard-prev" type="button" class="hidden rounded-lg border border-gray-500/40 px-4 py-2 text-gray-200 transition-colors hover:bg-dark-700">Previous</button>
+        </div>
+        <button id="wizard-next" type="button" class="inline-flex items-center gap-2 rounded-lg bg-neon-primary px-5 py-2 font-semibold text-white transition-colors hover:bg-violet-500 btn-glow">
+          <span id="wizard-next-spinner" class="hidden h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>
+          <span id="wizard-next-label">Next</span>
+        </button>
+      </footer>
+    </div>
+
+    <div id="toast-container" class="pointer-events-none fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3"></div>
+  </main>
+
+  <script src="/ui/ui-common.js"></script>
+  <script type="module" src="/ui/setup.js"></script>
+</body>
+</html>

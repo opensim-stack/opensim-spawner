@@ -48,9 +48,15 @@
             <h1 class="text-3xl lg:text-4xl font-bold text-white">Stack</h1>
             <p class="text-gray-400">Manage other components of the OpenSim AI Stack.</p>
           </div>
-          <button id="refresh-stack" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">
-            Refresh
-          </button>
+          <div class="flex items-center gap-4">
+            <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+              <input id="show-entire-stack" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+              <span>Show entire stack</span>
+            </label>
+            <button id="refresh-stack" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">
+              Refresh
+            </button>
+          </div>
         </div>
 
         <section class="feature-card bg-dark-800/80 backdrop-blur rounded-xl border border-neon-primary/20 overflow-hidden">

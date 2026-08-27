@@ -32,7 +32,7 @@ public class UiSessionAuthFilter extends OncePerRequestFilter {
             return true;
         }
 
-        if ("/ui/login.html".equals(path)) {
+        if ("/ui/login.html".equals(path) || "/ui/register.html".equals(path)) {
             return true;
         }
 

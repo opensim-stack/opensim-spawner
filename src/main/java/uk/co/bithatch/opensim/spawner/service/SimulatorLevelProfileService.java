@@ -38,6 +38,19 @@ public class SimulatorLevelProfileService extends AbstractProfileService<Simulat
         for (var envEntry : System.getenv().entrySet()) {
             variables.put("env." + envEntry.getKey(), envEntry.getValue());
         }
+        
+        if(sim.getRegions() != null && sim.getRegions().length > 0) {
+			var region = sim.getRegions()[0];
+			var regionX = String.valueOf(region.getX());
+			var regionY = String.valueOf(region.getY());
+			var regionUUID = region.getUuid();
+			var regionName = region.getName();
+			variables.put("region.name", regionName);
+			variables.put("region.x", regionX);
+			variables.put("region.y", regionY);
+			variables.put("region.uuid", regionUUID);
+		}
+        
         return variables;
     }
 

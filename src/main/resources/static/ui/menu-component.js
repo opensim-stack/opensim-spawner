@@ -19,7 +19,9 @@ class SpawnerSideMenu extends HTMLElement {
           ${this.menuItem('/ui/bots.html', 'Bots', 'bots', active === 'bots')}
           ${this.menuItem('/ui/stack.html', 'Stack', 'stack', active === 'stack')}
           ${this.menuItem('/ui/simulators.html', 'Simulators', 'simulators', active === 'simulators')}
-          ${this.menuItem('/ui/users.html', 'Users', 'users', active === 'users')}
+          ${this.menuItem('/ui/users.html', 'Users', 'users', active === 'users' || active === 'create-user' || active === 'approvals')}
+          ${this.menuItem('/ui/create-user.html', 'Create User', 'create-user', active === 'create-user', true)}
+          ${this.menuItem('/ui/approvals.html', 'Approvals', 'approvals', active === 'approvals', true)}
         </nav>
 
         <div class="mt-auto pt-6">
@@ -42,8 +44,8 @@ class SpawnerSideMenu extends HTMLElement {
     }
   }
 
-  menuItem(href, label, iconKey, isActive) {
-    const base = 'px-3 py-2 rounded-lg transition-colors flex items-center gap-2';
+  menuItem(href, label, iconKey, isActive, isSubItem = false) {
+    const base = `px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${isSubItem ? 'ml-6 text-sm' : ''}`;
     const state = isActive
       ? 'bg-neon-primary/20 border border-neon-primary/40 text-white'
       : 'text-gray-200 hover:bg-dark-700 hover:text-neon-primary border border-transparent';
@@ -86,6 +88,10 @@ class SpawnerSideMenu extends HTMLElement {
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"></circle><path d="M10 4v12"></path><path d="M4 10h12"></path></svg>';
       case 'users':
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="7" r="3"></circle><path d="M4.5 16a5.5 5.5 0 0 1 11 0"></path></svg>';
+      case 'create-user':
+        return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><path d="M3.5 16a4.5 4.5 0 0 1 9 0"></path><path d="M14 6v5"></path><path d="M11.5 8.5h5"></path></svg>';
+      case 'approvals':
+        return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="3.5" width="12" height="13" rx="1.5"></rect><path d="M7 7.5h6"></path><path d="M7 10h4"></path><path d="M7.5 13l1.4 1.4L12.5 11"></path></svg>';
       case 'signout':
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 4.5H5.5A1.5 1.5 0 0 0 4 6v8a1.5 1.5 0 0 0 1.5 1.5H8"></path><path d="M12 6.5 16 10l-4 3.5"></path><path d="M16 10H8"></path></svg>';
       default:

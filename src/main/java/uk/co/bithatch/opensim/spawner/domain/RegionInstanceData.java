@@ -8,6 +8,15 @@ public class RegionInstanceData {
 	private int height = 1;
 	private String uuid;
 	private String oar;
+	private String name;
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
 
 	public int getWidth() {
 		return width;

@@ -26,13 +26,114 @@ export const showToast = (toastContainer, message, tone = 'info') => {
   }, 3200);
 };
 
+export const REQUEST_TIMEOUT_MS = 180000;
+
+let workingOverlayRefCount = 0;
+let workingOverlayElement = null;
+
+const ensureWorkingOverlay = () => {
+  if (workingOverlayElement && document.body.contains(workingOverlayElement)) {
+    return workingOverlayElement;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'global-working-overlay';
+  overlay.className = 'fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center';
+  overlay.innerHTML = `
+    <div class="bg-dark-800/95 border border-neon-primary/30 rounded-2xl p-6 neon-border min-w-[16rem]">
+      <div class="flex items-center gap-3 text-gray-100">
+        <span class="inline-block h-6 w-6 rounded-full border-2 border-neon-primary/40 border-t-neon-accent animate-spin"></span>
+        <span id="global-working-message" class="font-medium">Working ...</span>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  workingOverlayElement = overlay;
+  return overlay;
+};
+
+export const showWorkingOverlay = (message = 'Working ...') => {
+  const overlay = ensureWorkingOverlay();
+  const messageEl = overlay.querySelector('#global-working-message');
+  if (messageEl) {
+    messageEl.textContent = message;
+  }
+  workingOverlayRefCount += 1;
+  overlay.classList.remove('hidden');
+};
+
+export const hideWorkingOverlay = () => {
+  if (workingOverlayRefCount > 0) {
+    workingOverlayRefCount -= 1;
+  }
+  if (workingOverlayRefCount > 0) {
+    return;
+  }
+  if (workingOverlayElement) {
+    workingOverlayElement.classList.add('hidden');
+  }
+};
+
+export const withWorkingOverlay = async (operation, message = 'Working ...') => {
+  showWorkingOverlay(message);
+  try {
+    return await operation();
+  } finally {
+    hideWorkingOverlay();
+  }
+};
+
+export const fetchWithTimeout = async (url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) => {
+  const timeoutController = new AbortController();
+  const externalSignal = options?.signal;
+  const timeoutHandle = setTimeout(() => {
+    timeoutController.abort(new DOMException('Timed out', 'AbortError'));
+  }, timeoutMs);
+
+  const abortExternal = () => timeoutController.abort(new DOMException('Aborted', 'AbortError'));
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      abortExternal();
+    } else {
+      externalSignal.addEventListener('abort', abortExternal, { once: true });
+    }
+  }
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: timeoutController.signal
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.ceil(timeoutMs / 1000)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+    if (externalSignal) {
+      externalSignal.removeEventListener('abort', abortExternal);
+    }
+  }
+};
+
 const iconByAction = {
   start: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M7 5v10l8-5-8-5Z"></path></svg>',
   stop: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="10" height="10" rx="1.5"></rect></svg>',
   restart: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15.5 9a5.5 5.5 0 1 0 1.3 3.6"></path><path d="M15.5 4.5V9h-4.5"></path></svg>',
   delete: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3.5 5.5h13"></path><path d="M7.5 5.5V4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1.5"></path><path d="M6.5 7.5v8"></path><path d="M10 7.5v8"></path><path d="M13.5 7.5v8"></path><path d="M5 5.5l.7 11a1 1 0 0 0 1 .9h6.6a1 1 0 0 0 1-.9l.7-11"></path></svg>',
   console: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="1.5"></rect><path d="M6 8.2 8.8 10 6 11.8"></path><path d="M10.3 12h3.7"></path></svg>',
-  plus: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 4.5v11"></path><path d="M4.5 10h11"></path></svg>'
+  plus: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 4.5v11"></path><path d="M4.5 10h11"></path></svg>',
+  select: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 10.5 8.2 13.7 15 7"></path><path d="M16 10a6 6 0 1 1-2.2-4.6"></path></svg>',
+  robot: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="6.5" width="10" height="8" rx="2"></rect><path d="M8.5 6.5V5a1.5 1.5 0 0 1 3 0v1.5"></path><circle cx="8" cy="10.5" r="0.8"></circle><circle cx="12" cy="10.5" r="0.8"></circle><path d="M3.8 9.8h1.2"></path><path d="M15 9.8h1.2"></path></svg>',
+  person: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="7" r="3"></circle><path d="M4.5 16a5.5 5.5 0 0 1 11 0"></path></svg>',
+  handler: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"></circle><path d="M10 6.2v7.6"></path><path d="M6.8 9.5h6.4"></path><path d="M7.6 13.8 10 11.4l2.4 2.4"></path></svg>',
+  chevronDown: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m5.5 7.5 4.5 5 4.5-5"></path></svg>',
+  male: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="12" r="4"></circle><path d="M11 9l5-5"></path><path d="M12.8 4H16v3.2"></path></svg>',
+  female: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="7" r="4"></circle><path d="M10 11v6"></path><path d="M7 14h6"></path></svg>',
+  neutral: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="5"></circle><path d="M10 3.8v2.2"></path><path d="M10 14v2.2"></path></svg>',
+  standalone: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"></circle><path d="M10 4v12"></path><path d="M4 10h12"></path></svg>',
+  robust: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6.2 10 3l6 3.2-6 3.2L4 6.2Z"></path><path d="M4 10l6 3.2 6-3.2"></path><path d="M4 13.8 10 17l6-3.2"></path></svg>'
 };
 
 export const actionIconSvg = (action) => iconByAction[action] || '';

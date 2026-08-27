@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
+import uk.co.bithatch.opensim.spawner.service.Appearances;
 import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 
 @RestController
@@ -30,9 +31,11 @@ public class BotController {
     private static final Logger LOG = LoggerFactory.getLogger(BotController.class);
 
     private final BotProvisioningService provisioningService;
+    private final Appearances appearances;
 
-    public BotController(BotProvisioningService provisioningService) {
+    public BotController(BotProvisioningService provisioningService, Appearances appearances) {
         this.provisioningService = provisioningService;
+        this.appearances = appearances;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -43,6 +46,11 @@ public class BotController {
     @GetMapping(path = "/{first}/{last}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> getBotStatus(@PathVariable String first, @PathVariable String last) {
         return provisioningService.getContainerGroupStatus(key(first, last));
+    }
+
+    @GetMapping(path = "/appearances", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<String> listAppearances() {
+        return appearances.listAppearanceNames();
     }
 
     @PostMapping(path = "/{first}/{last}", consumes = {

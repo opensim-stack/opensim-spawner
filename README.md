@@ -52,10 +52,9 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `OPENSIM_CONSOLE_USER` | |
 | `OPENSIM_CONSOLE_PASS` | |
 | `OPENSIM_CREATE_BOT_USER` | true |
-| `OPENSIM_LOGIN_FIRSTNAME` | Bot |
-| `OPENSIM_LOGIN_LASTNAME` | User |
-| `OPENSIM_LOGIN_EMAIL` | bot@localhost |
-| `OPENSIM_LOGIN_MODEL` | Ruth |
+| `OPENSIM_BOT_FIRST` | Bot |
+| `OPENSIM_BOT_LAST` | User |
+| `OPENSIM_BOT_EMAIL` | bot@localhost |
 | `OPENSIM_RESTART_POLICY` | `unless-stopped` |
 | `OPENSIM_PULL_POLICY` | `ifnotpresent` |
 | `BOT_APPEARNCE` | `Cube Bot` |
@@ -78,16 +77,14 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `JANUS_ADMIN_TOKEN` | `` |
 | `OPENSIM_HOSTNAME` | `opensim` |
 | `OPENSIM_ESTATE_NAME` | `Botland` |
-| `OPENSIM_ESTATE_OWNER_FIRST` | `Bot` |
-| `OPENSIM_ESTATE_OWNER_LAST` | `Handler` |
-| `OPENSIM_ESTATE_OWNER_PASSWORD` | `changeme` |
-| `OPENSIM_ESTATE_OWNER_UUID` | `00000000-0000-0000-0000-000000000000` |
+| `OPENSIM_USER_FIRST` | `Bot` |
+| `OPENSIM_USER_LAST` | `Handler` |
+| `OPENSIM_USER_PASSWORD` | `changeme` |
 | `OPENSIM_ROBUST_PUBLIC_PORT` | `8002` |
 | `OPENSIM_ROBUST_PRIVATE_PORT` | `8003` |
 | `OPENSIMGRID_NAME` | `Bot Grid` |
 | `OPENSIMGRID_NICK` | `botgrid` |
-| `OPENSIM_WELCOME_MESSAGE` | `Welcome to Botgrid!` |
-
+| `OPENSIM_WELCOME_MESSAGE` | `Welcome to ${OPENSIMGRID_NAME:-Bot Grid}!` |
 
 ## Environment Variables Passed To `opencode`
 
@@ -103,12 +100,10 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `OPENSIM_LOGIN_START` | `last` |
 | `OPENSIM_LOGIN_URI` | `http://opensim:9000` |
 | `SPAWNER_HOST` | `opensim-spawner` |
-| `OPENSIM_BOT_HANDLER_FIRSTNAME` | `$OPENSIM_ESTATE_OWNER_FIRST` |
-| `OPENSIM_BOT_HANDLER_LASTNAME` | `$OPENSIM_ESTATE_OWNER_LAST` |
 | `VOICE_ROUTING_ENABLED` | `true` |
 | `VOICE_BACKEND` | `webrtc` |
 | `PIPER_SCHEME` | `http` |
-| `PIPER_HOST` | `opensim-piper` |
+| `PIPER_HOST` | `opensim-ai-piper-1` |
 | `PIPER_PORT` | `8995` |
 | `PIPER_TTS_PATH` | `/tts` |
 | `PIPER_VOICES_PATH` | `/voices` |

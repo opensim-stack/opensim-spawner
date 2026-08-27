@@ -11,9 +11,9 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
+import uk.co.bithatch.opensim.spawner.domain.DomainObject;
 
-public abstract class AbstractStateRepository<T extends ContainerGroupInstanceData> {
+public abstract class AbstractStateRepository<T extends DomainObject> {
 
     private final ObjectMapper objectMapper;
     private final Path dataDir;
@@ -84,7 +84,15 @@ public abstract class AbstractStateRepository<T extends ContainerGroupInstanceDa
         }
     }
 
-    private Path filePath(String name) {
+    protected Path filePath(String name) {
         return dataDir.resolve(name.replace(' ', '-') + ".json");
+    }
+
+    protected final ObjectMapper objectMapper() {
+        return objectMapper;
+    }
+
+    protected final Path dataDir() {
+        return dataDir;
     }
 }

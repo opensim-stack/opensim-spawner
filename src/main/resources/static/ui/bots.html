@@ -113,11 +113,17 @@
             </label>
 
             <label class="block">
-              <span class="text-sm text-gray-300">Model (optional)</span>
-              <input id="create-model" name="model"
-                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
-                type="text" placeholder="Ruth">
+              <span class="text-sm text-gray-300">Appearance</span>
+              <select id="create-appearance" name="appearance"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+                <option value="">Default</option>
+              </select>
             </label>
+
+            <div class="block">
+              <span class="text-sm text-gray-300">Gender</span>
+              <div id="create-gender-group" class="mt-2 grid grid-cols-3 gap-2"></div>
+            </div>
 
             <p id="create-bot-info" class="text-xs text-gray-400"></p>
             <p id="create-bot-error" class="hidden text-sm text-rose-300"></p>

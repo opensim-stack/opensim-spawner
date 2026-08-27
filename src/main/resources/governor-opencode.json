@@ -5,8 +5,8 @@
     "write": {
       "/workspace/bots/%bot.first%-%bot.last%/**": "allow",
       "/workspace/bots/%bot.first%-%bot.last%": "allow",
-      "/workspace": "ask",
-      "/workspace/**": "ask",
+      "/workspace": "allow",
+      "/workspace/**": "allow",
       "/config/**": "ask",
       "*": "deny"
     },
@@ -44,7 +44,7 @@
   "mcp": {
     "local_host_mcp": {
       "type": "remote",
-      "url": "http://opensim-console2mcp:%env.CONSOLE_MCP_PORT%/mcp",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-console2mcp:%env.CONSOLE_MCP_PORT%/mcp",
       "enabled": true,
       "headers": {
         "Authorization": "Bearer %env.CONSOLE_MCP_BEARER_TOKEN%"
@@ -52,7 +52,7 @@
     },
     "metaverse_mcp": {
       "type": "remote",
-      "url": "http://opensim-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
       "enabled": true,
       "headers": {
         "Authorization": "Bearer %bot.token%"
@@ -60,7 +60,7 @@
     },
     "blender_mcp": {
       "type": "remote",
-      "url": "http://opensim-blender:%env.BLENDER_MCP_PORT%/mcp",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-blender:%env.BLENDER_MCP_PORT%/mcp",
       "enabled": true
     }
   }

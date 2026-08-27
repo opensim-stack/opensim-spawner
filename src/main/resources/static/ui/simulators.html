@@ -79,14 +79,14 @@
               <span class="text-sm text-gray-300">Simulator name</span>
               <input id="create-sim-name" name="name" required
                 class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
-                type="text" placeholder="Botland">
+                type="text">
             </label>
 
             <label class="block">
-              <span class="text-sm text-gray-300">Port (optional)</span>
+              <span class="text-sm text-gray-300">Port</span>
               <input id="create-sim-port" name="port"
                 class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
-                type="number" min="1" max="65535" placeholder="Empty = next free port">
+                type="number" min="1" max="65535" placeholder="Next free port">
             </label>
 
             <label id="create-simulator-level-row" class="block hidden">
@@ -134,7 +134,7 @@
             </div>
 
             <label id="create-sim-oar-row" class="block hidden">
-              <span class="text-sm text-gray-300">OAR name (optional)</span>
+              <span class="text-sm text-gray-300">Appearance</span>
               <select id="create-sim-oar" name="oar"
                 class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
                 <option value="">None</option>
@@ -144,11 +144,17 @@
             <p id="create-simulator-info" class="text-xs text-gray-400"></p>
             <p id="create-simulator-error" class="hidden text-sm text-rose-300"></p>
 
-            <div class="flex justify-end gap-3 pt-2">
-              <button type="button" id="cancel-create-simulator"
-                class="px-4 py-2 rounded-lg border border-gray-500/40 text-gray-200 hover:bg-dark-700 transition-colors">Cancel</button>
-              <button id="submit-create-simulator" type="submit"
-                class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Create Simulator</button>
+            <div class="flex items-center justify-between gap-3 pt-2">
+              <label id="create-simulator-bot-row" class="hidden inline-flex items-center gap-2 text-sm text-gray-300">
+                <input id="create-simulator-bot" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary" checked>
+                <span>Create bot</span>
+              </label>
+              <div class="ml-auto flex gap-3">
+                <button type="button" id="cancel-create-simulator"
+                  class="px-4 py-2 rounded-lg border border-gray-500/40 text-gray-200 hover:bg-dark-700 transition-colors">Cancel</button>
+                <button id="submit-create-simulator" type="submit"
+                  class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Create Simulator</button>
+              </div>
             </div>
           </form>
         </div>

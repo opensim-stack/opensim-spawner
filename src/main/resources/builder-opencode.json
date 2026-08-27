@@ -26,7 +26,7 @@
   "mcp": {
     "metaverse_mcp": {
       "type": "remote",
-      "url": "http://opensim-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
       "enabled": true,
       "headers": {
         "Authorization": "Bearer %bot.token%"
@@ -34,7 +34,7 @@
     },
     "blender_mcp": {
       "type": "remote",
-      "url": "http://opensim-blender:%env.BLENDER_MCP_PORT%%env.CONSOLE_MCP_HTTP_ENDPOINT%",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-blender:%env.BLENDER_MCP_PORT%/mcp",
       "enabled": true
     }
   }

@@ -1,9 +1,11 @@
 import {
   buildConsoleIconLink,
+  fetchWithTimeout,
   iconSpan,
   renderContainerStatusRows,
   resolvePreferredConsole,
-  showToast
+  showToast,
+  withWorkingOverlay
 } from '/ui/ui-helpers.js';
 
 const simulatorsGrid = document.getElementById('simulators-grid');
@@ -32,6 +34,8 @@ const createRegionX = document.getElementById('create-region-x');
 const createRegionY = document.getElementById('create-region-y');
 const createSimulatorOarRow = document.getElementById('create-sim-oar-row');
 const createSimulatorOar = document.getElementById('create-sim-oar');
+const createSimulatorBotRow = document.getElementById('create-simulator-bot-row');
+const createSimulatorBot = document.getElementById('create-simulator-bot');
 const submitCreateSimulator = document.getElementById('submit-create-simulator');
 const toastContainer = document.getElementById('toast-container');
 
@@ -39,6 +43,10 @@ let cachedSimulatorStatuses = [];
 let cachedCreatePolicy = null;
 let cachedLevelRules = [];
 let cachedOars = [];
+
+const REQUEST_RECOVERY_WINDOW_MS = 180000;
+const REQUEST_RECOVERY_POLL_MS = 3000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const levelIcon = (level) => {
   switch ((level || '').toUpperCase()) {
@@ -54,6 +62,38 @@ const levelIcon = (level) => {
 };
 
 const normalizedLevel = (status) => String(status?.level || '').trim().toUpperCase();
+const normalizeOwnerFirstFromName = (name) => String(name || '').replace(/\s+/g, '').trim();
+const createBotToggleAllowedForLevel = (levelName) => {
+  const normalized = String(levelName || '').trim().toUpperCase();
+  return normalized.length > 0 && normalized !== 'ROBUST';
+};
+
+const actionVerb = (action) => {
+  switch (String(action || '').toLowerCase()) {
+    case 'start':
+      return 'Starting';
+    case 'stop':
+      return 'Stopping';
+    case 'restart':
+      return 'Restarting';
+    case 'delete':
+      return 'Deleting';
+    default:
+      return 'Working on';
+  }
+};
+
+const ownerLastPlaceholder = () => (createSimulatorBot?.checked ? 'Bot' : 'Owner');
+
+const syncOwnerPlaceholders = () => {
+  const normalized = normalizeOwnerFirstFromName(createSimulatorName?.value || '');
+  if (createOwnerFirst) {
+    createOwnerFirst.placeholder = normalized;
+  }
+  if (createOwnerLast) {
+    createOwnerLast.placeholder = ownerLastPlaceholder();
+  }
+};
 
 const computeCreatePolicy = (statuses) => {
   const all = Array.isArray(statuses) ? statuses : [];
@@ -102,7 +142,7 @@ const computeCreatePolicy = (statuses) => {
 const callAction = async (name, action) => {
   const payload = new URLSearchParams();
   payload.set('action', action);
-  const response = await fetch(`/api/simulator/${encodeURIComponent(name)}`, {
+  const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload.toString()
@@ -113,7 +153,7 @@ const callAction = async (name, action) => {
 };
 
 const deleteSimulator = async (name) => {
-  const response = await fetch(`/api/simulator/${encodeURIComponent(name)}`, {
+  const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`, {
     method: 'DELETE'
   });
   if (!response.ok) {
@@ -121,7 +161,7 @@ const deleteSimulator = async (name) => {
   }
 };
 
-const createSimulator = async ({ name, level, port, ownerFirst, ownerLast, ownerEmail, oar, regionX, regionY }) => {
+const createSimulator = async ({ name, level, port, ownerFirst, ownerLast, ownerEmail, oar, regionX, regionY, createBot }) => {
   const payload = new URLSearchParams();
   payload.set('level', level);
   if (ownerFirst) {
@@ -145,8 +185,11 @@ const createSimulator = async ({ name, level, port, ownerFirst, ownerLast, owner
   if (regionY) {
     payload.set('regionY', regionY);
   }
+  if (createBot) {
+    payload.set('createBot', 'true');
+  }
 
-  const response = await fetch(`/api/simulator/${encodeURIComponent(name)}`, {
+  const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload.toString()
@@ -160,6 +203,9 @@ const createSimulator = async ({ name, level, port, ownerFirst, ownerLast, owner
 
 const resetCreateDialog = () => {
   createSimulatorForm?.reset();
+  if (createSimulatorBot) {
+    createSimulatorBot.checked = true;
+  }
   if (createRegionX) {
     createRegionX.value = '1000';
   }
@@ -170,6 +216,7 @@ const resetCreateDialog = () => {
     createSimulatorError.textContent = '';
     createSimulatorError.classList.add('hidden');
   }
+  syncOwnerPlaceholders();
 };
 
 const regionRequiredForLevel = (levelName) => {
@@ -197,12 +244,6 @@ const setRegionFieldMode = (regionRequired) => {
   createOwnerEmailRow?.classList.toggle('hidden', !regionRequired);
   createRegionFields?.classList.toggle('hidden', !regionRequired);
   createSimulatorOarRow?.classList.toggle('hidden', !regionRequired);
-  if (createOwnerFirst) {
-    createOwnerFirst.required = regionRequired;
-  }
-  if (createOwnerLast) {
-    createOwnerLast.required = regionRequired;
-  }
   if (!regionRequired) {
     if (createOwnerFirst) {
       createOwnerFirst.value = '';
@@ -228,13 +269,19 @@ const setRegionFieldMode = (regionRequired) => {
 const syncCreateDialogFields = () => {
   const level = activeCreateLevel();
   const regionRequired = regionRequiredForLevel(level);
+  const showCreateBotToggle = createBotToggleAllowedForLevel(level);
+  createSimulatorBotRow?.classList.toggle('hidden', !showCreateBotToggle);
+  if (showCreateBotToggle && createSimulatorBot) {
+    createSimulatorBot.checked = true;
+  }
   setRegionFieldMode(regionRequired);
+  syncOwnerPlaceholders();
 };
 
 const loadCreateDialogMetadata = async () => {
   const [levelsResponse, oarsResponse] = await Promise.all([
-    fetch('/api/simulator/levels'),
-    fetch('/api/simulator/oars')
+    fetchWithTimeout('/api/simulator/levels'),
+    fetchWithTimeout('/api/simulator/oars')
   ]);
 
   if (!levelsResponse.ok) {
@@ -397,18 +444,33 @@ const createCard = (status) => {
 
       button.disabled = true;
       try {
-        if (action === 'delete') {
-          if (!window.confirm(`Delete simulator ${name}?`)) {
-            return;
+        await withWorkingOverlay(async () => {
+          if (action === 'delete') {
+            if (!window.confirm(`Delete simulator ${name}?`)) {
+              return;
+            }
+            await deleteSimulator(name);
+            showToast(toastContainer, `Deleted simulator ${name}.`, 'success');
+          } else {
+            await callAction(name, action);
+            showToast(toastContainer, `Sent '${action}' for ${name}.`, 'success');
           }
-          await deleteSimulator(name);
-          showToast(toastContainer, `Deleted simulator ${name}.`, 'success');
-        } else {
-          await callAction(name, action);
-          showToast(toastContainer, `Sent '${action}' for ${name}.`, 'success');
-        }
-        await loadSimulators();
+          await loadSimulators();
+        }, `${actionVerb(action)} simulator ${name} ...`);
       } catch (err) {
+        const recovered = await withWorkingOverlay(
+          async () => waitForSimulatorActionOutcome(name, action),
+          `Verifying ${actionVerb(action).toLowerCase()} result for simulator ${name} ...`
+        );
+        if (recovered) {
+          await loadSimulators();
+          if (action === 'delete') {
+            showToast(toastContainer, `Deleted simulator ${name}.`, 'success');
+          } else {
+            showToast(toastContainer, `Completed '${action}' for ${name}.`, 'success');
+          }
+          return;
+        }
         showToast(toastContainer, err instanceof Error ? err.message : 'Request failed.', 'error');
       } finally {
         button.disabled = false;
@@ -427,7 +489,7 @@ const loadSimulators = async () => {
   simulatorsGrid.innerHTML = '';
   simulatorsEmpty.classList.add('hidden');
 
-  const listResponse = await fetch('/api/simulator');
+  const listResponse = await fetchWithTimeout('/api/simulator');
   if (!listResponse.ok) {
     throw new Error(`Could not list simulators (${listResponse.status}).`);
   }
@@ -441,7 +503,7 @@ const loadSimulators = async () => {
   }
 
   const statuses = await Promise.all(simulatorNames.map(async (name) => {
-    const response = await fetch(`/api/simulator/${encodeURIComponent(name)}`);
+    const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`);
     if (!response.ok) {
       throw new Error(`Could not load simulator '${name}' (${response.status}).`);
     }
@@ -454,6 +516,73 @@ const loadSimulators = async () => {
   statuses.forEach((status) => {
     simulatorsGrid.appendChild(createCard(status));
   });
+};
+
+const waitForSimulatorVisible = async (name, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`);
+      if (response.ok) {
+        return true;
+      }
+    } catch (_ignored) {
+      // Ignore transient errors while waiting for eventual consistency after create.
+    }
+    await new Promise((resolve) => setTimeout(resolve, REQUEST_RECOVERY_POLL_MS));
+  }
+  return false;
+};
+
+const fetchSimulatorStatusOrNull = async (name) => {
+  try {
+    const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`);
+    if (!response.ok) {
+      return null;
+    }
+    return response.json();
+  } catch (_ignored) {
+    return null;
+  }
+};
+
+const waitForSimulatorActionOutcome = async (name, action, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+  const normalizedAction = String(action || '').toLowerCase();
+  const deadline = Date.now() + maxWaitMs;
+
+  while (Date.now() < deadline) {
+    if (normalizedAction === 'delete') {
+      try {
+        const listResponse = await fetchWithTimeout('/api/simulator');
+        if (listResponse.ok) {
+          const names = await listResponse.json();
+          if (Array.isArray(names) && !names.includes(name)) {
+            return true;
+          }
+        }
+      } catch (_ignored) {
+        // Keep polling through transient failures.
+      }
+      await sleep(REQUEST_RECOVERY_POLL_MS);
+      continue;
+    }
+
+    const status = await fetchSimulatorStatusOrNull(name);
+    const containers = Array.isArray(status?.containerStatus) ? status.containerStatus : [];
+    if (containers.length > 0) {
+      if ((normalizedAction === 'start' || normalizedAction === 'restart')
+        && containers.every((container) => !!container.running)) {
+        return true;
+      }
+      if (normalizedAction === 'stop' && containers.every((container) => !container.running)) {
+        return true;
+      }
+    }
+
+    await sleep(REQUEST_RECOVERY_POLL_MS);
+  }
+
+  return false;
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -490,8 +619,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const name = createSimulatorName.value.trim();
     const port = createSimulatorPort.value.trim();
-    const ownerFirst = createOwnerFirst.value.trim();
-    const ownerLast = createOwnerLast.value.trim();
+    const ownerFirstInput = createOwnerFirst.value.trim();
+    const ownerLastInput = createOwnerLast.value.trim();
+    const ownerFirst = ownerFirstInput || normalizeOwnerFirstFromName(name);
+    const ownerLast = ownerLastInput || ownerLastPlaceholder();
     const ownerEmail = createOwnerEmail.value.trim();
     const oar = createSimulatorOar.value.trim();
     const regionX = createRegionX.value.trim() || '1000';
@@ -500,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ? String(createSimulatorLevel?.value || '').toUpperCase()
       : String(policy.fixedLevel || '').toUpperCase();
     const regionRequired = regionRequiredForLevel(level);
+    const createBot = createBotToggleAllowedForLevel(level) && !!createSimulatorBot?.checked;
 
     if (!name || !level) {
       createSimulatorError.textContent = 'Name and level are required.';
@@ -529,21 +661,35 @@ document.addEventListener('DOMContentLoaded', () => {
     submitCreateSimulator.disabled = true;
 
     try {
-      await createSimulator({
-        name,
-        level,
-        port,
-        ownerFirst: regionRequired ? ownerFirst : '',
-        ownerLast: regionRequired ? ownerLast : '',
-        ownerEmail: regionRequired ? ownerEmail : '',
-        oar: regionRequired ? oar : '',
-        regionX: regionRequired ? regionX : '',
-        regionY: regionRequired ? regionY : ''
-      });
-      closeCreateDialog();
-      await loadSimulators();
-      showToast(toastContainer, `Created simulator ${name}.`, 'success');
+      await withWorkingOverlay(async () => {
+        await createSimulator({
+          name,
+          level,
+          port,
+          ownerFirst: regionRequired ? ownerFirst : '',
+          ownerLast: regionRequired ? ownerLast : '',
+          ownerEmail: regionRequired ? ownerEmail : '',
+          oar: regionRequired ? oar : '',
+          regionX: regionRequired ? regionX : '',
+          regionY: regionRequired ? regionY : '',
+          createBot
+        });
+        closeCreateDialog();
+        await loadSimulators();
+        showToast(toastContainer, `Created simulator ${name}.`, 'success');
+      }, `Creating simulator ${name} ...`);
     } catch (err) {
+      const recovered = await withWorkingOverlay(
+        async () => waitForSimulatorVisible(name),
+        `Verifying simulator ${name} ...`
+      );
+      if (recovered) {
+        closeCreateDialog();
+        await loadSimulators();
+        showToast(toastContainer, `Created simulator ${name}.`, 'success');
+        return;
+      }
+
       createSimulatorError.textContent = err instanceof Error ? err.message : 'Failed to create simulator.';
       createSimulatorError.classList.remove('hidden');
       showToast(toastContainer, createSimulatorError.textContent, 'error');
@@ -554,7 +700,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   refreshButton?.addEventListener('click', async () => {
     try {
-      await loadSimulators();
+      await withWorkingOverlay(async () => {
+        await loadSimulators();
+      }, 'Refreshing simulators ...');
       showToast(toastContainer, 'Simulator list refreshed.', 'success');
     } catch (err) {
       showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');
@@ -563,6 +711,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   createSimulatorLevel?.addEventListener('change', () => {
     syncCreateDialogFields();
+  });
+
+  createSimulatorName?.addEventListener('input', () => {
+    syncOwnerPlaceholders();
+  });
+
+  createSimulatorBot?.addEventListener('change', () => {
+    syncOwnerPlaceholders();
   });
 
   loadSimulators().catch((err) => {

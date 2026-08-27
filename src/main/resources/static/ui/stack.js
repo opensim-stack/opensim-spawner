@@ -1,9 +1,13 @@
-import { actionIconSvg, consoleTargetForContainer, showToast } from '/ui/ui-helpers.js';
+import { actionIconSvg, consoleTargetForContainer, fetchWithTimeout, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
 
 const stackList = document.getElementById('stack-list');
 const stackEmpty = document.getElementById('stack-empty');
 const refreshButton = document.getElementById('refresh-stack');
+const showEntireStackCheckbox = document.getElementById('show-entire-stack');
 const toastContainer = document.getElementById('toast-container');
+const REQUEST_RECOVERY_WINDOW_MS = 180000;
+const REQUEST_RECOVERY_POLL_MS = 3000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const buttonClassesByAction = {
   start: 'text-emerald-200 border-emerald-400/40 hover:bg-emerald-600/20',
@@ -12,12 +16,87 @@ const buttonClassesByAction = {
   console: 'text-neon-accent border-neon-primary/40 hover:bg-neon-primary/10'
 };
 
+const actionVerb = (action) => {
+  switch (String(action || '').toLowerCase()) {
+    case 'start':
+      return 'Starting';
+    case 'stop':
+      return 'Stopping';
+    case 'restart':
+      return 'Restarting';
+    default:
+      return 'Updating';
+  }
+};
+
+const splitBotName = (displayName) => {
+  const trimmed = String(displayName || '').trim();
+  if (!trimmed) {
+    return { first: '', last: '' };
+  }
+  const firstSpace = trimmed.indexOf(' ');
+  if (firstSpace < 0) {
+    return { first: trimmed, last: '' };
+  }
+  return {
+    first: trimmed.slice(0, firstSpace),
+    last: trimmed.slice(firstSpace + 1)
+  };
+};
+
+const fetchManagedContainerNames = async () => {
+  const names = new Set();
+
+  const simulatorListResponse = await fetchWithTimeout('/api/simulator');
+  if (simulatorListResponse.ok) {
+    const simulatorNames = await simulatorListResponse.json();
+    if (Array.isArray(simulatorNames)) {
+      const statuses = await Promise.all(simulatorNames.map(async (name) => {
+        const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`);
+        return response.ok ? response.json() : null;
+      }));
+      statuses.forEach((status) => {
+        const containers = Array.isArray(status?.containerStatus) ? status.containerStatus : [];
+        containers.forEach((container) => {
+          const containerName = String(container?.containerName || '').trim();
+          if (containerName) {
+            names.add(containerName);
+          }
+        });
+      });
+    }
+  }
+
+  const botListResponse = await fetchWithTimeout('/api/bot');
+  if (botListResponse.ok) {
+    const botNames = await botListResponse.json();
+    if (Array.isArray(botNames)) {
+      const statuses = await Promise.all(botNames.map(async (displayName) => {
+        const { first, last } = splitBotName(displayName);
+        const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
+        return response.ok ? response.json() : null;
+      }));
+      statuses.forEach((status) => {
+        const containers = Array.isArray(status?.containerStatus) ? status.containerStatus : [];
+        containers.forEach((container) => {
+          const containerName = String(container?.containerName || '').trim();
+          if (containerName) {
+            names.add(containerName);
+          }
+        });
+      });
+    }
+  }
+
+  return names;
+};
+
 const callAction = async (containerName, action) => {
   const payload = new URLSearchParams();
   payload.set('container', containerName);
   payload.set('action', action);
 
-  const response = await fetch('/api/stack', {
+  const response = await fetchWithTimeout('/api/stack', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload.toString()
@@ -89,10 +168,22 @@ const renderRow = (container) => {
     button.addEventListener('click', async () => {
       button.disabled = true;
       try {
-        const result = await callAction(container.containerName, button.dataset.action || '');
-        showToast(toastContainer, `Container ${result.container}: ${result.action} requested (${result.status}).`, 'success');
-        await loadStack();
+        await withWorkingOverlay(async () => {
+          const result = await callAction(container.containerName, button.dataset.action || '');
+          showToast(toastContainer, `Container ${result.container}: ${result.action} requested (${result.status}).`, 'success');
+          await loadStack();
+        }, `${actionVerb(button.dataset.action)} container ${container.containerName} ...`);
       } catch (err) {
+        const action = button.dataset.action || '';
+        const recovered = await withWorkingOverlay(
+          async () => waitForStackActionOutcome(container.containerName, action),
+          `Verifying ${actionVerb(action).toLowerCase()} result for container ${container.containerName} ...`
+        );
+        if (recovered) {
+          await loadStack();
+          showToast(toastContainer, `Completed '${action}' for ${container.containerName}.`, 'success');
+          return;
+        }
         showToast(toastContainer, err instanceof Error ? err.message : 'Action failed.', 'error');
       } finally {
         button.disabled = false;
@@ -118,7 +209,7 @@ const loadStack = async () => {
   stackList.innerHTML = '';
   stackEmpty.classList.add('hidden');
 
-  const response = await fetch('/api/stack');
+  const response = await fetchWithTimeout('/api/stack');
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || `Could not load stack containers (${response.status}).`);
@@ -130,7 +221,17 @@ const loadStack = async () => {
     return;
   }
 
-  containers.forEach((container) => {
+  let visibleContainers = containers;
+  if (!showEntireStackCheckbox?.checked) {
+    try {
+      const managed = await fetchManagedContainerNames();
+      visibleContainers = containers.filter((container) => !managed.has(String(container?.containerName || '').trim()));
+    } catch (_ignored) {
+      // If managed-group discovery fails, keep default list rather than hiding everything.
+    }
+  }
+
+  visibleContainers.forEach((container) => {
     if (container && typeof container.containerName === 'string' && container.containerName.trim()) {
       stackList.appendChild(renderRow(container));
     }
@@ -141,11 +242,54 @@ const loadStack = async () => {
   }
 };
 
+const waitForStackActionOutcome = async (containerName, action, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+  const normalizedAction = String(action || '').toLowerCase();
+  const deadline = Date.now() + maxWaitMs;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithTimeout('/api/stack');
+      if (response.ok) {
+        const containers = await response.json();
+        const match = Array.isArray(containers)
+          ? containers.find((container) => container?.containerName === containerName)
+          : null;
+        if (match) {
+          if ((normalizedAction === 'start' || normalizedAction === 'restart') && !!match.running) {
+            return true;
+          }
+          if (normalizedAction === 'stop' && !match.running) {
+            return true;
+          }
+        }
+      }
+    } catch (_ignored) {
+      // Keep polling through transient failures.
+    }
+
+    await sleep(REQUEST_RECOVERY_POLL_MS);
+  }
+
+  return false;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   refreshButton?.addEventListener('click', async () => {
     try {
-      await loadStack();
+      await withWorkingOverlay(async () => {
+        await loadStack();
+      }, 'Refreshing stack ...');
       showToast(toastContainer, 'Stack list refreshed.', 'success');
+    } catch (err) {
+      showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');
+    }
+  });
+
+  showEntireStackCheckbox?.addEventListener('change', async () => {
+    try {
+      await withWorkingOverlay(async () => {
+        await loadStack();
+      }, 'Refreshing stack ...');
     } catch (err) {
       showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');
     }

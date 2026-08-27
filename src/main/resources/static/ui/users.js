@@ -1,16 +1,10 @@
-import { showToast } from '/ui/ui-helpers.js';
+import { fetchWithTimeout, iconSpan, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
 
 const toastContainer = document.getElementById('toast-container');
 
-const createUserForm = document.getElementById('create-user-form');
-const createFirst = document.getElementById('create-first');
-const createLast = document.getElementById('create-last');
-const createEmail = document.getElementById('create-email');
-const createModel = document.getElementById('create-model');
-const createPassword = document.getElementById('create-password');
-const createPasswordConfirm = document.getElementById('create-password-confirm');
-const createUserError = document.getElementById('create-user-error');
-const createUserSubmit = document.getElementById('create-user-submit');
+const activeUsersList = document.getElementById('active-users-list');
+const activeUsersEmpty = document.getElementById('active-users-empty');
+const refreshActiveUsersButton = document.getElementById('refresh-active-users');
 
 const findUserForm = document.getElementById('find-user-form');
 const findFirst = document.getElementById('find-first');
@@ -28,6 +22,8 @@ const usersGridServiceWarning = document.getElementById('users-grid-service-warn
 const usersGridServicePill = document.getElementById('users-grid-service-pill');
 
 let gridServiceAvailable = false;
+let botNameSet = new Set();
+let handlerNameSet = new Set();
 const gridServiceUnavailableMessage = 'User management is disabled until a ROBUST or STANDALONE simulator is active.';
 
 const showInlineError = (el, message) => {
@@ -47,7 +43,7 @@ const clearInlineError = (el) => {
 };
 
 const fetchGridServiceAvailability = async () => {
-  const response = await fetch('/api/simulator/grid-service');
+  const response = await fetchWithTimeout('/api/simulator/grid-service');
   if (!response.ok) {
     throw new Error(`Could not determine grid service availability (${response.status}).`);
   }
@@ -65,9 +61,18 @@ const setFormEnabled = (form, enabled) => {
   form.classList.toggle('opacity-50', !enabled);
 };
 
+const setElementEnabled = (el, enabled) => {
+  if (!el) {
+    return;
+  }
+  el.disabled = !enabled;
+  el.classList.toggle('opacity-50', !enabled);
+  el.classList.toggle('cursor-not-allowed', !enabled);
+};
+
 const applyGridServiceUiState = () => {
   const enabled = gridServiceAvailable;
-  setFormEnabled(createUserForm, enabled);
+  setElementEnabled(refreshActiveUsersButton, enabled);
   setFormEnabled(findUserForm, enabled);
   setFormEnabled(resetPasswordForm, enabled);
   if (usersGridServiceWarning) {
@@ -86,30 +91,8 @@ const applyGridServiceUiState = () => {
   }
 };
 
-const createUser = async ({ first, last, email, model, password }) => {
-  const payload = new URLSearchParams();
-  payload.set('first', first);
-  payload.set('last', last);
-  payload.set('email', email);
-  payload.set('model', model);
-  payload.set('password', password);
-
-  const response = await fetch('/api/user', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: payload.toString()
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Create user failed (${response.status}).`);
-  }
-
-  return response.json();
-};
-
 const findUser = async (first, last) => {
-  const response = await fetch(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
+  const response = await fetchWithTimeout(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
   if (!response.ok) {
     const body = await response.text();
     throw new Error(body || `Find user failed (${response.status}).`);
@@ -117,11 +100,57 @@ const findUser = async (first, last) => {
   return response.json();
 };
 
+const listActiveUsers = async () => {
+  const response = await fetchWithTimeout('/api/user/active');
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Active user query failed (${response.status}).`);
+  }
+  const payload = await response.json();
+  return Array.isArray(payload) ? payload : [];
+};
+
+const listBotNames = async () => {
+  const response = await fetchWithTimeout('/api/bot');
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Bot query failed (${response.status}).`);
+  }
+  const payload = await response.json();
+  return Array.isArray(payload) ? payload : [];
+};
+
+const listHandlers = async () => {
+  const response = await fetchWithTimeout('/api/user/handlers');
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Handler query failed (${response.status}).`);
+  }
+  const payload = await response.json();
+  return Array.isArray(payload) ? payload : [];
+};
+
+const normalizeDisplayName = (first, last) => `${String(first || '').trim()} ${String(last || '').trim()}`.trim().toLowerCase();
+
+const setHandlerEnabled = async (first, last, enabled) => {
+  const payload = new URLSearchParams();
+  payload.set('enabled', enabled ? 'true' : 'false');
+  const response = await fetchWithTimeout(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}/handler`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload.toString()
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Failed to update bot handler state (${response.status}).`);
+  }
+};
+
 const resetUserPassword = async (first, last, password) => {
   const payload = new URLSearchParams();
   payload.set('password', password);
 
-  const response = await fetch(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}/password`, {
+  const response = await fetchWithTimeout(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}/password`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: payload.toString()
@@ -170,6 +199,166 @@ const renderFindResult = (result) => {
   resetPasswordSection.classList.remove('hidden');
 };
 
+const findAndRenderUser = async (first, last) => {
+  const result = await withWorkingOverlay(async () => findUser(first, last), `Finding user ${first} ${last} ...`);
+  renderFindResult(result);
+  if (!result.found) {
+    showToast(toastContainer, `No account found for ${first} ${last}.`, 'info');
+  }
+};
+
+const renderActiveUsers = (users) => {
+  if (!activeUsersList || !activeUsersEmpty) {
+    return;
+  }
+
+  activeUsersList.innerHTML = '';
+
+  if (!Array.isArray(users) || users.length === 0) {
+    activeUsersEmpty.classList.remove('hidden');
+    return;
+  }
+
+  activeUsersEmpty.classList.add('hidden');
+
+  users.forEach((user) => {
+    const first = String(user?.first || '').trim();
+    const last = String(user?.last || '').trim();
+    if (!first || !last) {
+      return;
+    }
+    const isBot = botNameSet.has(normalizeDisplayName(first, last));
+    const isHandler = !isBot && handlerNameSet.has(normalizeDisplayName(first, last));
+
+    const tr = document.createElement('tr');
+
+    const firstTd = document.createElement('td');
+    firstTd.className = 'py-2 pr-3 text-gray-100';
+    const leadingIcon = isBot ? 'robot' : (isHandler ? 'handler' : 'person');
+    const leadingColor = isBot ? 'text-amber-300' : (isHandler ? 'text-sky-300' : 'text-emerald-300');
+    firstTd.innerHTML = `<span class="inline-flex items-center gap-2"><span class="${leadingColor}">${iconSpan(leadingIcon, 'h-4 w-4 inline-block align-middle shrink-0')}</span><span>${first}</span></span>`;
+
+    const lastTd = document.createElement('td');
+    lastTd.className = 'py-2 pr-3 text-gray-100';
+    lastTd.textContent = last;
+
+    const idTd = document.createElement('td');
+    idTd.className = 'py-2 pr-3 text-gray-300 font-mono text-xs break-all';
+    idTd.textContent = String(user?.agentId || '');
+
+    const typeTd = document.createElement('td');
+    typeTd.className = 'py-2 pr-3 text-gray-300';
+    typeTd.textContent = String(user?.type || '');
+
+    const posTd = document.createElement('td');
+    posTd.className = 'py-2 pr-3 text-gray-300 font-mono text-xs';
+    posTd.textContent = String(user?.position || '');
+
+    const actionTd = document.createElement('td');
+    actionTd.className = 'py-2 text-right';
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'inline-flex items-center gap-2';
+
+    const selectButton = document.createElement('button');
+    selectButton.type = 'button';
+    selectButton.className = 'inline-flex items-center gap-2 rounded-lg border border-neon-primary/40 px-3 py-1.5 text-xs text-neon-accent hover:bg-neon-primary/10';
+    selectButton.innerHTML = `${iconSpan('select', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Select</span>`;
+    selectButton.addEventListener('click', async () => {
+      if (!gridServiceAvailable) {
+        showToast(toastContainer, gridServiceUnavailableMessage, 'error');
+        return;
+      }
+      if (findFirst) {
+        findFirst.value = first;
+      }
+      if (findLast) {
+        findLast.value = last;
+      }
+
+      const next = new URL(window.location.href);
+      next.searchParams.set('first', first);
+      next.searchParams.set('last', last);
+      window.history.replaceState({}, '', next.toString());
+
+      try {
+        await findAndRenderUser(first, last);
+      } catch (err) {
+        showToast(toastContainer, err instanceof Error ? err.message : 'Find user failed.', 'error');
+      }
+    });
+
+    actionsWrap.appendChild(selectButton);
+
+    if (!isBot) {
+      const handlerButton = document.createElement('button');
+      handlerButton.type = 'button';
+      const syncHandlerButton = (enabled) => {
+        handlerButton.className = enabled
+          ? 'inline-flex items-center gap-2 rounded-lg border border-sky-400/40 px-3 py-1.5 text-xs text-sky-200 bg-sky-600/20 hover:bg-sky-600/30'
+          : 'inline-flex items-center gap-2 rounded-lg border border-gray-500/40 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-700';
+        handlerButton.innerHTML = `${iconSpan('handler', 'h-4 w-4 inline-block align-middle shrink-0')}<span>${enabled ? 'Handler On' : 'Handler Off'}</span>`;
+      };
+      syncHandlerButton(isHandler);
+
+      handlerButton.addEventListener('click', async () => {
+        if (!gridServiceAvailable) {
+          showToast(toastContainer, gridServiceUnavailableMessage, 'error');
+          return;
+        }
+        const currentlyEnabled = handlerNameSet.has(normalizeDisplayName(first, last));
+        selectButton.disabled = true;
+        handlerButton.disabled = true;
+        try {
+          await withWorkingOverlay(
+            async () => setHandlerEnabled(first, last, !currentlyEnabled),
+            `${currentlyEnabled ? 'Removing' : 'Assigning'} bot handler ${first} ${last} ...`
+          );
+          if (currentlyEnabled) {
+            handlerNameSet.delete(normalizeDisplayName(first, last));
+          } else {
+            handlerNameSet.add(normalizeDisplayName(first, last));
+          }
+          renderActiveUsers(users);
+          showToast(toastContainer, `${first} ${last} ${currentlyEnabled ? 'is no longer' : 'is now'} a bot handler.`, 'success');
+        } catch (err) {
+          showToast(toastContainer, err instanceof Error ? err.message : 'Failed to update bot handler state.', 'error');
+        } finally {
+          selectButton.disabled = false;
+          handlerButton.disabled = false;
+        }
+      });
+
+      actionsWrap.appendChild(handlerButton);
+    }
+
+    actionTd.appendChild(actionsWrap);
+
+    tr.appendChild(firstTd);
+    tr.appendChild(lastTd);
+    tr.appendChild(idTd);
+    tr.appendChild(typeTd);
+    tr.appendChild(posTd);
+    tr.appendChild(actionTd);
+    activeUsersList.appendChild(tr);
+  });
+
+  if (!activeUsersList.children.length) {
+    activeUsersEmpty.classList.remove('hidden');
+  }
+};
+
+const loadActiveUsers = async () => {
+  const [users, botNames, handlers] = await withWorkingOverlay(
+    async () => Promise.all([listActiveUsers(), listBotNames(), listHandlers()]),
+    'Loading active users ...'
+  );
+  botNameSet = new Set(botNames.map((name) => String(name || '').trim().toLowerCase()).filter((name) => name.length > 0));
+  handlerNameSet = new Set(handlers
+    .map((item) => normalizeDisplayName(item?.handlerFirst, item?.handlerLast))
+    .filter((name) => name.length > 0));
+  renderActiveUsers(users);
+};
+
 const loadFindResultFromQuery = async () => {
   if (!gridServiceAvailable) {
     return;
@@ -188,26 +377,23 @@ const loadFindResultFromQuery = async () => {
     findLast.value = last;
   }
 
-  try {
-    const result = await findUser(first, last);
-    renderFindResult(result);
-    if (!result.found) {
-      showToast(toastContainer, `No account found for ${first} ${last}.`, 'info');
-    }
-  } catch (err) {
-    showToast(toastContainer, err instanceof Error ? err.message : 'Find user failed.', 'error');
-  }
+  await findAndRenderUser(first, last);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   fetchGridServiceAvailability()
-    .then((available) => {
+    .then(async (available) => {
       gridServiceAvailable = available;
       applyGridServiceUiState();
       if (!available) {
         showToast(toastContainer, gridServiceUnavailableMessage, 'info');
       } else {
-        loadFindResultFromQuery();
+        try {
+          await loadActiveUsers();
+          await loadFindResultFromQuery();
+        } catch (err) {
+          showToast(toastContainer, err instanceof Error ? err.message : 'Failed to load users data.', 'error');
+        }
       }
     })
     .catch((err) => {
@@ -216,50 +402,20 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(toastContainer, err instanceof Error ? err.message : 'Failed to query grid service availability.', 'error');
     });
 
-  createUserForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    clearInlineError(createUserError);
-
+  refreshActiveUsersButton?.addEventListener('click', async () => {
     if (!gridServiceAvailable) {
-      showInlineError(createUserError, gridServiceUnavailableMessage);
+      showToast(toastContainer, gridServiceUnavailableMessage, 'error');
       return;
     }
-
-    if (!createFirst || !createLast || !createEmail || !createModel || !createPassword || !createPasswordConfirm || !createUserSubmit) {
-      return;
-    }
-
-    const first = createFirst.value.trim();
-    const last = createLast.value.trim();
-    const email = createEmail.value.trim();
-    const model = createModel.value.trim();
-    const password = createPassword.value;
-    const confirm = createPasswordConfirm.value;
-
-    if (!first || !last || !email || !model || !password) {
-      showInlineError(createUserError, 'All fields are required.');
-      return;
-    }
-
-    if (password !== confirm) {
-      showInlineError(createUserError, 'Password and confirm password must match.');
-      return;
-    }
-
-    createUserSubmit.disabled = true;
     try {
-      const created = await createUser({ first, last, email, model, password });
-      createUserForm.reset();
-      showToast(toastContainer, `Created user ${created.first} ${created.last}.`, 'success');
+      await loadActiveUsers();
+      showToast(toastContainer, 'Active users refreshed.', 'success');
     } catch (err) {
-      showInlineError(createUserError, err instanceof Error ? err.message : 'Create user failed.');
-      showToast(toastContainer, createUserError?.textContent || 'Create user failed.', 'error');
-    } finally {
-      createUserSubmit.disabled = false;
+      showToast(toastContainer, err instanceof Error ? err.message : 'Active users refresh failed.', 'error');
     }
   });
 
-  findUserForm?.addEventListener('submit', (event) => {
+  findUserForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!gridServiceAvailable) {
       showToast(toastContainer, gridServiceUnavailableMessage, 'error');
@@ -275,7 +431,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const next = new URL(window.location.href);
     next.searchParams.set('first', first);
     next.searchParams.set('last', last);
-    window.location.assign(next.toString());
+    window.history.replaceState({}, '', next.toString());
+
+    try {
+      await findAndRenderUser(first, last);
+    } catch (err) {
+      showToast(toastContainer, err instanceof Error ? err.message : 'Find user failed.', 'error');
+    }
   });
 
   resetPasswordForm?.addEventListener('submit', async (event) => {
@@ -314,7 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resetPasswordSubmit.disabled = true;
     try {
-      await resetUserPassword(first, last, password);
+      await withWorkingOverlay(async () => resetUserPassword(first, last, password), `Resetting password for ${first} ${last} ...`);
       resetPasswordForm.reset();
       showToast(toastContainer, `Reset password for ${first} ${last}.`, 'success');
     } catch (err) {

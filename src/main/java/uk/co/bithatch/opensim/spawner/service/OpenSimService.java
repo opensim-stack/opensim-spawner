@@ -1,6 +1,7 @@
 package uk.co.bithatch.opensim.spawner.service;
 
 import java.util.Map;
+import java.util.List;
 
 public interface OpenSimService {
 
@@ -13,6 +14,8 @@ public interface OpenSimService {
     void deleteUser(String first, String last);
 
     Map<String, String> showAccount(String first, String last);
+
+    List<Map<String, String>> showActiveUsers();
 
     void resetUserPassword(String first, String last, String password);
 }

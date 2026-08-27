@@ -1,6 +1,8 @@
 package uk.co.bithatch.opensim.spawner.domain;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ContainerSpec {
@@ -12,8 +14,35 @@ public class ContainerSpec {
     private Map<String, String> files = new LinkedHashMap<>();
     private Map<String, String> ports = new LinkedHashMap<>();
     private Map<String, String> extraHosts = new LinkedHashMap<>();
+    private String hostname;
+    private List<String> aliases = new ArrayList<>();
+    private List<String> directories = new ArrayList<>();
 
-    public String getImage() {
+    public List<String> getDirectories() {
+		return directories;
+	}
+
+	public void setDirectories(List<String> directories) {
+		this.directories = directories;
+	}
+
+	public List<String> getAliases() {
+		return aliases;
+	}
+
+	public void setAliases(List<String> aliases) {
+		this.aliases = aliases;
+	}
+
+	public String getHostname() {
+		return hostname;
+	}
+
+	public void setHostname(String hostname) {
+		this.hostname = hostname;
+	}
+
+	public String getImage() {
         return image;
     }
 
@@ -67,5 +96,12 @@ public class ContainerSpec {
 
 	public void setExtraHosts(Map<String, String> extraHosts) {
 		this.extraHosts = extraHosts;
+	}
+
+	@Override
+	public String toString() {
+		return "ContainerSpec [image=" + image + ", name=" + name + ", environment=" + environment + ", volumes="
+				+ volumes + ", files=" + files + ", ports=" + ports + ", extraHosts=" + extraHosts + ", hostname="
+				+ hostname + ", aliases=" + aliases + "]";
 	}
 }

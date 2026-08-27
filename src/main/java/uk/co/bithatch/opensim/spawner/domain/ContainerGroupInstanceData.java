@@ -2,10 +2,11 @@ package uk.co.bithatch.opensim.spawner.domain;
 
 import java.util.List;
 
-public abstract class ContainerGroupInstanceData<LVL extends Enum<LVL>> {
+public abstract class ContainerGroupInstanceData<LVL extends Enum<LVL>> implements DomainObject {
     private List<String> containerIds = List.of();
     private LVL level;
 
+	@Override
 	public abstract String displayName();
 
     public final List<String> getContainerIds() {

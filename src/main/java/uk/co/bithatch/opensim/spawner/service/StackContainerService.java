@@ -44,7 +44,7 @@ public class StackContainerService {
 
         for (var container : containers) {
             var containerName = primaryName(container == null ? null : container.getNames());
-            if (containerName == null || !containerName.startsWith(projectPrefix)) {
+            if (containerName == null || !containerName.startsWith(projectPrefix) || containerName.matches(".*-init-[0-9]+$")) {
                 continue;
             }
 
