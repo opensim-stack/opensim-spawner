@@ -25,7 +25,10 @@ import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
 @Service
 public class SimulatorProvisioningService extends AbstractContainerGroupProvisioningService<SimulatorStateRepository, SimulatorInstanceData> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(SimulatorProvisioningService.class);
+    private static final int MAX_IMPORT_RETRIES = 100;
+    private static final Duration IMPORT_RETRY_DELAY = Duration.ofSeconds(10);
+
+	private static final Logger LOG = LoggerFactory.getLogger(SimulatorProvisioningService.class);
     
     private final OARs oars;
 	private final RandomPasswordService passwordService;
@@ -195,18 +198,18 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
         		LOG.info("Sim {} requires a region, importing OAR {}.", name, oarName);
 	            var workspaceArchivePath = copyArchiveToWorkspace(oar.archivePath(), materializedFiles);
 	            
-	            for(int i = 0 ; i < 18 ; i++) {
+	            for(int i = 0 ; i < MAX_IMPORT_RETRIES ; i++) {
 	            	try {
 	            		openSimService.loadRegionArchive(workspaceArchivePath.toString());
 	            		break;
 	            	} catch(Exception e) {
-	            		LOG.warn("Failed to import OAR {} for sim {}. Attempt {}/5.", oarName, name, i+1, e);
-	            		if(i == 4) {
+	            		LOG.warn("Failed to import OAR {} for sim {}. Attempt {}/5. {}", oarName, name, i+1, e.getMessage() == null ? "No message." : e.getMessage());
+	            		if(i == MAX_IMPORT_RETRIES - 1) {
 	            			throw e;
 	            		}
  	            		else {
  	            			try {
- 	            				Thread.sleep(10000); // wait a bit for the region to be fully loade
+ 	            				Thread.sleep(IMPORT_RETRY_DELAY); // wait a bit for the region to be fully loade
  	            			} catch (InterruptedException e2) {
  	       	            		throw new RuntimeException("Interrupted while waiting for region to load.", e2);
  	       					}

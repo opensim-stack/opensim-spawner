@@ -44,7 +44,6 @@ public class RestOpenSimService implements OpenSimService {
              		archivePath).toList();
              LOG.info("Loaded opensimulator archive '{}'.", archivePath);
          } catch (RuntimeException e) {
-             LOG.error("Failed to load opensimulator archive '{}.", archivePath,  e);
              throw new ExternalDependencyException("Failed to load OpenSimulator inventory archive via REST console. " + e.getMessage(), e);
          }
 		

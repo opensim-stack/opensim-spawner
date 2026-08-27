@@ -10,6 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
+import uk.co.bithatch.opensim.spawner.domain.BotLevel;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
 
@@ -55,6 +56,7 @@ public class SetupWizardService {
 							"create", properties.isOpensimCreateBotUser(),
 							"first", properties.getOpensimBotFirst(),
 							"last", properties.getOpensimBotLast(),
+			                "level", BotLevel.GOVERNOR.name(),
 							"email", properties.getOpensimBotEmail(),
 							"appearance", properties.getOpensimBotAppearance(),
 							"gender", properties.getOpensimBotGender())));
@@ -88,7 +90,7 @@ public class SetupWizardService {
         var botEmail = stringValue(bot.get("email"));
         var botAppearance = stringValue(bot.get("appearance"));
         var botGender = stringValue(bot.get("gender"));
-        var botLevel = firstNonBlank(stringValue(bot.get("level")), "ACTOR");
+        var botLevel = firstNonBlank(stringValue(bot.get("level")), BotLevel.GOVERNOR.name());
 
         var userFirst = firstNonBlank(stringValue(user.get("first")), normalizeNameFromSimulator(primarySimulatorName));
         var userLast = firstNonBlank(stringValue(user.get("last")), "User");
