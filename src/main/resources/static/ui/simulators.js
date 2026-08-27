@@ -61,6 +61,26 @@ const levelIcon = (level) => {
   }
 };
 
+const normalizeMapHost = (hostname) => {
+  const value = String(hostname || '').trim();
+  if (!value) {
+    return value;
+  }
+  // IPv6 literals must be wrapped for host:port URLs.
+  return value.includes(':') && !value.startsWith('[') ? `[${value}]` : value;
+};
+
+const buildWorldMapUrl = (status) => {
+  const port = Number(status?.port);
+  const regionX = Number(status?.region?.x);
+  const regionY = Number(status?.region?.y);
+  const host = normalizeMapHost(window.location.hostname);
+  if (!host || !Number.isFinite(port) || port <= 0 || !Number.isFinite(regionX) || !Number.isFinite(regionY)) {
+    return null;
+  }
+  return `http://${host}:${port}/map-1-${regionX}-${regionY}-objects.jpg`;
+};
+
 const normalizedLevel = (status) => String(status?.level || '').trim().toUpperCase();
 const normalizeOwnerFirstFromName = (name) => String(name || '').replace(/\s+/g, '').trim();
 const createBotToggleAllowedForLevel = (levelName) => {
@@ -384,7 +404,7 @@ const openCreateDialog = async () => {
 
 const createCard = (status) => {
   const card = document.createElement('section');
-  card.className = 'feature-card bg-dark-800/80 backdrop-blur rounded-xl p-5 flex flex-col gap-4';
+  card.className = 'feature-card bg-dark-800/80 backdrop-blur rounded-xl p-5 flex flex-col gap-4 sm:col-span-2 xl:col-span-2';
 
   const name = String(status.name || '').trim() || 'Unnamed Simulator';
   const level = status.level || 'UNKNOWN';
@@ -399,6 +419,13 @@ const createCard = (status) => {
     ? `<div class="mt-2"><span class="inline-flex items-center rounded-md border border-neon-accent/40 bg-neon-accent/10 px-2.5 py-1 text-xs font-medium text-neon-accent">Port ${port}</span></div>`
     : '';
   const containers = Array.isArray(status.containerStatus) ? status.containerStatus : [];
+  const worldMapUrl = buildWorldMapUrl(status);
+  const worldMapPane = worldMapUrl
+    ? `<div class="relative h-full w-full">
+        <img src="${worldMapUrl}" alt="World map for ${name}" loading="lazy" class="h-full w-full object-cover rounded-lg border border-neon-accent/30 bg-dark-900/50" />
+        <a href="${worldMapUrl}" target="_blank" rel="noopener noreferrer" class="absolute right-2 top-2 rounded-md border border-neon-accent/50 bg-dark-900/80 px-2 py-1 text-xs font-medium text-neon-accent hover:bg-dark-800">Open map</a>
+      </div>`
+    : `<div class="h-full w-full rounded-lg border border-neon-accent/20 bg-dark-900/40 text-sm text-gray-400 flex items-center justify-center text-center px-4">World map unavailable</div>`;
 
   const preferredConsole = resolvePreferredConsole(containers, 'opensim-simulator-');
   const preferredConsoleLink = preferredConsole
@@ -407,31 +434,39 @@ const createCard = (status) => {
   const containerRows = renderContainerStatusRows(containers);
 
   card.innerHTML = `
-    <div class="flex items-start justify-between gap-3">
-      <div>
-        <h2 class="text-xl font-semibold text-white">${name}</h2>
-        ${ownerLine}
-      </div>
-      <div class="flex items-start gap-2">
-        ${preferredConsoleLink}
-        <div class="w-14 h-14 rounded-xl bg-neon-primary/20 border border-neon-primary/40 flex items-center justify-center text-neon-primary font-bold">
-          ${levelIcon(level)}
+    <div class="flex flex-col lg:flex-row gap-4">
+      <div class="w-full lg:w-1/2 flex flex-col gap-4 min-w-0">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-semibold text-white">${name}</h2>
+            ${ownerLine}
+          </div>
+          <div class="flex items-start gap-2">
+            ${preferredConsoleLink}
+            <div class="w-14 h-14 rounded-xl bg-neon-primary/20 border border-neon-primary/40 flex items-center justify-center text-neon-primary font-bold">
+              ${levelIcon(level)}
+            </div>
+          </div>
+        </div>
+
+        <div class="text-xs uppercase tracking-wide text-neon-accent">${level}</div>
+
+        <div class="space-y-2 bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
+          ${containerRows || '<div class="text-sm text-gray-400">No tracked containers.</div>'}
+          ${portBadge}
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mt-auto">
+          <button data-action="start" class="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600/30 inline-flex items-center justify-center gap-2">${iconSpan('start', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Start</span></button>
+          <button data-action="stop" class="px-3 py-2 rounded-lg bg-amber-600/20 border border-amber-400/40 text-amber-200 hover:bg-amber-600/30 inline-flex items-center justify-center gap-2">${iconSpan('stop', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Stop</span></button>
+          <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30 inline-flex items-center justify-center gap-2">${iconSpan('restart', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Restart</span></button>
+          <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('delete', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Delete</span></button>
         </div>
       </div>
-    </div>
 
-    <div class="text-xs uppercase tracking-wide text-neon-accent">${level}</div>
-
-    <div class="space-y-2 bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
-      ${containerRows || '<div class="text-sm text-gray-400">No tracked containers.</div>'}
-      ${portBadge}
-    </div>
-
-    <div class="grid grid-cols-2 gap-2 mt-auto">
-      <button data-action="start" class="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600/30 inline-flex items-center justify-center gap-2">${iconSpan('start', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Start</span></button>
-      <button data-action="stop" class="px-3 py-2 rounded-lg bg-amber-600/20 border border-amber-400/40 text-amber-200 hover:bg-amber-600/30 inline-flex items-center justify-center gap-2">${iconSpan('stop', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Stop</span></button>
-      <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30 inline-flex items-center justify-center gap-2">${iconSpan('restart', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Restart</span></button>
-      <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('delete', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Delete</span></button>
+      <div class="w-full lg:w-1/2 min-h-[220px] lg:min-h-full">
+        ${worldMapPane}
+      </div>
     </div>
   `;
 

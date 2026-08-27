@@ -203,7 +203,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 	            		openSimService.loadRegionArchive(workspaceArchivePath.toString());
 	            		break;
 	            	} catch(Exception e) {
-	            		LOG.warn("Failed to import OAR {} for sim {}. Attempt {}/5. {}", oarName, name, i+1, e.getMessage() == null ? "No message." : e.getMessage());
+	            		LOG.warn("Failed to import OAR {} for sim {}. Attempt {}/{}. {}", oarName, name, i+1, MAX_IMPORT_RETRIES, e.getMessage() == null ? "No message." : e.getMessage());
 	            		if(i == MAX_IMPORT_RETRIES - 1) {
 	            			throw e;
 	            		}
