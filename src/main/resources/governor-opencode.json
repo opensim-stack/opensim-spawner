@@ -42,7 +42,7 @@
     }
   },
   "mcp": {
-    "local_host_mcp": {
+    "console2mcp": {
       "type": "remote",
       "url": "http://%env.COMPOSE_PROJECT_NAME%-console2mcp-1:%env.CONSOLE_MCP_PORT%/mcp",
       "enabled": true,
@@ -50,7 +50,7 @@
         "Authorization": "Bearer %env.CONSOLE_MCP_BEARER_TOKEN%"
       }
     },
-    "metaverse_mcp": {
+    "metaverse2mcp": {
       "type": "remote",
       "url": "http://%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
       "enabled": true,
@@ -58,7 +58,7 @@
         "Authorization": "Bearer %bot.token%"
       }
     },
-    "blender_mcp": {
+    "blender": {
       "type": "remote",
       "url": "http://%env.COMPOSE_PROJECT_NAME%-blender-1:%env.BLENDER_MCP_PORT%/mcp",
       "enabled": true
