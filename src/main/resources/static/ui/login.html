@@ -43,9 +43,14 @@
       <div class="flex items-center gap-3 mb-8">
         <img src="/ui/opensim-stack.png" alt="OpenSim AI Stack" class="h-10 w-auto">
         <div>
-          <h1 class="text-xl font-bold gradient-text">OpenSim Spawner</h1>
-          <p class="text-sm text-gray-400">Sign in to manage bots</p>
+          <h1 class="text-xl font-bold gradient-text">OpenSim AI</h1>
+          <p class="text-sm text-gray-400">Sign in to a virtual world powered by AI</p>
         </div>
+      </div>
+
+      <div id="login-grid-service-pill" class="mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs border-amber-400/40 bg-amber-500/10 text-amber-200">
+        <span class="w-2 h-2 rounded-full bg-amber-300"></span>
+        <span>Grid Service: Unavailable</span>
       </div>
 
       <form id="login-form" class="space-y-4">
@@ -54,6 +59,7 @@
           <input name="username" autocomplete="username" required
             class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
             type="text">
+          <span class="mt-1 block text-xs text-gray-400">Admins use the console username. Grid users sign in as <code>First Last</code>.</span>
         </label>
 
         <label class="block">

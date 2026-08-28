@@ -36,7 +36,8 @@ public class BearerTokenFilter extends OncePerRequestFilter {
         }
 
         var auth = request.getHeader("Authorization");
-        if (!isAuthorized(auth, configuredToken) && !UiAuthSupport.isAuthenticated(request.getSession(false))) {
+        var session = request.getSession(false);
+        if (!isAuthorized(auth, configuredToken) && !UiAuthSupport.isAdmin(session)) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setHeader("WWW-Authenticate", "Bearer");
             response.setContentType("application/json");

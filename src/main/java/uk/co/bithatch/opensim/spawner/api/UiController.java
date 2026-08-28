@@ -12,10 +12,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.server.ResponseStatusException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.service.ApprovalService;
+import uk.co.bithatch.opensim.spawner.service.OpenSimService;
+import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.SetupWizardService;
 
 @Controller
@@ -24,11 +27,19 @@ public class UiController {
     private final SpawnerProperties properties;
     private final ApprovalService approvalService;
     private final SetupWizardService setupWizardService;
+    private final OpenSimService openSimService;
+    private final SimulatorProvisioningService simulatorProvisioningService;
 
-    public UiController(SpawnerProperties properties, ApprovalService approvalService, SetupWizardService setupWizardService) {
+    public UiController(SpawnerProperties properties,
+            ApprovalService approvalService,
+            SetupWizardService setupWizardService,
+            OpenSimService openSimService,
+            SimulatorProvisioningService simulatorProvisioningService) {
         this.properties = properties;
         this.approvalService = approvalService;
         this.setupWizardService = setupWizardService;
+        this.openSimService = openSimService;
+        this.simulatorProvisioningService = simulatorProvisioningService;
     }
 
     @GetMapping("/")
@@ -54,8 +65,21 @@ public class UiController {
     @GetMapping(path = "/ui/api/auth/status", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public Map<String, Object> authStatus(HttpServletRequest request) {
+        var session = request.getSession(false);
         var response = new LinkedHashMap<String, Object>();
-        response.put("authenticated", UiAuthSupport.isAuthenticated(request.getSession(false)));
+        var authenticated = UiAuthSupport.isAuthenticated(session);
+        response.put("authenticated", authenticated);
+        response.put("admin", UiAuthSupport.isAdmin(session));
+        response.put("first", authenticated ? UiAuthSupport.authenticatedUserFirst(session) : "");
+        response.put("last", authenticated ? UiAuthSupport.authenticatedUserLast(session) : "");
+        return response;
+    }
+
+    @GetMapping(path = "/ui/api/auth/grid-status", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> gridStatus() {
+        var response = new LinkedHashMap<String, Object>();
+        response.put("available", simulatorProvisioningService.hasActiveGridLoginService());
         return response;
     }
 
@@ -75,20 +99,41 @@ public class UiController {
             HttpServletRequest request) {
         var expectedUser = normalize(properties.getOpensimConsoleUser());
         var expectedPass = normalize(properties.getOpensimConsolePass());
+        var session = request.getSession(true);
 
-        if (expectedUser.isEmpty() || expectedPass.isEmpty()) {
-            return unauthorized("UI login is not configured. Set OPENSIM_CONSOLE_USER and OPENSIM_CONSOLE_PASS.");
+        if (!expectedUser.isEmpty() && !expectedPass.isEmpty()
+                && expectedUser.equals(normalize(username))
+                && expectedPass.equals(password == null ? "" : password)) {
+            UiAuthSupport.markAdminAuthenticated(session);
+            var response = new LinkedHashMap<String, Object>();
+            response.put("ok", true);
+            response.put("admin", true);
+            return ResponseEntity.ok(response);
         }
 
-        if (!expectedUser.equals(normalize(username)) || !expectedPass.equals(password == null ? "" : password)) {
+        if (!simulatorProvisioningService.hasActiveGridLoginService()) {
             return unauthorized("Invalid credentials.");
         }
 
-        var session = request.getSession(true);
-        session.setAttribute(UiAuthSupport.SESSION_AUTH_KEY, Boolean.TRUE);
+        var name = parseUserName(username);
+        if (name == null) {
+            return unauthorized("Use your OpenSim user name as 'First Last'.");
+        }
+
+        var pass = password == null ? new char[0] : password.toCharArray();
+        var authenticated = openSimService.authenticate(name.first(), name.last(), pass);
+        java.util.Arrays.fill(pass, '\0');
+        if (!authenticated) {
+            return unauthorized("Invalid credentials.");
+        }
+
+        UiAuthSupport.markUserAuthenticated(session, name.first(), name.last());
 
         var response = new LinkedHashMap<String, Object>();
         response.put("ok", true);
+        response.put("admin", false);
+        response.put("first", name.first());
+        response.put("last", name.last());
         return ResponseEntity.ok(response);
     }
 
@@ -123,10 +168,83 @@ public class UiController {
         return response;
     }
 
+    @PostMapping(path = "/ui/api/auth/change-password", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> changeOwnPassword(@RequestParam String oldPassword,
+            @RequestParam String newPassword,
+            HttpServletRequest request) {
+        var session = request.getSession(false);
+        if (!UiAuthSupport.isAuthenticated(session)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated.");
+        }
+        if (UiAuthSupport.isAdmin(session)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Admin users cannot use this endpoint. Use the Users page to reset passwords.");
+        }
+        if (!simulatorProvisioningService.hasActiveGridLoginService()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Password change is unavailable because no active ROBUST/STANDALONE simulator is online.");
+        }
+
+        var first = UiAuthSupport.authenticatedUserFirst(session);
+        var last = UiAuthSupport.authenticatedUserLast(session);
+        if (first.isEmpty() || last.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Session is not bound to an OpenSim user account.");
+        }
+
+        var normalizedNewPassword = normalize(newPassword);
+        if (normalizedNewPassword.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password is required.");
+        }
+
+        var oldPass = oldPassword == null ? new char[0] : oldPassword.toCharArray();
+        var valid = openSimService.authenticate(first, last, oldPass);
+        java.util.Arrays.fill(oldPass, '\0');
+        if (!valid) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Old password is incorrect.");
+        }
+
+        openSimService.resetUserPassword(first, last, normalizedNewPassword);
+
+        var response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("first", first);
+        response.put("last", last);
+        return response;
+    }
+
     @PostMapping(path = "/ui/api/setup/run", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public Map<String, Object> runSetupWizard(@RequestBody(required = false) Map<String, Object> payload) {
+    public Map<String, Object> runSetupWizard(@RequestBody(required = false) Map<String, Object> payload,
+            HttpServletRequest request) {
+        // Setup operations are admin-only because they mutate stack and simulator state.
+        if (!UiAuthSupport.isAdmin(request.getSession(false))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access is required.");
+        }
         return setupWizardService.runSetup(payload);
+    }
+
+    private static UserName parseUserName(String raw) {
+        var value = normalize(raw);
+        if (value.isEmpty()) {
+            return null;
+        }
+        var parts = value.split("\\s+");
+        if (parts.length < 2) {
+            return null;
+        }
+        var first = parts[0];
+        var last = String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length)).trim();
+        if (first.isEmpty() || last.isEmpty()) {
+            return null;
+        }
+        return new UserName(first, last);
+    }
+
+    private record UserName(String first, String last) {
     }
 
     private static String normalize(String value) {

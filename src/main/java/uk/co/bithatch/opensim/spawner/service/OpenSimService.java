@@ -18,4 +18,6 @@ public interface OpenSimService {
     List<Map<String, String>> showActiveUsers();
 
     void resetUserPassword(String first, String last, String password);
+
+	boolean authenticate(String first, String last, char[] password);
 }

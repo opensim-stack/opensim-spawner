@@ -22,7 +22,6 @@ docker run --rm \
   -e OPENSIM_SPAWNER_HTTP_PORT=8993 \
   -e OPENSIM_SPAWNER_TOKEN= \
   -e OPENSIM_SPAWNER_FIRST_PORT=12345 \
-  -e OPENSIM_CONSOLE_URL=http://host.docker.internal:9000 \
   -e OPENSIM_CONSOLE_USER=ConsoleUser \
   -e OPENSIM_CONSOLE_PASS=ConsolePass \
   -v $(pwd)/config:/config \

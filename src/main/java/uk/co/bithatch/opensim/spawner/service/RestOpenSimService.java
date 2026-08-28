@@ -1,17 +1,20 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.ArrayList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import uk.co.bithatch.opensim.jlib.OpensimRESTConsole;
+import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
-import uk.co.bithatch.opensim.spawner.opensim.OpensimRESTConsole;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
 
 @Service
 public class RestOpenSimService implements OpenSimService {
@@ -19,9 +22,17 @@ public class RestOpenSimService implements OpenSimService {
     private static final Logger LOG = LoggerFactory.getLogger(RestOpenSimService.class);
 
     private final SpawnerProperties properties;
+    private final SimulatorStateRepository simStateRepository;
+    private final GridStateRepository gridStateRepository;
 
-    public RestOpenSimService(SpawnerProperties properties) {
+    public RestOpenSimService(
+    		SpawnerProperties properties,
+			SimulatorStateRepository stateRepository,
+			GridStateRepository gridStateRepository
+    	) {
         this.properties = properties;
+        this.simStateRepository = stateRepository;
+        this.gridStateRepository = gridStateRepository;
     }
 
     @Override
@@ -107,6 +118,20 @@ public class RestOpenSimService implements OpenSimService {
         }
     }
 
+    @Override
+    public boolean authenticate(String first, String last, char[] password) {
+        try {
+        	var admin= openRemoteAdmin();
+            LOG.info("Authenticating for {} {}.", first, last);
+            admin.authenticateUser(first, last, password, 10);
+            LOG.info("Authenticated OpenSim user {} {}.", first, last);
+            return true;
+        } catch (RuntimeException e) {
+        	LOG.error("Failed to authenticate OpenSimulator user {} {}.", first, last, e);
+        	return false;
+        }
+    }
+
     private static Map<String, String> parseAccountDetails(List<String> lines) {
         var details = new LinkedHashMap<String, String>();
         for (var rawLine : lines) {
@@ -163,11 +188,29 @@ public class RestOpenSimService implements OpenSimService {
         return users;
     }
 
+    private OpensimRemoteAdminClient openRemoteAdmin() {
+        var sim = simStateRepository.list().stream().filter(s -> s.getLevel().providesGridService()).findFirst().orElse(null);
+		if(sim == null) {
+        	throw new IllegalStateException("No login services found. Cannot open OpenSim console.");
+        }
+		
+		var url = "http://" + properties.getOpensimGridServices() + ":" + sim.getPort();
+		
+        return new OpensimRemoteAdminClient(url, gridStateRepository.get().getAdminToken());
+	}   
+
     private OpensimRESTConsole openConsole() {
         var user = Optional.ofNullable(properties.getOpensimConsoleUser()).filter(value -> !value.isBlank());
         var pass = Optional.ofNullable(properties.getOpensimConsolePass())
                 .filter(value -> !value.isBlank())
                 .map(String::toCharArray);
-        return new OpensimRESTConsole(properties.getOpensimConsoleUrl(), user, pass);
+        var sim = simStateRepository.list().stream().filter(s -> s.getLevel().providesGridService()).findFirst().orElse(null);
+		if(sim == null) {
+        	throw new IllegalStateException("No login services found. Cannot open OpenSim console.");
+        }
+		
+		var url = "http://" + properties.getOpensimGridServices() + ":" + sim.getPort();
+		
+        return new OpensimRESTConsole(url, user, pass);
     }
 }

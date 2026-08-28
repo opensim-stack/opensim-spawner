@@ -13,18 +13,30 @@ import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedSimulatorPlan;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Service
 public class SimulatorLevelProfileService extends AbstractProfileService<SimulatorInstanceData, ResolvedSimulatorPlan, SimulatorLevel> {
 
+	private final GridStateRepository gridStateRepository;
 
-    public SimulatorLevelProfileService(ObjectMapper objectMapper, SpawnerProperties properties, TemplateResolver templateResolver) {
+    public SimulatorLevelProfileService(
+    		ObjectMapper objectMapper, 
+    		SpawnerProperties properties, 
+    		TemplateResolver templateResolver,
+    		GridStateRepository gridStateRepository) {
     	super(objectMapper, properties, templateResolver, "grid-levels.json", "default-grid-levels.json");
+    	this.gridStateRepository = gridStateRepository;
     }
 
 	@Override
 	public Map<String, String> buildBaseVariables(SimulatorInstanceData sim) {
         var variables = new LinkedHashMap<String, String>();
+        var grid = gridStateRepository.get();
+        variables.put("grid.adminToken", grid.getAdminToken());
+        variables.put("grid.name", grid.getName());
+        variables.put("grid.nick", grid.getNick());
+        
         variables.put("sim.name", sim.getName());
         variables.put("sim.normalisedName", sim.getName().replace(" ", "-"));
         variables.put("sim.port", String.valueOf(sim.getPort()));

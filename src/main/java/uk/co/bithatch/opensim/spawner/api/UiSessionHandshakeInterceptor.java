@@ -19,7 +19,7 @@ public class UiSessionHandshakeInterceptor implements HandshakeInterceptor {
             WebSocketHandler wsHandler,
             Map<String, Object> attributes) {
         if (request instanceof ServletServerHttpRequest servletRequest
-                && UiAuthSupport.isAuthenticated(servletRequest.getServletRequest().getSession(false))) {
+                && UiAuthSupport.isAdmin(servletRequest.getServletRequest().getSession(false))) {
             return true;
         }
 

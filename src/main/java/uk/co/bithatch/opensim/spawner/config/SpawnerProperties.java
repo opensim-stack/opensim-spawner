@@ -7,47 +7,51 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "spawner")
 public class SpawnerProperties {
 
+	private boolean opensimCreateBotUser = true;
 	private String token = "";
-	private int firstPort = 9000;
 	private String metaverse2mcpImage = "bithatch/opensim-metaverse2mcp:latest";
 	private String opencodeImage = "bithatch/opensim-opencode:latest";
 	private String opensimHandlerConfig = "/config/handlers.json";
-
-	private int opensimRegionX = 1000;
-	private int opensimRegionY = 1000;
 	private String opensimGridName = "Bot Grid";
 	private String opensimGridNick = "botgrid";
 	private String opensimEstateName = "Botland";
 	private String opensimEstateArchive = "blank";
 	private String opensimWelcomeMessage = "Welcome to Botgrid";
-	private String opensimConsoleUrl = "http://opensim:9000";
 	private String opensimConsoleUser;
 	private String opensimConsolePass;
-	private boolean opensimCreateBotUser = true;
 	private String opensimBotFirst = "Bot";
 	private String opensimBotLast = "User";
 	private String opensimBotEmail = "bot@localhost";
 	private String opensimBotAppearance = "Cube Bot";
 	private String opensimBotGender = "neutral";
-	private int opensimMaxBots = 10;
-	private int opensimMaxSimulators = 10;
 	private String opensimPullPolicy = "IfNotPresent";
 	private String opensimRestartPolicy = "unless-stopped";
 	private String opensimNetwork = "opensim-ai-docker_default";
 	private String composeProjectName = "";
-
-	private Path configDir = Path.of("/config");
-	private Path dataDir = Path.of("/data");
-	private Path workspaceDir = Path.of("/workspace");
-	
-	private int opensimRobustPublicPort = 8002;
-	private int opensimRobustPrivatePort = 8003;
-	
 	private String opensimUserEmail = "admin@example.com";
 	private String opensimUserPassword = "changeme";
 	private String opensimUserFirst = "Bot";
 	private String opensimUserLast = "Handler";
 	private String opensimProvisionMode = "guided";
+	private String opensimGridServices = "http://localhost:9000";
+	private Path configDir = Path.of("/config");
+	private Path dataDir = Path.of("/data");
+	private Path workspaceDir = Path.of("/workspace");
+	private int firstPort = 9000;
+	private int opensimRegionX = 1000;
+	private int opensimRegionY = 1000;
+	private int opensimMaxBots = 10;
+	private int opensimMaxSimulators = 10;
+	private int opensimRobustPublicPort = 8002;
+	private int opensimRobustPrivatePort = 8003;
+
+	public String getOpensimGridServices() {
+		return opensimGridServices;
+	}
+
+	public void setOpensimGridServices(String opensimGridServices) {
+		this.opensimGridServices = opensimGridServices;
+	}
 
 	public int getOpensimRegionX() {
 		return opensimRegionX;
@@ -295,14 +299,6 @@ public class SpawnerProperties {
 
 	public void setOpensimHandlerConfig(String opensimHandlerConfig) {
 		this.opensimHandlerConfig = opensimHandlerConfig;
-	}
-
-	public String getOpensimConsoleUrl() {
-		return opensimConsoleUrl;
-	}
-
-	public void setOpensimConsoleUrl(String opensimConsoleUrl) {
-		this.opensimConsoleUrl = opensimConsoleUrl;
 	}
 
 	public String getOpensimConsoleUser() {

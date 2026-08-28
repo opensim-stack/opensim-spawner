@@ -42,15 +42,22 @@ public class UiSessionAuthFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (UiAuthSupport.isAuthenticated(request.getSession(false))) {
-            filterChain.doFilter(request, response);
+        var session = request.getSession(false);
+        if (!UiAuthSupport.isAuthenticated(session)) {
+            var originalPath = request.getRequestURI();
+            var query = request.getQueryString();
+            var fullPath = query == null || query.isBlank() ? originalPath : originalPath + "?" + query;
+            var encodedNext = URLEncoder.encode(fullPath, StandardCharsets.UTF_8);
+            response.sendRedirect("/ui/login.html?next=" + encodedNext);
             return;
         }
 
-        var originalPath = request.getRequestURI();
-        var query = request.getQueryString();
-        var fullPath = query == null || query.isBlank() ? originalPath : originalPath + "?" + query;
-        var encodedNext = URLEncoder.encode(fullPath, StandardCharsets.UTF_8);
-        response.sendRedirect("/ui/login.html?next=" + encodedNext);
+        var path = request.getRequestURI();
+        if (!UiAuthSupport.isAdmin(session) && !"/ui/change-password.html".equals(path)) {
+            response.sendRedirect("/ui/change-password.html");
+            return;
+        }
+
+        filterChain.doFilter(request, response);
     }
 }
