@@ -34,7 +34,7 @@
     },
     "blender_mcp": {
       "type": "remote",
-      "url": "http://%env.COMPOSE_PROJECT_NAME%-blender:%env.BLENDER_MCP_PORT%/mcp",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-blender-1:%env.BLENDER_MCP_PORT%/mcp",
       "enabled": true
     }
   }

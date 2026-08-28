@@ -44,7 +44,7 @@
   "mcp": {
     "local_host_mcp": {
       "type": "remote",
-      "url": "http://%env.COMPOSE_PROJECT_NAME%-console2mcp:%env.CONSOLE_MCP_PORT%/mcp",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-console2mcp-1:%env.CONSOLE_MCP_PORT%/mcp",
       "enabled": true,
       "headers": {
         "Authorization": "Bearer %env.CONSOLE_MCP_BEARER_TOKEN%"
@@ -60,7 +60,7 @@
     },
     "blender_mcp": {
       "type": "remote",
-      "url": "http://%env.COMPOSE_PROJECT_NAME%-blender:%env.BLENDER_MCP_PORT%/mcp",
+      "url": "http://%env.COMPOSE_PROJECT_NAME%-blender-1:%env.BLENDER_MCP_PORT%/mcp",
       "enabled": true
     }
   }
