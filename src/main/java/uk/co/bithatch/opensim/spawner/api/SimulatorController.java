@@ -22,6 +22,7 @@ import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
 import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.OARs;
+import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 
 @RestController
@@ -34,16 +35,19 @@ public class SimulatorController {
     private final OARs oars;
     private final BotProvisioningService botProvisioningService;
     private final SpawnerProperties properties;
+    private final OpenSimService openSimService;
 
     public SimulatorController(
     		SimulatorProvisioningService provisioningService, 
     		BotProvisioningService botProvisioningService, 
     		OARs oars,
-    		SpawnerProperties properties) {
+	    		SpawnerProperties properties,
+	    		OpenSimService openSimService) {
         this.provisioningService = provisioningService;
         this.botProvisioningService = botProvisioningService;
         this.oars = oars;
         this.properties = properties;
+        this.openSimService = openSimService;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -89,6 +93,30 @@ public class SimulatorController {
         return provisioningService.getContainerGroupStatus(name);
     }
 
+    @GetMapping(path = "/{name}/regions", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<OpenSimService.RegionData> listRegions(@PathVariable String name) {
+        if (!provisioningService.exists(name)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Simulator not found.");
+        }
+        try {
+            return openSimService.showRegions(name);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    @GetMapping(path = "/{name}/estates", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<OpenSimService.EstateData> listEstates(@PathVariable String name) {
+        if (!provisioningService.exists(name)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Simulator not found.");
+        }
+        try {
+            return openSimService.showEstates(name);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
     @PostMapping(path = "/{name}", consumes = {
             MediaType.APPLICATION_FORM_URLENCODED_VALUE,
             MediaType.MULTIPART_FORM_DATA_VALUE
@@ -114,6 +142,37 @@ public class SimulatorController {
             return provisioningService.toResponse(sim);
         } catch (IllegalArgumentException e) {
             LOG.error("Failed to create OpenSim user {}.", name, e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    @PostMapping(path = "/{name}/regions", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    public OpenSimService.RegionData createRegion(@PathVariable String name,
+            @RequestParam String regionName,
+            @RequestParam int regionX,
+            @RequestParam int regionY,
+            @RequestParam String estateName,
+            @RequestParam(defaultValue = "true") boolean isPublic,
+            @RequestParam(defaultValue = "true") boolean enableVoice,
+            @RequestParam(required = false) String estateOwnerFirst,
+            @RequestParam(required = false) String estateOwnerLast) {
+        if (!provisioningService.exists(name)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Simulator not found.");
+        }
+        try {
+            return openSimService.createRegion(name,
+                    new OpenSimService.CreateRegionData(regionName,
+                            regionX,
+                            regionY,
+                            isPublic,
+                            enableVoice,
+                            estateName,
+                            estateOwnerFirst,
+                            estateOwnerLast));
+        } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
         }
     }

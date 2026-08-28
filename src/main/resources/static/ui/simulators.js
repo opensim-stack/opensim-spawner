@@ -408,6 +408,10 @@ const createCard = (status) => {
 
   const name = String(status.name || '').trim() || 'Unnamed Simulator';
   const level = status.level || 'UNKNOWN';
+  const levelUpper = String(level || '').toUpperCase();
+  const regionsLink = (levelUpper === 'GRID' || levelUpper === 'STANDALONE')
+    ? `<a href="/ui/regions.html?simulator=${encodeURIComponent(name)}" class="inline-flex items-center rounded-md border border-neon-accent/40 bg-neon-accent/10 px-2.5 py-1 text-xs font-medium text-neon-accent hover:bg-neon-accent/20 transition-colors">Regions</a>`
+    : '';
   const ownerFirst = status.ownerFirst || '';
   const ownerLast = status.ownerLast || '';
   const ownerDisplay = `${ownerFirst} ${ownerLast}`.trim();
@@ -450,6 +454,8 @@ const createCard = (status) => {
         </div>
 
         <div class="text-xs uppercase tracking-wide text-neon-accent">${level}</div>
+
+        ${regionsLink ? `<div>${regionsLink}</div>` : ''}
 
         <div class="space-y-2 bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
           ${containerRows || '<div class="text-sm text-gray-400">No tracked containers.</div>'}

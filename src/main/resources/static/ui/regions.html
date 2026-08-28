@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Regions</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <main class="relative z-10 min-h-screen px-4 py-6 lg:px-8 lg:py-8">
+    <a href="/ui/simulators.html" class="inline-flex items-center gap-2 text-neon-accent hover:text-neon-secondary transition-colors">
+      <span class="h-4 w-4">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m12.5 4.5-6 5.5 6 5.5"></path><path d="M13.5 10h-7"></path></svg>
+      </span>
+      <span>Back</span>
+    </a>
+
+    <section class="mt-4 mx-auto w-full max-w-[120rem] bg-dark-800/90 border border-neon-primary/30 rounded-2xl p-4 lg:p-6">
+      <div class="flex flex-wrap items-end justify-between gap-4 border-b border-neon-primary/20 pb-4">
+        <div>
+          <h1 class="text-2xl lg:text-3xl font-bold text-white">Regions</h1>
+          <p id="regions-subtitle" class="text-sm text-gray-400">Loading simulator...</p>
+        </div>
+        <div class="flex flex-wrap items-end gap-4">
+          <label class="text-sm text-gray-300">
+            Grid Size X
+            <input id="grid-size-x" type="number" min="1" max="10" value="4"
+              class="mt-1 w-24 rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+          </label>
+          <label class="text-sm text-gray-300">
+            Grid Size Y
+            <input id="grid-size-y" type="number" min="1" max="10" value="4"
+              class="mt-1 w-24 rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+          </label>
+          <button id="refresh-regions" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">Refresh</button>
+        </div>
+      </div>
+
+      <div class="mt-5 grid grid-cols-1 xl:grid-cols-2 gap-5 min-h-[65vh]">
+        <section class="rounded-xl border border-neon-primary/20 bg-dark-900/35 p-3">
+          <div id="regions-grid" class="grid gap-3"></div>
+        </section>
+
+        <section class="rounded-xl border border-neon-primary/20 bg-dark-900/35 p-5">
+          <h2 class="text-lg font-semibold text-white">Region Details</h2>
+          <p id="region-details-empty" class="mt-4 text-sm text-gray-400">Select a region from the grid.</p>
+          <dl id="region-details" class="hidden mt-4 grid grid-cols-1 gap-3 text-sm">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Name</dt>
+              <dd id="detail-name" class="text-gray-100"></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">ID</dt>
+              <dd id="detail-id" class="font-mono text-[12px] text-gray-100 break-all"></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Position</dt>
+              <dd id="detail-position" class="text-gray-100"></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Size</dt>
+              <dd id="detail-size" class="text-gray-100"></dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Flags</dt>
+              <dd id="detail-flags" class="mt-1 flex flex-wrap gap-2"></dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+    </section>
+
+    <div id="add-region-modal" class="hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm p-4">
+      <div class="max-w-lg mx-auto mt-16 bg-dark-800/95 border border-neon-primary/30 rounded-2xl p-6 neon-border">
+        <div class="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 class="text-2xl font-bold text-white">Add Region</h2>
+            <p class="text-sm text-gray-300 mt-1">Create a region in this simulator.</p>
+          </div>
+          <button id="close-add-region" class="text-gray-300 hover:text-white text-xl" aria-label="Close">x</button>
+        </div>
+
+        <form id="add-region-form" class="space-y-4">
+          <label class="block">
+            <span class="text-sm text-gray-300">Name</span>
+            <input id="add-region-name" required type="text"
+              class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+          </label>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-sm text-gray-300">X</span>
+              <input id="add-region-x" required type="number" value="1000"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Y</span>
+              <input id="add-region-y" required type="number" value="1000"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+              <input id="add-region-public" type="checkbox" checked class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+              <span>Public</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+              <input id="add-region-voice" type="checkbox" checked class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+              <span>Enable Voice</span>
+            </label>
+          </div>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Estate Name</span>
+            <select id="add-region-estate" required
+              class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"></select>
+          </label>
+
+          <div id="add-estate-owner-fields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="block">
+              <span class="text-sm text-gray-300">Estate Owner First</span>
+              <input id="add-estate-owner-first" type="text"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Estate Owner Last</span>
+              <input id="add-estate-owner-last" type="text"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+          </div>
+
+          <p id="add-region-error" class="hidden text-sm text-rose-300"></p>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button id="cancel-add-region" type="button" class="px-4 py-2 rounded-lg border border-gray-500/40 text-gray-200 hover:bg-dark-700 transition-colors">Cancel</button>
+            <button id="submit-add-region" type="submit" class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast-container" class="fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 pointer-events-none"></div>
+  </main>
+
+  <script src="/ui/ui-common.js"></script>
+  <script type="module" src="/ui/regions.js"></script>
+</body>
+</html>
