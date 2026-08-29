@@ -17,8 +17,17 @@ public class ContainerSpec {
     private String hostname;
     private List<String> aliases = new ArrayList<>();
     private List<String> directories = new ArrayList<>();
+    private List<ManagedFile> managedFiles = new ArrayList<>();
+    
+    public List<ManagedFile> getManagedFiles() {
+		return managedFiles;
+	}
 
-    public List<String> getDirectories() {
+	public void setManagedFiles(List<ManagedFile> managedFiles) {
+		this.managedFiles = managedFiles;
+	}
+
+	public List<String> getDirectories() {
 		return directories;
 	}
 

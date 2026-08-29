@@ -34,6 +34,9 @@ public class SpawnerProperties {
 	private String opensimUserLast = "Handler";
 	private String opensimProvisionMode = "guided";
 	private String opensimGridServices = "http://localhost:9000";
+	private Path addOnsDir = Path.of("/config/add-ons");
+	private String addOnsRepository = "";
+	private boolean addOnsRefreshAtStartup;
 	private Path configDir = Path.of("/config");
 	private Path dataDir = Path.of("/data");
 	private Path workspaceDir = Path.of("/workspace");
@@ -44,6 +47,30 @@ public class SpawnerProperties {
 	private int opensimMaxSimulators = 10;
 	private int opensimRobustPublicPort = 8002;
 	private int opensimRobustPrivatePort = 8003;
+
+	public Path getAddOnsDir() {
+		return addOnsDir;
+	}
+
+	public void setAddOnsDir(Path addOnsDir) {
+		this.addOnsDir = addOnsDir;
+	}
+
+	public String getAddOnsRepository() {
+		return addOnsRepository;
+	}
+
+	public void setAddOnsRepository(String addOnsRepository) {
+		this.addOnsRepository = addOnsRepository == null ? "" : addOnsRepository.trim();
+	}
+
+	public boolean isAddOnsRefreshAtStartup() {
+		return addOnsRefreshAtStartup;
+	}
+
+	public void setAddOnsRefreshAtStartup(boolean addOnsRefreshAtStartup) {
+		this.addOnsRefreshAtStartup = addOnsRefreshAtStartup;
+	}
 
 	public String getOpensimGridServices() {
 		return opensimGridServices;

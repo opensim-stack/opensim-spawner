@@ -10,12 +10,14 @@ import java.util.Map;
 
 import org.springframework.core.io.ClassPathResource;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
+import uk.co.bithatch.opensim.spawner.domain.ManagedFile;
 
 public abstract class AbstractProfileService<T extends ContainerGroupInstanceData<LVL>, P, LVL extends Enum<LVL>> {
 
@@ -131,6 +133,7 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
             spec.setExtraHosts(resolveMap(containerNode.get("extraHosts"), variables));
             spec.setAliases(resolveList(containerNode.get("aliases"), variables));
             spec.setDirectories(resolveList(containerNode.get("directories"), variables));
+            spec.setManagedFiles(resolveListOfObjects(containerNode.get("managed"), variables, ManagedFile.class));
             var hostnameNode = containerNode.get("hostname");
             if(hostnameNode != null && !hostnameNode.isNull() && !hostnameNode.asText().isBlank()) {
             	spec.setHostname(resolve(hostnameNode.asText(""), variables));
@@ -144,6 +147,25 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
     }
 
 
+    private <LT> List<LT> resolveListOfObjects(JsonNode node, Map<String, String> variables, Class<LT> clazz) {
+    	var result = new ArrayList<LT>();
+		if (node == null) {
+			return result;
+		}
+		if (!node.isArray()) {
+			throw new IllegalArgumentException("Expected array field while resolving profile list.");
+		}
+		for (var itemNode : node) {
+			try {
+				result.add(objectMapper.treeToValue(itemNode, clazz));
+			} catch (JsonProcessingException e) {
+				throw new IllegalArgumentException("Failed to parse object of type " + clazz.getSimpleName() + " from profile list.", e);
+			}
+		}
+		return result;
+    	
+    }
+    
     private List<String> resolveList(JsonNode node, Map<String, String> variables) {
     	var result = new ArrayList<String>();
 		if (node == null) {

@@ -15,7 +15,7 @@ FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /opt/opensim-spawner
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /workspace/target/opensim-spawner-*.jar /opt/opensim-spawner/app.jar

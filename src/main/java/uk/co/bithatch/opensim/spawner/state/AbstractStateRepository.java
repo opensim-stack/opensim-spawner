@@ -8,16 +8,19 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import uk.co.bithatch.opensim.jlib.IO;
 import uk.co.bithatch.opensim.spawner.domain.DomainObject;
 
 public abstract class AbstractStateRepository<T extends DomainObject> {
 
     private final ObjectMapper objectMapper;
-    private final Path dataDir;
     private final Class<T> clazz;
+    
+    protected final Path dataDir;
 
     protected AbstractStateRepository(ObjectMapper objectMapper, Path dataDir, Class<T> clazz) {
         this.objectMapper = objectMapper;
@@ -56,8 +59,7 @@ public abstract class AbstractStateRepository<T extends DomainObject> {
         }
         var result = new ArrayList<T>();
         try (var stream = Files.list(dataDir)) {
-            stream
-                    .filter(path -> !Files.isDirectory(path) && path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json"))
+            filterStream(stream)
                     .sorted(Comparator.comparing(path -> path.getFileName().toString()))
                     .forEach(path -> {
                         try {
@@ -78,11 +80,22 @@ public abstract class AbstractStateRepository<T extends DomainObject> {
             return;
         }
         try {
+        	if(Files.isDirectory(path)) {
+        		if(!dataDir.isAbsolute()) {
+					throw new IllegalStateException("Refusing to delete non-absolute path " + path + ".");
+				}
+        		IO.deleteDirectoryQuietly(path);
+        	}
             Files.delete(path);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to delete simulator state file " + path + ".", e);
         }
     }
+
+	protected Stream<Path> filterStream(Stream<Path> stream) {
+		return stream
+		        .filter(path -> !Files.isDirectory(path) && path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json"));
+	}
 
     protected Path filePath(String name) {
         return dataDir.resolve(name.replace(' ', '-') + ".json");

@@ -42,6 +42,7 @@ class SpawnerSideMenu extends HTMLElement {
   adminMenu(active) {
     return `${this.menuItem('/ui/bots.html', 'Bots', 'bots', active === 'bots')}
       ${this.menuItem('/ui/stack.html', 'Stack', 'stack', active === 'stack')}
+      ${this.menuItem('/ui/add-ons.html', 'Add-Ons', 'add-ons', active === 'add-ons')}
       ${this.menuItem('/ui/simulators.html', 'Simulators', 'simulators', active === 'simulators')}
       ${this.menuItem('/ui/users.html', 'Users', 'users', active === 'users' || active === 'create-user' || active === 'approvals')}
       ${this.menuItem('/ui/create-user.html', 'Create User', 'create-user', active === 'create-user', true)}
@@ -110,6 +111,8 @@ class SpawnerSideMenu extends HTMLElement {
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="7" width="10" height="8" rx="2"></rect><path d="M8 7V5.8a2 2 0 0 1 4 0V7"></path><circle cx="8" cy="11" r="1"></circle><circle cx="12" cy="11" r="1"></circle><path d="M3.5 9.5h1.5"></path><path d="M15 9.5h1.5"></path></svg>';
       case 'stack':
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6.2 10 3l6 3.2-6 3.2L4 6.2Z"></path><path d="M4 10l6 3.2 6-3.2"></path><path d="M4 13.8 10 17l6-3.2"></path></svg>';
+      case 'add-ons':
+        return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 2.8v3.1"></path><path d="M10 14.1v3.1"></path><path d="M2.8 10h3.1"></path><path d="M14.1 10h3.1"></path><circle cx="10" cy="10" r="2.4"></circle><path d="M5 5l2.2 2.2"></path><path d="M12.8 12.8 15 15"></path><path d="M15 5l-2.2 2.2"></path><path d="M7.2 12.8 5 15"></path></svg>';
       case 'simulators':
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"></circle><path d="M10 4v12"></path><path d="M4 10h12"></path></svg>';
       case 'users':

@@ -1,6 +1,6 @@
 package uk.co.bithatch.opensim.spawner.domain;
 
-public class BotHandlerAssignment extends ContainerGroupInstanceData<HandlerLevel> {
+public class BotHandlerAssignment implements DomainObject {
 
     private String botFirst;
     private String botLast;
