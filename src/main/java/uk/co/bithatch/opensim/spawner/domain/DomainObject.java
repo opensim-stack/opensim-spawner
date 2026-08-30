@@ -2,6 +2,10 @@ package uk.co.bithatch.opensim.spawner.domain;
 
 public interface DomainObject {
 
-	String displayName();
+	String getName();
+	
+	default String displayName() {
+		return getName();
+	}
 
 }

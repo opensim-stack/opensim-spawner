@@ -227,26 +227,26 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
     }
 
 	@Override
-	public Map<String, Object> toResponse(SimulatorInstanceData bot) {
+	public Map<String, Object> toResponse(SimulatorInstanceData sim) {
         var status = new LinkedHashMap<String, Object>();
-        status.put("name", bot.getName());
-        status.put("level", bot.getLevel() == null ? null : bot.getLevel().name());
-        status.put("ownerUuid", bot.getOwnerUuid());
-        status.put("ownerFirst", bot.getOwnerFirst());
-        status.put("ownerEmail", bot.getOwnerEmail());
-        status.put("ownerLast", bot.getOwnerLast());
-        status.put("port", bot.getPort());
-    if (bot.getRegions() == null) {
-      return status;
-    }
-    for(RegionInstanceData region : bot.getRegions()) {
-			var regionStatus = new LinkedHashMap<String, Object>();
-			regionStatus.put("uuid", region.getUuid());
-			regionStatus.put("x", region.getX());
-			regionStatus.put("y", region.getY());
-			regionStatus.put("name", region.getName());
-			regionStatus.put("oar", region.getOar());
-			status.put("region", regionStatus);
+        status.put("name", sim.getName());
+        status.put("level", sim.getLevel() == null ? null : sim.getLevel().name());
+        status.put("ownerUuid", sim.getOwnerUuid());
+        status.put("ownerFirst", sim.getOwnerFirst());
+        status.put("ownerEmail", sim.getOwnerEmail());
+        status.put("ownerLast", sim.getOwnerLast());
+        status.put("port", sim.getPort());
+	    if (sim.getRegions() == null) {
+	      return status;
+	    }
+	    for(RegionInstanceData region : sim.getRegions()) {
+				var regionStatus = new LinkedHashMap<String, Object>();
+				regionStatus.put("uuid", region.getUuid());
+				regionStatus.put("x", region.getX());
+				regionStatus.put("y", region.getY());
+				regionStatus.put("name", region.getName());
+				regionStatus.put("oar", region.getOar());
+				status.put("region", regionStatus);
 		}
         return status;
 	}

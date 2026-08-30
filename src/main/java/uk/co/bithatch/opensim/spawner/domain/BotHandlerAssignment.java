@@ -40,7 +40,7 @@ public class BotHandlerAssignment implements DomainObject {
     }
 
     @Override
-    public String displayName() {
+    public String getName() {
         return botFirst + "-" + botLast + "-" + handlerFirst + "-" + handlerLast;
     }
 }

@@ -25,18 +25,18 @@ import org.springframework.web.server.ResponseStatusException;
 import jakarta.servlet.http.HttpServletRequest;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.AddOn;
-import uk.co.bithatch.opensim.spawner.service.AddOnService;
+import uk.co.bithatch.opensim.spawner.service.AddOnInstanceProvisioningService;
 import uk.co.bithatch.opensim.spawner.state.AddOnRepository;
 
 @RestController
 @RequestMapping("/api/add-ons")
 public class AddOnController {
 
-    private final AddOnService addOnService;
+    private final AddOnInstanceProvisioningService addOnService;
     private final AddOnRepository addOnRepository;
     private final SpawnerProperties properties;
 
-    public AddOnController(AddOnService addOnService,
+    public AddOnController(AddOnInstanceProvisioningService addOnService,
             AddOnRepository addOnRepository,
             SpawnerProperties properties) {
         this.addOnService = addOnService;

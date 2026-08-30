@@ -6,9 +6,6 @@ public abstract class ContainerGroupInstanceData<LVL extends Enum<LVL>> implemen
     private List<String> containerIds = List.of();
     private LVL level;
 
-	@Override
-	public abstract String displayName();
-
     public final List<String> getContainerIds() {
         return containerIds;
     }

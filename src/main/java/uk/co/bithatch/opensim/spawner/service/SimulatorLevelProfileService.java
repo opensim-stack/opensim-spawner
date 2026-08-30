@@ -16,7 +16,7 @@ import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
 import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Service
-public class SimulatorLevelProfileService extends AbstractProfileService<SimulatorInstanceData, ResolvedSimulatorPlan, SimulatorLevel> {
+public class SimulatorLevelProfileService extends AbstractComponentProfileService<SimulatorInstanceData, ResolvedSimulatorPlan, SimulatorLevel> {
 
 	private final GridStateRepository gridStateRepository;
 

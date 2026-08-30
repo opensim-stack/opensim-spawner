@@ -20,10 +20,10 @@ import org.springframework.web.server.ResponseStatusException;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.Plan;
-import uk.co.bithatch.opensim.spawner.state.AbstractStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StateRepository;
 
 public abstract class AbstractContainerGroupProvisioningService<
-	R extends AbstractStateRepository<T>,
+	R extends StateRepository<T>,
 	T extends ContainerGroupInstanceData<?>> {
 	
     private static final Logger LOG = LoggerFactory.getLogger(AbstractContainerGroupProvisioningService.class);

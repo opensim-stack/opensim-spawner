@@ -1,52 +1,57 @@
 package uk.co.bithatch.opensim.spawner.config;
 
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * @see application.properties for the defaults
+ */
 @ConfigurationProperties(prefix = "spawner")
 public class SpawnerProperties {
 
-	private boolean opensimCreateBotUser = true;
+	private boolean opensimCreateBotUser;
 	private String token = "";
-	private String metaverse2mcpImage = "bithatch/opensim-metaverse2mcp:latest";
-	private String opencodeImage = "bithatch/opensim-opencode:latest";
-	private String opensimHandlerConfig = "/config/handlers.json";
-	private String opensimGridName = "Bot Grid";
-	private String opensimGridNick = "botgrid";
-	private String opensimEstateName = "Botland";
-	private String opensimEstateArchive = "blank";
-	private String opensimWelcomeMessage = "Welcome to Botgrid";
+	private String metaverse2mcpImage;
+	private String opencodeImage;
+	private String opensimHandlerConfig;
+	private String opensimGridName;
+	private String opensimGridNick;
+	private String opensimEstateName;
+	private String opensimEstateArchive;
+	private String opensimWelcomeMessage;
 	private String opensimConsoleUser;
 	private String opensimConsolePass;
-	private String opensimBotFirst = "Bot";
-	private String opensimBotLast = "User";
-	private String opensimBotEmail = "bot@localhost";
-	private String opensimBotAppearance = "Cube Bot";
-	private String opensimBotGender = "neutral";
-	private String opensimPullPolicy = "IfNotPresent";
-	private String opensimRestartPolicy = "unless-stopped";
-	private String opensimNetwork = "opensim-ai-docker_default";
-	private String composeProjectName = "";
-	private String opensimUserEmail = "admin@example.com";
-	private String opensimUserPassword = "changeme";
-	private String opensimUserFirst = "Bot";
-	private String opensimUserLast = "Handler";
-	private String opensimProvisionMode = "guided";
-	private String opensimGridServices = "http://localhost:9000";
-	private Path addOnsDir = Path.of("/config/add-ons");
-	private String addOnsRepository = "";
+	private String opensimBotFirst;
+	private String opensimBotLast;
+	private String opensimBotEmail;
+	private String opensimBotAppearance;
+	private String opensimBotGender;
+	private String opensimPullPolicy;
+	private String opensimRestartPolicy;
+	private String opensimNetwork;
+	private String composeProjectName;
+	private String opensimUserEmail;
+	private String opensimUserPassword;
+	private String opensimUserFirst;
+	private String opensimUserLast;
+	private String opensimProvisionMode;
+	private String opensimGridServices;
+	private Path addOnsDir;
+	private String addOnsRepository;
 	private boolean addOnsRefreshAtStartup;
-	private Path configDir = Path.of("/config");
-	private Path dataDir = Path.of("/data");
-	private Path workspaceDir = Path.of("/workspace");
-	private int firstPort = 9000;
-	private int opensimRegionX = 1000;
-	private int opensimRegionY = 1000;
-	private int opensimMaxBots = 10;
-	private int opensimMaxSimulators = 10;
-	private int opensimRobustPublicPort = 8002;
-	private int opensimRobustPrivatePort = 8003;
+	private Path configDir;
+	private Path dataDir;
+	private Path workspaceDir;
+	private int firstPort;
+	private int opensimRegionX;
+	private int opensimRegionY;
+	private int opensimMaxBots;
+	private int opensimMaxSimulators;
+	private int opensimRobustPublicPort;
+	private int opensimRobustPrivatePort;
 
 	public Path getAddOnsDir() {
 		return addOnsDir;
@@ -366,5 +371,50 @@ public class SpawnerProperties {
 
 	public void setWorkspaceDir(Path workspaceDir) {
 		this.workspaceDir = workspaceDir;
+	}
+	
+	public Map<String, String> buildVariables() {
+		var map = new HashMap<String, String>();
+		map.put("cfg.createBotUser", String.valueOf(opensimCreateBotUser));
+		map.put("cfg.token", token);
+		map.put("cfg.metaverse2mcpImage", metaverse2mcpImage);
+		map.put("cfg.opencodeImage", opencodeImage);
+		map.put("cfg.handlerConfig", opensimHandlerConfig);
+		map.put("cfg.gridName", opensimGridName);
+		map.put("cfg.gridNick", opensimGridNick);
+		map.put("cfg.estateName", opensimEstateName);
+		map.put("cfg.estateArchive", opensimEstateArchive);
+		map.put("cfg.welcomeMessage", opensimWelcomeMessage);
+		map.put("cfg.consoleUser", opensimConsoleUser);
+		map.put("cfg.consolePass", opensimConsolePass);
+		map.put("cfg.botFirst", opensimBotFirst);
+		map.put("cfg.botLast", opensimBotLast);
+		map.put("cfg.botEmail", opensimBotEmail);
+		map.put("cfg.botAppearance", opensimBotAppearance);
+		map.put("cfg.botGender", opensimBotGender);
+		map.put("cfg.pullPolicy", opensimPullPolicy);
+		map.put("cfg.restartPolicy", opensimRestartPolicy);
+		map.put("cfg.network", opensimNetwork);
+		map.put("cfg.composeProjectName", composeProjectName);
+		map.put("cfg.userEmail", opensimUserEmail);
+		map.put("cfg.userPassword", opensimUserPassword);
+		map.put("cfg.userFirst", opensimUserFirst);
+		map.put("cfg.userLast", opensimUserLast);
+		map.put("cfg.provisionMode", opensimProvisionMode);
+		map.put("cfg.gridServices", opensimGridServices);
+		map.put("cfg.addOnsDir", addOnsDir.toAbsolutePath().normalize().toString());
+		map.put("cfg.addOnsRepository", addOnsRepository);
+		map.put("cfg.addOnsRefreshAtStartup", String.valueOf(addOnsRefreshAtStartup));
+		map.put("cfg.configDir", configDir.toAbsolutePath().normalize().toString());
+		map.put("cfg.dataDir", dataDir.toAbsolutePath().normalize().toString());
+		map.put("cfg.workspaceDir", workspaceDir.toAbsolutePath().normalize().toString());
+		map.put("cfg.firstPort", String.valueOf(firstPort));
+		map.put("cfg.regionX", String.valueOf(opensimRegionX));
+		map.put("cfg.regionY", String.valueOf(opensimRegionY));
+		map.put("cfg.maxBots", String.valueOf(opensimMaxBots));
+		map.put("cfg.maxSimulators", String.valueOf(opensimMaxSimulators));
+		map.put("cfg.robustPublicPort", String.valueOf(opensimRobustPublicPort));	
+		map.put("cfg.robustPrivatePort", String.valueOf(opensimRobustPrivatePort));
+		return map;
 	}
 }

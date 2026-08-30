@@ -1,12 +1,13 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import java.util.Collection;
 import java.util.List;
 
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 
 public interface DockerService {
 
-    List<String> createContainers(List<ContainerSpec> specs);
+    List<String> createContainers(Collection<ContainerSpec> specs);
 
     void startContainers(List<String> containerIds);
 

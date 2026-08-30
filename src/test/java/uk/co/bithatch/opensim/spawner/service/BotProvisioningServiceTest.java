@@ -6,6 +6,7 @@ import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +34,7 @@ class BotProvisioningServiceTest {
         private final Map<String, ContainerStatus> statusesByContainerId = new LinkedHashMap<>();
 
         @Override
-        public List<String> createContainers(List<uk.co.bithatch.opensim.spawner.domain.ContainerSpec> specs) {
+        public List<String> createContainers(Collection<uk.co.bithatch.opensim.spawner.domain.ContainerSpec> specs) {
             return List.of();
         }
 

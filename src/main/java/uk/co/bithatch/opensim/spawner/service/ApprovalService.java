@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.spawner.domain.ApprovalInstanceData;
-import uk.co.bithatch.opensim.spawner.domain.ApprovalLevel;
 import uk.co.bithatch.opensim.spawner.state.ApprovalStateRepository;
 
 @Service
@@ -48,7 +47,6 @@ public class ApprovalService {
         }
 
         var approval = new ApprovalInstanceData();
-        approval.setLevel(ApprovalLevel.PENDING);
         approval.setFirst(normalizedFirst);
         approval.setLast(normalizedLast);
         approval.setEmail(normalizedEmail);

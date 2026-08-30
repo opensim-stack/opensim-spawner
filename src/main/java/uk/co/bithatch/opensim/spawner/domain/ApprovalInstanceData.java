@@ -1,6 +1,6 @@
 package uk.co.bithatch.opensim.spawner.domain;
 
-public class ApprovalInstanceData extends ContainerGroupInstanceData<ApprovalLevel> {
+public class ApprovalInstanceData implements DomainObject {
 
     private String first;
     private String last;
@@ -48,12 +48,8 @@ public class ApprovalInstanceData extends ContainerGroupInstanceData<ApprovalLev
         this.requestedAtEpochMillis = requestedAtEpochMillis;
     }
 
-    public String key() {
-        return first + "-" + last;
-    }
-
     @Override
-    public String displayName() {
-        return first + " " + last;
+    public String getName() {
+        return first + "-" + last;
     }
 }

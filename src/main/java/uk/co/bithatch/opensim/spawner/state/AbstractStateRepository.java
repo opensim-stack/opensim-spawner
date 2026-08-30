@@ -10,12 +10,13 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import uk.co.bithatch.opensim.jlib.IO;
 import uk.co.bithatch.opensim.spawner.domain.DomainObject;
 
-public abstract class AbstractStateRepository<T extends DomainObject> {
+public abstract class AbstractStateRepository<T extends DomainObject> implements StateRepository<T> {
 
     private final ObjectMapper objectMapper;
     private final Class<T> clazz;
@@ -30,6 +31,18 @@ public abstract class AbstractStateRepository<T extends DomainObject> {
 
     public final synchronized boolean exists(String name) {
         return Files.exists(filePath(name));
+    }
+
+    public final synchronized Optional<JsonNode> loadRaw(String name) {
+        var path = filePath(name);
+        if (!Files.exists(path)) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(objectMapper.readTree(path.toFile()));
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load simulator state from " + path + ".", e);
+        }
     }
 
     public final synchronized Optional<T> load(String name) {

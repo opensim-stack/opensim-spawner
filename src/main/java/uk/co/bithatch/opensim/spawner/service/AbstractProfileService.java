@@ -1,14 +1,9 @@
 package uk.co.bithatch.opensim.spawner.service;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.springframework.core.io.ClassPathResource;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -21,28 +16,22 @@ import uk.co.bithatch.opensim.spawner.domain.ManagedFile;
 
 public abstract class AbstractProfileService<T extends ContainerGroupInstanceData<LVL>, P, LVL extends Enum<LVL>> {
 
-    private final ObjectMapper objectMapper;
     private final TemplateResolver templateResolver;
-    private final String profileFileName;
-    private final String defaultProfileResourceName;
-    
+
+    protected final ObjectMapper objectMapper;
     protected final SpawnerProperties properties;
 
     public AbstractProfileService(
     		ObjectMapper objectMapper, 
     		SpawnerProperties properties, 
-    		TemplateResolver templateResolver,
-    		String profileFileName,
-    		String defaultProfileResourceName) {
-    	this.profileFileName = profileFileName;
-    	this.defaultProfileResourceName = defaultProfileResourceName;
+    		TemplateResolver templateResolver) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.templateResolver = templateResolver;
     }
 
     public P resolvePlan(T bot, Map<String, String> requestFields) {
-        var levelNode = getLevelNode(bot.getLevel());
+        var levelNode = getLevelNode(bot.getLevel(), bot.getName());
 
 
         var variables = buildBaseVariables(bot);
@@ -52,47 +41,12 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
 
 	protected abstract P createPlan(T bot, List<ContainerSpec> containers);
 
-    public String resolveLevelField(LVL level, String fieldName) {
-        var levelNode = getLevelNode(level);
-        var fieldNode = levelNode.get(fieldName);
-        if (fieldNode == null || fieldNode.isNull()) {
-            return null;
-        }
-        var value = fieldNode.asText("").trim();
-        return value.isEmpty() ? null : value;
-    }
-
-    private JsonNode loadProfilesRoot() {
-        var configPath = properties.getConfigDir().resolve(profileFileName);
-        String json;
-        try {
-            if (Files.exists(configPath)) {
-                json = Files.readString(configPath, StandardCharsets.UTF_8);
-            } else {
-                var resource = new ClassPathResource(defaultProfileResourceName);
-                try (var input = resource.getInputStream()) {
-                    json = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-                }
-            }
-            return objectMapper.readTree(json);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load level profiles.", e);
-        }
-    }
-
-    private JsonNode getLevelNode(LVL level) {
-        var root = loadProfilesRoot();
-        var levelNode = root.get(level.name());
-        if (levelNode == null || !levelNode.isObject()) {
-            throw new IllegalArgumentException("No level profile found for " + level.name() + ".");
-        }
-        return levelNode;
-    }
+    protected abstract JsonNode getLevelNode(LVL level, String name);
 
     private List<ContainerSpec> parseContainers(JsonNode levelNode, Map<String, String> variables, Map<String, String> requestFields) {
         var containersNode = levelNode.get("containers");
         if (containersNode == null || !containersNode.isObject()) {
-            throw new IllegalArgumentException("Bot level profile must contain an object field named 'containers'.");
+            throw new IllegalArgumentException("Profile must contain an object field named 'containers'.");
         }
         var result = new ArrayList<ContainerSpec>();
         var iterator = containersNode.fields();

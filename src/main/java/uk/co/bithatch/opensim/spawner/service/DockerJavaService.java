@@ -3,6 +3,7 @@ package uk.co.bithatch.opensim.spawner.service;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -54,7 +55,7 @@ public class DockerJavaService implements DockerService {
     }
 
     @Override
-    public List<String> createContainers(List<ContainerSpec> specs) {
+    public List<String> createContainers(Collection<ContainerSpec> specs) {
         var ids = new ArrayList<String>();
         for (var spec : specs) {
             LOG.info("Creating container {}.", spec);

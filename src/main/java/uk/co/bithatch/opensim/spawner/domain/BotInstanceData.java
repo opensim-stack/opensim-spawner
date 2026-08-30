@@ -75,11 +75,13 @@ public class BotInstanceData extends ContainerGroupInstanceData<BotLevel> {
         this.model = model;
     }
 
-    public String key() {
+    @Override
+    public String getName() {
         return first + "-" + last;
     }
 
-    public String displayName() {
-        return first + " " + last;
-    }
+	@Override
+	public String displayName() {
+		return first + " " + last;
+	}
 }

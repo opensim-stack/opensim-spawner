@@ -15,7 +15,7 @@ import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
 
 @Service
-public class BotLevelProfileService extends AbstractProfileService<BotInstanceData, ResolvedBotPlan, BotLevel> {
+public class BotLevelProfileService extends AbstractComponentProfileService<BotInstanceData, ResolvedBotPlan, BotLevel> {
 
 
     public BotLevelProfileService(ObjectMapper objectMapper, SpawnerProperties properties, TemplateResolver templateResolver) {
