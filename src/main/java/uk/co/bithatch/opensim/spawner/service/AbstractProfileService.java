@@ -152,7 +152,7 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
 
     public abstract Map<String, String> buildBaseVariables(T bot);
 
-    private String resolve(String value, Map<String, String> variables) {
+    protected String resolve(String value, Map<String, String> variables) {
         return templateResolver.resolve(value, variables);
     }
 

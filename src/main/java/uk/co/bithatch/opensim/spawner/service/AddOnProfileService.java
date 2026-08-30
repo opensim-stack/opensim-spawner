@@ -23,7 +23,6 @@ import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Service
 public class AddOnProfileService extends AbstractProfileService<AddOnInstanceData, ResolvedAddOnPlan, AddOnLevel> {
-	private static final Logger LOG = LoggerFactory.getLogger(AddOnProfileService.class);
 
     private final GridStateRepository gridStateRepository;
     private final AddOnRepository addOnRepository;
@@ -54,7 +53,7 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
         addOn.getConstants().forEach((key, value) -> {
         	var envar = System.getenv(key);
         	if(envar == null) {
-        		variables.putIfAbsent("env." + key, value);
+        		variables.putIfAbsent("env." + key, resolve(value, properties.buildVariables()));
         	}
         });
 
