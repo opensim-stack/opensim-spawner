@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 public abstract class AbstractComponentProfileService<T extends ContainerGroupInstanceData<LVL>, P, LVL extends Enum<LVL>> extends AbstractProfileService<T, P, LVL> {
 
@@ -27,8 +28,9 @@ public abstract class AbstractComponentProfileService<T extends ContainerGroupIn
     		SpawnerProperties properties, 
     		TemplateResolver templateResolver,
     		String profileFileName,
-    		String defaultProfileResourceName) {
-    	super(objectMapper, properties, templateResolver);
+    		String defaultProfileResourceName,
+    		GridStateRepository gridStateRepository) {
+    	super(objectMapper, properties, templateResolver, gridStateRepository);
     	this.profileFileName = profileFileName;
     	this.defaultProfileResourceName = defaultProfileResourceName;
     }

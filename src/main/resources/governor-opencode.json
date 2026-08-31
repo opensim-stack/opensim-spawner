@@ -42,14 +42,6 @@
     }
   },
   "mcp": {
-    "console2mcp": {
-      "type": "remote",
-      "url": "http://%env.COMPOSE_PROJECT_NAME%-console2mcp-1:%env.CONSOLE_MCP_PORT%/mcp",
-      "enabled": true,
-      "headers": {
-        "Authorization": "Bearer %env.CONSOLE_MCP_BEARER_TOKEN%"
-      }
-    },
     "metaverse2mcp": {
       "type": "remote",
       "url": "http://%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",

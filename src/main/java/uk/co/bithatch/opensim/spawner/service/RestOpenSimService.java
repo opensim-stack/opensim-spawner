@@ -488,6 +488,8 @@ public class RestOpenSimService implements OpenSimService {
         var pass = Optional.ofNullable(properties.getOpensimConsolePass())
                 .filter(value -> !value.isBlank())
                 .map(String::toCharArray);
+        
+        LOG.info("Opening OpenSim REST console at {} with user {} [{}].", simulatorBaseUrl(simulator.getPort()), user.orElse("<none>"), pass.orElse(null));
 
         return new OpensimRESTConsole(simulatorBaseUrl(simulator.getPort()), user, pass);
     }

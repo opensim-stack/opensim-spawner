@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 class BotLevelProfileServiceTest {
 
@@ -26,7 +27,7 @@ class BotLevelProfileServiceTest {
         props.setConfigDir(tempDir.resolve("config"));
         Files.createDirectories(props.getConfigDir());
 
-        var service = new BotLevelProfileService(new ObjectMapper(), props, new TemplateResolver());
+        var service = new BotLevelProfileService(new ObjectMapper(), props, new TemplateResolver(), new GridStateRepository(new ObjectMapper(), tempDir.resolve("grids"), props));
 
         var bot = new BotInstanceData();
         bot.setFirst("Ada");

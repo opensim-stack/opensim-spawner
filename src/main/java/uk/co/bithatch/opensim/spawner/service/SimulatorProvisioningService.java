@@ -281,7 +281,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
     }
 
     private void materializeFiles(ResolvedSimulatorPlan plan, SimulatorInstanceData bot, List<java.nio.file.Path> writtenFiles) {
-        materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot));
+        materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot,  new LinkedHashMap<String, String>()));
     }
     
     private String resolveRequestedOAR(SimulatorLevel level, Map<String, String> requestFields) {

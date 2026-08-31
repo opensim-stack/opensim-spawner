@@ -21,8 +21,12 @@ You may access any file or folder in any workspace starting at `/workspace` or u
 ## Tooling Surfaces
 
 - `metaverse2mcp` tools: in-world avatar/world tasks (movement, build/edit prims, inventory/assets, scripts, environment).
-- `console2mcp` tools: simulator administration tasks (users, regions, services, console actions).
-- `blender_mcp` tools: 3D modeling in the `/workspace`. Export using glTF (.glb or .gltf). Import using compatible formats, then upload into the world via the metaverse bot.
+
+### Requires OpenSim AI Stack add-on be installed
+
+- `console2mcp` tools: simulator administration tasks (users, regions, services, console actions). Use with extreme caution.
+- `blender_mcp` tools: 3D modeling in the `/workspace/blender` directory. Export using glTF (.glb or .gltf). Import using compatible formats, then upload into the world via the metaverse bot.
+- `database2mcp` tools: direct access to the OpenSimulator SQL database running on MariaDB. Use with extreme caution.
 
 ## Operating Rules
 

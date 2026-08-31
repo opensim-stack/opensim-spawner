@@ -1,6 +1,5 @@
 package uk.co.bithatch.opensim.spawner.service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,24 +17,16 @@ import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 @Service
 public class SimulatorLevelProfileService extends AbstractComponentProfileService<SimulatorInstanceData, ResolvedSimulatorPlan, SimulatorLevel> {
 
-	private final GridStateRepository gridStateRepository;
-
     public SimulatorLevelProfileService(
     		ObjectMapper objectMapper, 
     		SpawnerProperties properties, 
     		TemplateResolver templateResolver,
     		GridStateRepository gridStateRepository) {
-    	super(objectMapper, properties, templateResolver, "grid-levels.json", "default-grid-levels.json");
-    	this.gridStateRepository = gridStateRepository;
+    	super(objectMapper, properties, templateResolver, "grid-levels.json", "default-grid-levels.json", gridStateRepository);
     }
 
 	@Override
-	public Map<String, String> buildBaseVariables(SimulatorInstanceData sim) {
-        var variables = new LinkedHashMap<String, String>();
-        var grid = gridStateRepository.get();
-        variables.put("grid.adminToken", grid.getAdminToken());
-        variables.put("grid.name", grid.getName());
-        variables.put("grid.nick", grid.getNick());
+	public Map<String, String> buildTypeVariables(SimulatorInstanceData sim, Map<String, String> variables) {
         
         variables.put("sim.name", sim.getName());
         variables.put("sim.normalisedName", sim.getName().replace(" ", "-"));
@@ -46,11 +37,6 @@ public class SimulatorLevelProfileService extends AbstractComponentProfileServic
         variables.put("sim.ownerUuid", sim.getOwnerUuid());
         variables.put("sim.ownerPassword", sim.getOwnerPassword());
         variables.put("sim.level", sim.getLevel() == null ? "" : sim.getLevel().name());
-        variables.put("env.OPENSIM_SIMULATOR_IMAGE", properties.getOpencodeImage());
-        for (var envEntry : System.getenv().entrySet()) {
-            variables.put("env." + envEntry.getKey(), envEntry.getValue());
-        }
-        
         if(sim.getRegions() != null && sim.getRegions().length > 0) {
 			var region = sim.getRegions()[0];
 			var regionX = String.valueOf(region.getX());

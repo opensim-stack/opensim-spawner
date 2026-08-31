@@ -27,7 +27,7 @@
             {
             "resource": "governor-opencode.json",
             "target": "/config/bots/%bot.first%-%bot.last%/opencode.json",
-            "dropIns": "/config/add-ons/opencode/opencode.json.d"
+            "dropIns": "/config/drop-ins/opencode/opencode.json.d"
             }
         ],
         "files": {

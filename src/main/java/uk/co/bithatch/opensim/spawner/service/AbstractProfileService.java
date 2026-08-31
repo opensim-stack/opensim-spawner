@@ -13,6 +13,7 @@ import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.ManagedFile;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 public abstract class AbstractProfileService<T extends ContainerGroupInstanceData<LVL>, P, LVL extends Enum<LVL>> {
 
@@ -20,25 +21,26 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
 
     protected final ObjectMapper objectMapper;
     protected final SpawnerProperties properties;
+	protected final GridStateRepository gridStateRepository;
 
     public AbstractProfileService(
     		ObjectMapper objectMapper, 
     		SpawnerProperties properties, 
-    		TemplateResolver templateResolver) {
+    		TemplateResolver templateResolver,
+    		GridStateRepository gridStateRepository) {
         this.objectMapper = objectMapper;
         this.properties = properties;
         this.templateResolver = templateResolver;
+        this.gridStateRepository = gridStateRepository;
     }
 
     public P resolvePlan(T bot, Map<String, String> requestFields) {
-        var levelNode = getLevelNode(bot.getLevel(), bot.getName());
-
-
-        var variables = buildBaseVariables(bot);
-        var containers = parseContainers(levelNode, variables, requestFields);
-        return createPlan(bot, containers);
+        return createPlan(bot, parseContainers(
+	        		getLevelNode(bot.getLevel(), 
+	        		bot.getName()), 
+        		buildBaseVariables(bot,  new LinkedHashMap<String, String>()), requestFields));
     }
-
+    
 	protected abstract P createPlan(T bot, List<ContainerSpec> containers);
 
     protected abstract JsonNode getLevelNode(LVL level, String name);
@@ -150,7 +152,26 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
         return result;
     }
 
-    public abstract Map<String, String> buildBaseVariables(T bot);
+
+    public final Map<String, String> buildBaseVariables(T bot, Map<String, String> variables) {
+
+		for (var envEntry : System.getenv().entrySet()) {
+			variables.put("env." + envEntry.getKey(), envEntry.getValue());
+		}
+		
+    	var grid = gridStateRepository.get();
+
+        variables.put("grid.adminToken", grid.getAdminToken());
+        variables.put("grid.name", grid.getName());
+        variables.put("grid.nick", grid.getNick());
+        
+    	grid.getTokens().forEach((key, value) -> variables.put("token." + key, value));    	
+    	
+    	return buildTypeVariables(bot, variables);
+    }
+    
+
+    public abstract Map<String, String> buildTypeVariables(T bot, Map<String, String> variables);
 
     protected String resolve(String value, Map<String, String> variables) {
         return templateResolver.resolve(value, variables);

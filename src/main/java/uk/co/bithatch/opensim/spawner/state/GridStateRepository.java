@@ -30,7 +30,7 @@ public class GridStateRepository  {
     	load();
     }
 
-    GridStateRepository(ObjectMapper objectMapper, Path file, SpawnerProperties properties) {
+    public GridStateRepository(ObjectMapper objectMapper, Path file, SpawnerProperties properties) {
     	this.objectMapper = objectMapper;
     	this.file = file;
     	this.properties = properties;

@@ -342,7 +342,7 @@ public class BotProvisioningService extends AbstractContainerGroupProvisioningSe
 	}
 
     private void materializeFiles(ResolvedBotPlan plan, BotInstanceData bot, List<java.nio.file.Path> writtenFiles) {
-    	materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot));
+    	materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot,  new LinkedHashMap<>()));
     }
     
     private String resolveRequestedAppearance(BotLevel level, Map<String, String> requestFields) {

@@ -1,6 +1,8 @@
 package uk.co.bithatch.opensim.spawner.domain;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Manifest implements DomainObject {
@@ -11,10 +13,19 @@ public class Manifest implements DomainObject {
 	private String author;
 	private String icon;
 	private Map<String, String> constants = new HashMap<>();
-	private Map<AddOnType, Map<String, ContainerSpec>> extensions = new HashMap<>();
+	private Map<AddOnLevel, Map<String, ContainerSpec>> extensions = new HashMap<>();
+	private List<String> tokens = new ArrayList<>();
 
 	public String getName() {
 		return name;
+	}
+
+	public List<String> getTokens() {
+		return tokens;
+	}
+
+	public void setTokens(List<String> tokens) {
+		this.tokens = tokens;
 	}
 
 	public void setName(String name) {
@@ -53,11 +64,11 @@ public class Manifest implements DomainObject {
 		this.constants = constants;
 	}
 
-	public Map<AddOnType, Map<String, ContainerSpec>> getExtensions() {
+	public Map<AddOnLevel, Map<String, ContainerSpec>> getExtensions() {
 		return extensions;
 	}
 
-	public void setExtensions(Map<AddOnType, Map<String, ContainerSpec>> extensions) {
+	public void setExtensions(Map<AddOnLevel, Map<String, ContainerSpec>> extensions) {
 		this.extensions = extensions;
 	}
 
