@@ -5,10 +5,16 @@ const addOnsEmpty = document.getElementById('add-ons-empty');
 const updateButton = document.getElementById('update-add-ons');
 const toastContainer = document.getElementById('toast-container');
 
+const REQUEST_RECOVERY_WINDOW_MS = 180000;
+const REQUEST_RECOVERY_POLL_MS = 3000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const normalizedText = (value, fallback = '') => {
   const text = String(value || '').trim();
   return text || fallback;
 };
+
+const normalizedAddOnName = (value) => normalizedText(value).toLowerCase();
 
 const callList = async () => {
   const response = await fetchWithTimeout('/api/add-ons');
@@ -47,6 +53,39 @@ const callSetEnabled = async (name, enabled) => {
   return response.json();
 };
 
+const isAddOnAtState = (addOn, expectedEnabled) => {
+  const enabled = !!addOn?.enabled;
+  return enabled === expectedEnabled;
+};
+
+const findAddOnByName = (addOns, name) => {
+  const expectedName = normalizedAddOnName(name);
+  return addOns.find((addOn) => {
+    const manifestName = normalizedAddOnName(addOn?.manifest?.name);
+    const addOnName = normalizedAddOnName(addOn?.name);
+    return manifestName === expectedName || addOnName === expectedName;
+  }) || null;
+};
+
+const waitForAddOnEnabledState = async (name, expectedEnabled, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    try {
+      const addOns = await callList();
+      if (Array.isArray(addOns)) {
+        const addOn = findAddOnByName(addOns, name);
+        if (addOn && isAddOnAtState(addOn, expectedEnabled)) {
+          return true;
+        }
+      }
+    } catch (_ignored) {
+      // Ignore transient polling errors while waiting for eventual consistency.
+    }
+    await sleep(REQUEST_RECOVERY_POLL_MS);
+  }
+  return false;
+};
+
 const createToggle = (name, enabled) => {
   const label = document.createElement('label');
   label.className = 'relative inline-flex items-center cursor-pointer';
@@ -76,6 +115,16 @@ const createToggle = (name, enabled) => {
       }, `${nextValue ? 'Enabling' : 'Disabling'} add-on ${name} ...`);
       showToast(toastContainer, `${nextValue ? 'Enabled' : 'Disabled'} add-on ${name}.`, 'success');
     } catch (err) {
+      const recovered = await withWorkingOverlay(
+        async () => waitForAddOnEnabledState(name, nextValue),
+        `Verifying ${nextValue ? 'enable' : 'disable'} result for add-on ${name} ...`
+      );
+      if (recovered) {
+        await loadAddOns();
+        showToast(toastContainer, `${nextValue ? 'Enabled' : 'Disabled'} add-on ${name}.`, 'success');
+        return;
+      }
+
       input.checked = !nextValue;
       showToast(toastContainer, err instanceof Error ? err.message : 'Could not update add-on.', 'error');
     } finally {

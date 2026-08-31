@@ -45,23 +45,39 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
         variables.put("grid.adminToken", grid.getAdminToken());
         variables.put("grid.name", grid.getName());
         variables.put("grid.nick", grid.getNick());
-        
 
-        var addOn = addOnRepository.load(addOnInstance.getName()).orElseThrow(() -> 
-	        new ResponseStatusException(HttpStatus.FORBIDDEN, "Simulator already exists.")
-	    );
-        addOn.getConstants().forEach((key, value) -> {
-        	var envar = System.getenv(key);
-        	if(envar == null) {
-        		variables.putIfAbsent("env." + key, resolve(value, properties.buildVariables()));
-        	}
-        });
+        variables.putAll(properties.buildVariables());
 
         for (var envEntry : System.getenv().entrySet()) {
             variables.put("env." + envEntry.getKey(), envEntry.getValue());
         }
-        
-        variables.putAll(properties.buildVariables());
+
+        var addOn = addOnRepository.load(addOnInstance.getName()).orElseThrow(() -> 
+	        new ResponseStatusException(HttpStatus.FORBIDDEN, "Simulator already exists.")
+	    );
+
+        // Resolve add-on constants against cfg/grid/env values and previously-resolved constants.
+        var unresolvedConstants = new LinkedHashMap<String, String>();
+        addOn.getConstants().forEach((key, value) -> {
+	        	if (System.getenv(key) == null) {
+	        		unresolvedConstants.put("env." + key, value == null ? "" : value);
+	        	}
+        });
+
+        var maxPasses = Math.max(1, unresolvedConstants.size());
+        for (int pass = 0; pass < maxPasses; pass++) {
+            var changed = false;
+            for (var entry : unresolvedConstants.entrySet()) {
+                var resolved = resolve(entry.getValue(), variables);
+                var previous = variables.put(entry.getKey(), resolved);
+                if (!resolved.equals(previous)) {
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                break;
+            }
+        }
         
         return variables;
     }

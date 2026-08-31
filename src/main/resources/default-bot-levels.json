@@ -110,6 +110,13 @@
           "%env.COMPOSE_PROJECT_NAME%_opencode-cache": "/root/.cache/opencode",
           "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
         },
+        "managed": [
+            {
+            "resource": "builder-opencode.json",
+            "target": "/config/bots/%bot.first%-%bot.last%/opencode.json",
+            "dropIns": "/config/add-ons/opencode/opencode.json.d"
+            }
+        ],
         "files": {
           "/config/bots/%bot.first%-%bot.last%/opencode.json": "builder-opencode.json",
           "/config/bots/%bot.first%-%bot.last%/AGENTS.md": "agent-md/BUILDER.md"
@@ -186,6 +193,13 @@
           "%env.COMPOSE_PROJECT_NAME%_opencode-cache": "/root/.cache/opencode",
           "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config"
         },
+        "managed": [
+            {
+            "resource": "actor-opencode.json",
+            "target": "/config/bots/%bot.first%-%bot.last%/opencode.json",
+            "dropIns": "/config/add-ons/opencode/opencode.json.d"
+            }
+        ],
         "files": {
           "/config/bots/%bot.first%-%bot.last%/opencode.json": "actor-opencode.json",
           "/config/bots/%bot.first%-%bot.last%/AGENTS.md": "agent-md/ACTOR.md"

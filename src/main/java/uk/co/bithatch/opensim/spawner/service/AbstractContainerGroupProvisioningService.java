@@ -6,8 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -16,6 +18,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
@@ -27,6 +32,7 @@ public abstract class AbstractContainerGroupProvisioningService<
 	T extends ContainerGroupInstanceData<?>> {
 	
     private static final Logger LOG = LoggerFactory.getLogger(AbstractContainerGroupProvisioningService.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 	protected final R stateRepository;
     protected final DockerService dockerService;
@@ -283,36 +289,144 @@ public abstract class AbstractContainerGroupProvisioningService<
 	protected void onRollbackFailedProvision(String name, List<String> containerIds, List<Path> files) {
 	}
 
-	protected void materializeFiles(Plan plan, List<Path> writtenFiles,
-			Map<String, String> variables) {
+	protected void materializeFiles(Plan plan, List<Path> writtenFiles, Map<String, String> variables) {
+		LOG.info("Materializing files for {} container(s).", plan.containers().size());
 		for (var container : plan.containers()) {
-			for(var dir : container.getDirectories()) {
+			LOG.info("Container materialization step: {} directories, {} files, {} managed files.",
+					container.getDirectories().size(), container.getFiles().size(), container.getManagedFiles().size());
+			for (var dir : container.getDirectories()) {
 				var targetPath = Path.of(dir);
 				try {
+					LOG.info("Ensuring directory exists: {}", targetPath);
 					Files.createDirectories(targetPath);
 					writtenFiles.add(targetPath);
 				} catch (IOException e) {
-					throw new IllegalStateException("Failed to materialize container group directory " + targetPath + ".", e);
+					throw new IllegalStateException(
+							"Failed to materialize container group directory " + targetPath + ".", e);
 				}
 			}
-            for (var fileEntry : container.getFiles().entrySet()) {
-                var targetPath = java.nio.file.Path.of(fileEntry.getKey());
-                var templateName = fileEntry.getValue();
-                var content = loadFileTemplate(templateName);
-                var resolved = templateResolver.resolve(content, variables);
-                try {
-                    var parent = targetPath.getParent();
-                    if (parent != null) {
-                        Files.createDirectories(parent);
-                    }
-                    Files.writeString(targetPath, resolved, StandardCharsets.UTF_8);
-                    writtenFiles.add(targetPath);
-                } catch (IOException e) {
-                    throw new IllegalStateException("Failed to materialize container group file " + targetPath + ".", e);
-                }
-            }
-        }
+
+			for (var fileEntry : container.getFiles().entrySet()) {
+				var targetPath = java.nio.file.Path.of(fileEntry.getKey());
+				var templateName = fileEntry.getValue();
+				var content = loadFileTemplate(templateName);
+				var resolved = templateResolver.resolve(content, variables);
+				try {
+					var parent = targetPath.getParent();
+					if (parent != null) {
+						LOG.info("Ensuring file parent directory exists: {}", parent);
+						Files.createDirectories(parent);
+					}
+					LOG.info("Writing materialized file '{}' from template '{}'.", targetPath, templateName);
+					Files.writeString(targetPath, resolved, StandardCharsets.UTF_8);
+					writtenFiles.add(targetPath);
+				} catch (IOException e) {
+					throw new IllegalStateException("Failed to materialize container group file " + targetPath + ".",
+							e);
+				}
+			}
+
+			/*
+			 * Managed files allow other parts of the stack to contribute configuratiln
+			 * files. The child add-on (e.g. blender, a stack add-on) will add configuration
+			 * files to the drop-in directory, and the parent stack container (e.g. stack,
+			 * sim or bot container) will add its own files (highest priority, loaded first)
+			 * to the dropins directory, and then scan the drop in directory for other files
+			 * to merge. At the moment, only merging of JSON files is supported
+			 */
+
+			for (var managedFile : container.getManagedFiles()) {
+				var templateName = managedFile.resource();
+				if (!templateName.endsWith(".json")) {
+					throw new IllegalArgumentException("Managed file resource must be JSON");
+				}
+				var dropInDir = Path.of(managedFile.dropIns());
+				var targetName = templateResolver.resolve( managedFile.target(), variables);
+        var content = loadManagedFileTemplate(templateName, targetName);
+        var resolved = templateResolver.resolve(content, variables);
+				LOG.info("Processing managed file template '{}' with drop-ins directory '{}' and target '{}'.",
+						templateName, dropInDir, targetName);
+
+				try {
+					Files.createDirectories(dropInDir);
+					LOG.info("Ensured drop-ins directory exists: {}", dropInDir);
+				} catch (IOException e) {
+					throw new IllegalStateException("Failed to create drop-ins directory " + dropInDir + ".", e);
+				}
+
+				if (targetName == null || targetName.trim().isEmpty()) {
+					// Add-on side of contribution
+					var number = new AtomicInteger(1);
+					LOG.info("Managed file '{}' is an add-on contribution; allocating drop-in index in '{}'.",
+							templateName, dropInDir);
+
+					try {
+						Files.list(dropInDir).forEach(path -> {
+							var fileName = path.getFileName().toString();
+							if (fileName.matches("\\d{2}-.*\\.json") && fileName.endsWith(templateName)) {
+								var prefix = fileName.substring(0, 2);
+								try {
+									var prefixNum = Integer.parseInt(prefix);
+									if (prefixNum >= number.get()) {
+										number.set(prefixNum + 1);
+									}
+								} catch (NumberFormatException e) {
+									// Ignore
+								}
+							}
+						});
+					} catch (IOException e) {
+						throw new IllegalStateException("Failed to find next drop in number.", e);
+					}
+
+					var dropInPath = dropInDir.resolve(String.format("%02d-%s", number.get(), templateName));
+					try {
+						LOG.info("Writing add-on drop-in file: {}", dropInPath);
+						Files.writeString(dropInPath, resolved, StandardCharsets.UTF_8);
+						writtenFiles.add(dropInPath);
+					} catch (IOException e) {
+						throw new IllegalStateException(
+								"Failed to materialize container group file " + dropInPath + ".", e);
+					}
+				} else {
+					// Parent stack side of contribution
+					var targetPath = Path.of(targetName);
+					var dropInPath = dropInDir.resolve("00-" + templateName);
+					try {
+						LOG.info("Writing parent drop-in file '{}' for target '{}'.", dropInPath, targetPath);
+						Files.writeString(dropInPath, resolved, StandardCharsets.UTF_8);
+						writtenFiles.add(dropInPath);
+					} catch (IOException e) {
+						throw new IllegalStateException(
+								"Failed to materialize container group file " + dropInPath + ".", e);
+					}
+
+					try {
+						var parent = targetPath.getParent();
+						if (parent != null) {
+							LOG.info("Ensuring managed target parent directory exists: {}", parent);
+							Files.createDirectories(parent);
+						}
+
+						var merged = mergeJsonDropIns(Path.of(managedFile.dropIns()), templateName);
+						LOG.info("Writing merged managed JSON target file: {}", targetPath);
+						Files.writeString(targetPath,
+								OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(merged)
+										+ System.lineSeparator(),
+								StandardCharsets.UTF_8);
+						writtenFiles.add(targetPath);
+					} catch (IOException e) {
+						throw new IllegalStateException(
+								"Failed to materialize container group file " + targetPath + ".", e);
+					}
+				}
+			}
+		}
 	}
+
+  protected String loadManagedFileTemplate(String name, String targetName) {
+    return loadFileTemplate(name);
+  }
 
 	protected static String nonBlankOrNull(String value) {
         if (value == null) {
@@ -320,6 +434,52 @@ public abstract class AbstractContainerGroupProvisioningService<
         }
         var trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private ObjectNode mergeJsonDropIns(Path dropInsPath, String templateName) throws IOException {
+        if (!Files.exists(dropInsPath)) {
+            LOG.info("Drop-ins directory does not exist yet, returning empty merge object: {}", dropInsPath);
+            return OBJECT_MAPPER.createObjectNode();
+        }
+
+        var merged = OBJECT_MAPPER.createObjectNode();
+        try (var stream = Files.list(dropInsPath)) {
+            var sortedJsonFiles = stream
+                    .filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().endsWith(".json") && path.getFileName().toString().endsWith(templateName))
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                    .toList();
+
+            LOG.info("Merging {} drop-in JSON file(s) from '{}': {}",
+                    sortedJsonFiles.size(),
+                    dropInsPath,
+                    sortedJsonFiles.stream().map(Path::toString).toList());
+
+            for (var jsonFile : sortedJsonFiles) {
+                var parsed = OBJECT_MAPPER.readTree(jsonFile.toFile());
+                if (!(parsed instanceof ObjectNode objectNode)) {
+                    throw new IllegalStateException("Managed drop-in file '" + jsonFile + "' must contain a JSON object.");
+                }
+                LOG.info("Applying drop-in JSON file: {}", jsonFile);
+                deepMerge(merged, objectNode);
+            }
+        }
+        return merged;
+    }
+
+    private void deepMerge(ObjectNode target, ObjectNode source) {
+        source.fields().forEachRemaining(entry -> {
+            var key = entry.getKey();
+            var sourceValue = entry.getValue();
+            var targetValue = target.get(key);
+
+            if (sourceValue.isObject() && targetValue != null && targetValue.isObject()) {
+                deepMerge((ObjectNode) targetValue, (ObjectNode) sourceValue);
+                return;
+            }
+
+            target.set(key, sourceValue.deepCopy());
+        });
     }
 
 }
