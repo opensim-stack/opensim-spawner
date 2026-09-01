@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 public class ContainerSpec {
+	
+	public record HealthCheck(List<String> test, long interval, long timeout, long startPeriod, long startInterval, int retries) {}
 
     private String image;
     private String name;
@@ -18,8 +20,29 @@ public class ContainerSpec {
     private List<String> aliases = new ArrayList<>();
     private List<String> directories = new ArrayList<>();
     private List<ManagedFile> managedFiles = new ArrayList<>();
+    private HealthCheck healthCheck;
+    private  Map<String, ContainerSpec> init;
     
-    public List<ManagedFile> getManagedFiles() {
+    public HealthCheck getHealthCheck() {
+		return healthCheck;
+	}
+
+
+	public Map<String, ContainerSpec> getInit() {
+		return init;
+	}
+
+
+	public void setInit(Map<String, ContainerSpec> init) {
+		this.init = init;
+	}
+
+
+	public void setHealthCheck(HealthCheck healthCheck) {
+		this.healthCheck = healthCheck;
+	}
+
+	public List<ManagedFile> getManagedFiles() {
 		return managedFiles;
 	}
 

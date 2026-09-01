@@ -59,47 +59,128 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
             if (!containerNode.isObject()) {
                 throw new IllegalArgumentException("Container definition for image " + image + " must be an object.");
             }
-            var spec = new ContainerSpec();
-            spec.setImage(image);
-            spec.setName(resolve(requiredText(containerNode, "name", "container.name"), variables));
-
-            var env = resolveMap(containerNode.get("environment"), variables);
-            var toRemove = new ArrayList<String>();
-            for (var envEntry : env.entrySet()) {
-                var overrideValue = requestFields.get(envEntry.getKey());
-                if (overrideValue != null) {
-                    envEntry.setValue(overrideValue);
-                }
-                
-                var val = envEntry.getValue();
-            	if(val.startsWith("%env.") && val.endsWith("%")) {
-            		var envVarName = val.substring(5, val.length() - 1);
-            		var envVarValue = System.getenv(envVarName);
-            		if(envVarValue == null) {
-            			toRemove.add(envEntry.getKey());
-            		}
-            	}
-            }
-            
-            for(var key : toRemove) {
-				env.remove(key);
-			}
-            
-            spec.setEnvironment(env);
-            spec.setExtraHosts(resolveMap(containerNode.get("extraHosts"), variables));
-            spec.setAliases(resolveList(containerNode.get("aliases"), variables));
-            spec.setDirectories(resolveList(containerNode.get("directories"), variables));
-            spec.setManagedFiles(resolveListOfObjects(containerNode.get("managed"), variables, ManagedFile.class));
-            var hostnameNode = containerNode.get("hostname");
-            if(hostnameNode != null && !hostnameNode.isNull() && !hostnameNode.asText().isBlank()) {
-            	spec.setHostname(resolve(hostnameNode.asText(""), variables));
-            }
-            spec.setVolumes(resolveMap(containerNode.get("volumes"), variables));
-            spec.setFiles(resolveMap(containerNode.get("files"), variables));
-            spec.setPorts(resolveMap(containerNode.get("ports"), variables));
-            result.add(spec);
+            result.add(parseContainerSpec(image, containerNode, variables, requestFields, false, null));
         }
         return result;
+    }
+
+    private ContainerSpec parseContainerSpec(String image,
+            JsonNode containerNode,
+            Map<String, String> variables,
+            Map<String, String> requestFields,
+            boolean nestedInit,
+            String defaultName) {
+        var spec = new ContainerSpec();
+        spec.setImage(image);
+
+        var nameNode = containerNode.get("name");
+        if (nameNode != null && nameNode.isTextual() && !nameNode.asText().isBlank()) {
+            spec.setName(resolve(nameNode.asText(), variables));
+        } else if (defaultName != null && !defaultName.isBlank()) {
+            spec.setName(defaultName);
+        } else {
+            spec.setName(resolve(requiredText(containerNode, "name", "container.name"), variables));
+        }
+
+        spec.setEnvironment(resolveEnvironment(containerNode.get("environment"), variables, requestFields));
+        spec.setExtraHosts(resolveMap(containerNode.get("extraHosts"), variables));
+        spec.setAliases(resolveList(containerNode.get("aliases"), variables));
+        spec.setDirectories(resolveList(containerNode.get("directories"), variables));
+        spec.setManagedFiles(resolveListOfObjects(containerNode.get("managed"), variables, ManagedFile.class));
+
+        var hostnameNode = containerNode.get("hostname");
+        if (hostnameNode != null && !hostnameNode.isNull() && !hostnameNode.asText().isBlank()) {
+            spec.setHostname(resolve(hostnameNode.asText(""), variables));
+        }
+
+        spec.setVolumes(resolveMap(containerNode.get("volumes"), variables));
+        spec.setFiles(resolveMap(containerNode.get("files"), variables));
+        spec.setPorts(resolveMap(containerNode.get("ports"), variables));
+        spec.setHealthCheck(resolveHealthCheck(containerNode.get("healthcheck"), variables));
+
+        var initNode = containerNode.get("init");
+        if (initNode != null && !initNode.isNull()) {
+            if (nestedInit) {
+                throw new IllegalArgumentException("Nested init containers are not supported.");
+            }
+            if (!initNode.isObject()) {
+                throw new IllegalArgumentException("Container init definition must be an object.");
+            }
+
+            var initSpecs = new LinkedHashMap<String, ContainerSpec>();
+            var initIterator = initNode.fields();
+            while (initIterator.hasNext()) {
+                var initEntry = initIterator.next();
+                var initImage = resolve(initEntry.getKey(), variables);
+                var initContainerNode = initEntry.getValue();
+                if (!initContainerNode.isObject()) {
+                    throw new IllegalArgumentException("Init container definition for image " + initImage + " must be an object.");
+                }
+
+                var initSpec = parseContainerSpec(initImage,
+                        initContainerNode,
+                        variables,
+                        requestFields,
+                        true,
+                        spec.getName() + "-init");
+                initSpecs.put(initImage, initSpec);
+            }
+            spec.setInit(initSpecs);
+        }
+
+        return spec;
+    }
+
+    private Map<String, String> resolveEnvironment(JsonNode environmentNode,
+            Map<String, String> variables,
+            Map<String, String> requestFields) {
+        var env = resolveMap(environmentNode, variables);
+        var toRemove = new ArrayList<String>();
+        for (var envEntry : env.entrySet()) {
+            var overrideValue = requestFields.get(envEntry.getKey());
+            if (overrideValue != null) {
+                envEntry.setValue(overrideValue);
+            }
+
+            var val = envEntry.getValue();
+            if (val.startsWith("%env.") && val.endsWith("%")) {
+                var envVarName = val.substring(5, val.length() - 1);
+                var envVarValue = System.getenv(envVarName);
+                if (envVarValue == null) {
+                    toRemove.add(envEntry.getKey());
+                }
+            }
+        }
+
+        for (var key : toRemove) {
+            env.remove(key);
+        }
+        return env;
+    }
+
+    private ContainerSpec.HealthCheck resolveHealthCheck(JsonNode node, Map<String, String> variables) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            throw new IllegalArgumentException("Expected object field while resolving healthcheck.");
+        }
+        try {
+            var resolvedNode = objectMapper.createObjectNode();
+            node.fields().forEachRemaining(field -> {
+                var key = field.getKey();
+                var value = field.getValue();
+                if (value.isTextual()) {
+                    var text = resolve(value.asText(""), variables);
+                    resolvedNode.put(key, text);
+                } else {
+                    resolvedNode.set(key, value);
+                }
+            });
+            return objectMapper.treeToValue(resolvedNode, ContainerSpec.HealthCheck.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Failed to parse healthcheck from profile.", e);
+        }
     }
 
 

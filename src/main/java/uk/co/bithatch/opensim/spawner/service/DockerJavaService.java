@@ -2,7 +2,9 @@ package uk.co.bithatch.opensim.spawner.service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -16,12 +18,14 @@ import org.springframework.stereotype.Service;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
+import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
+import com.github.dockerjava.api.model.InternetProtocol;
 import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.RestartPolicy;
@@ -60,40 +64,136 @@ public class DockerJavaService implements DockerService {
         for (var spec : specs) {
             LOG.info("Creating container {}.", spec);
 
-            ensureImageByPullPolicy(spec.getImage());
-
-            var hostConfig = HostConfig.newHostConfig();
-            var binds = toBinds(spec.getVolumes());
-            if (!binds.isEmpty()) {
-                hostConfig.withBinds(binds);
-            }
-            hostConfig.withRestartPolicy(RestartPolicy.parse(properties.getOpensimRestartPolicy()));
-            var configuredNetwork = normalizeNetworkName(properties.getOpensimNetwork());
-            if (configuredNetwork != null) {
-                hostConfig.withNetworkMode(configuredNetwork);
-            }
-            spec.getExtraHosts().forEach((host, ip) -> hostConfig.withExtraHosts(host + ":" + ip));
-            hostConfig.withPortBindings(spec.getPorts().entrySet().stream()
-					.map(entry -> new PortBinding(
-							Ports.Binding.bindPortSpec(entry.getValue()),
-							ExposedPort.parse(entry.getKey())))
-					.toList());
-
-            var createCommand = dockerClient.createContainerCmd(spec.getImage())
-                    .withName(spec.getName())
-                    .withHostConfig(hostConfig)
-                    .withEnv(toEnvList(spec.getEnvironment()));
-             
-            if(spec.getHostname() != null && !spec.getHostname().isBlank()) {
-				createCommand.withHostName(spec.getHostname());
-			}
-			createCommand.withAliases(spec.getAliases());
-            
-            CreateContainerResponse response = createCommand.exec();
+            runInitContainers(spec);
+            CreateContainerResponse response = createContainerCommand(spec, properties.getOpensimRestartPolicy(), null).exec();
             ids.add(response.getId());
             LOG.info("Created container {} with id {}.", spec.getName(), response.getId());
         }
         return ids;
+    }
+
+    private void runInitContainers(ContainerSpec parentSpec) {
+        var initSpecs = parentSpec.getInit();
+        if (initSpecs == null || initSpecs.isEmpty()) {
+            return;
+        }
+
+        for (var initEntry : initSpecs.entrySet()) {
+            var configuredInit = initEntry.getValue();
+            if (configuredInit == null) {
+                throw new IllegalArgumentException("Init container specification is missing for image key '" + initEntry.getKey() + "'.");
+            }
+            if (configuredInit.getInit() != null && !configuredInit.getInit().isEmpty()) {
+                throw new IllegalArgumentException("Nested init containers are not supported.");
+            }
+
+            var image = configuredInit.getImage() == null || configuredInit.getImage().isBlank()
+                    ? initEntry.getKey()
+                    : configuredInit.getImage();
+            if (image == null || image.isBlank()) {
+                throw new IllegalArgumentException("Init container image is missing for parent '" + parentSpec.getName() + "'.");
+            }
+
+            var initName = configuredInit.getName();
+            if (initName == null || initName.isBlank()) {
+                if (parentSpec.getName() == null || parentSpec.getName().isBlank()) {
+                    throw new IllegalArgumentException("Init container requires a name when parent container name is blank.");
+                }
+                initName = parentSpec.getName() + "-init";
+                configuredInit.setName(initName);
+            }
+            configuredInit.setImage(image);
+
+            LOG.info("Running init container '{}' for parent '{}'.", initName, parentSpec.getName());
+            removeExistingContainerByName(initName);
+
+            var response = createContainerCommand(configuredInit, "no", List.of("/bin/sh", "/init.sh")).exec();
+            var initContainerId = response.getId();
+
+            try {
+                dockerClient.startContainerCmd(initContainerId).exec();
+                var statusCode = dockerClient.waitContainerCmd(initContainerId).start().awaitStatusCode();
+                if (statusCode == null || statusCode.intValue() != 0) {
+                    throw new ExternalDependencyException(
+                            "Init container '" + initName + "' failed for parent '" + parentSpec.getName() + "' with status "
+                                    + statusCode + ".");
+                }
+                LOG.info("Init container '{}' completed successfully (service_completed condition met).", initName);
+            } finally {
+                try {
+                    dockerClient.removeContainerCmd(initContainerId).withForce(true).exec();
+                } catch (NotFoundException ignored) {
+                    LOG.debug("Init container {} already removed.", initContainerId);
+                }
+            }
+        }
+    }
+
+    private CreateContainerCmd createContainerCommand(ContainerSpec spec, String restartPolicy, List<String> entrypoint) {
+        ensureImageByPullPolicy(spec.getImage());
+
+        var hostConfig = HostConfig.newHostConfig();
+        var binds = toBinds(spec.getVolumes());
+        if (!binds.isEmpty()) {
+            hostConfig.withBinds(binds);
+        }
+        hostConfig.withRestartPolicy(RestartPolicy.parse(restartPolicy));
+
+        var configuredNetwork = normalizeNetworkName(properties.getOpensimNetwork());
+        if (configuredNetwork != null) {
+            hostConfig.withNetworkMode(configuredNetwork);
+        }
+
+        spec.getExtraHosts().forEach((host, ip) -> hostConfig.withExtraHosts(host + ":" + ip));
+        var portBindings = toPortBindings(spec.getPorts());
+        if (!portBindings.isEmpty()) {
+            hostConfig.withPortBindings(portBindings);
+        }
+
+        var createCommand = dockerClient.createContainerCmd(spec.getImage())
+                .withName(spec.getName())
+                .withHostConfig(hostConfig)
+                .withEnv(toEnvList(spec.getEnvironment()));
+
+        if (entrypoint != null && !entrypoint.isEmpty()) {
+            createCommand.withEntrypoint(entrypoint);
+        }
+
+        if (spec.getHostname() != null && !spec.getHostname().isBlank()) {
+            createCommand.withHostName(spec.getHostname());
+        }
+        createCommand.withAliases(spec.getAliases());
+
+        var hcheck = spec.getHealthCheck();
+        if (hcheck != null) {
+            var nhcheck = new com.github.dockerjava.api.model.HealthCheck();
+            nhcheck.withTest(hcheck.test());
+            nhcheck.withInterval(Duration.ofSeconds(hcheck.interval()).toNanos());
+            nhcheck.withRetries(hcheck.retries());
+            nhcheck.withStartPeriod(Duration.ofSeconds(hcheck.startPeriod()).toNanos());
+            nhcheck.withTimeout(Duration.ofSeconds(hcheck.timeout()).toNanos());
+            createCommand.withHealthcheck(nhcheck);
+        }
+
+        return createCommand;
+    }
+
+    private void removeExistingContainerByName(String name) {
+        var expectedName = "/" + name;
+        var existing = dockerClient.listContainersCmd().withShowAll(true).exec().stream()
+                .filter(container -> container.getNames() != null
+                        && Arrays.stream(container.getNames()).anyMatch(expectedName::equals))
+                .toList();
+
+        for (var container : existing) {
+            var id = container.getId();
+            try {
+                dockerClient.removeContainerCmd(id).withForce(true).exec();
+                LOG.info("Removed stale container '{}' ({}) before init run.", name, id);
+            } catch (NotFoundException ignored) {
+                LOG.debug("Stale container '{}' ({}) already removed.", name, id);
+            }
+        }
     }
 
     @Override
@@ -272,6 +372,108 @@ public class DockerJavaService implements DockerService {
             binds.add(new Bind(entry.getKey(), new Volume(entry.getValue())));
         }
         return binds;
+    }
+
+    private static List<PortBinding> toPortBindings(Map<String, String> ports) {
+        var bindings = new ArrayList<PortBinding>();
+        for (var entry : ports.entrySet()) {
+            bindings.addAll(expandPortBinding(entry.getKey(), entry.getValue()));
+        }
+        return bindings;
+    }
+
+    private static List<PortBinding> expandPortBinding(String containerSpec, String hostSpec) {
+        var containerRange = parsePortRange(containerSpec, true);
+        var hostRange = parsePortRange(hostSpec, false);
+
+        if (!containerRange.isRange() && !hostRange.isRange()) {
+            return List.of(new PortBinding(Ports.Binding.bindPortSpec(hostSpec),
+                    new ExposedPort(containerRange.start(), containerRange.protocol())));
+        }
+
+        if (!containerRange.isRange() || !hostRange.isRange()) {
+            throw new IllegalArgumentException(
+                    "Port ranges must map range-to-range. Got container='" + containerSpec + "', host='" + hostSpec + "'.");
+        }
+
+        var containerSize = containerRange.end() - containerRange.start();
+        var hostSize = hostRange.end() - hostRange.start();
+        if (containerSize != hostSize) {
+            throw new IllegalArgumentException(
+                    "Port range sizes must match. Got container='" + containerSpec + "', host='" + hostSpec + "'.");
+        }
+
+        var expanded = new ArrayList<PortBinding>();
+        for (int offset = 0; offset <= containerSize; offset++) {
+            expanded.add(new PortBinding(
+                    Ports.Binding.bindPort(hostRange.start() + offset),
+                    new ExposedPort(containerRange.start() + offset, containerRange.protocol())));
+        }
+        return expanded;
+    }
+
+    private static ParsedPortRange parsePortRange(String spec, boolean withProtocol) {
+        if (spec == null || spec.isBlank()) {
+            throw new IllegalArgumentException("Port specification must not be blank.");
+        }
+
+        var raw = spec.trim();
+        var protocol = InternetProtocol.TCP;
+        var portSegment = raw;
+        if (raw.contains("/")) {
+            var split = raw.split("/", 2);
+            portSegment = split[0].trim();
+            var protocolToken = split.length > 1 ? split[1].trim() : "tcp";
+            protocol = parseInternetProtocol(protocolToken);
+        } else if (withProtocol) {
+            // Keep parity with previous expectations for ExposedPort-like values.
+            protocol = InternetProtocol.TCP;
+        }
+
+        if (portSegment.contains(":")) {
+            throw new IllegalArgumentException(
+                    "Port ranges with host IP binding are not supported in this format: '" + spec + "'.");
+        }
+
+        if (portSegment.contains("-")) {
+            var parts = portSegment.split("-", 2);
+            var start = parsePortNumber(parts[0], spec);
+            var end = parsePortNumber(parts[1], spec);
+            if (end < start) {
+                throw new IllegalArgumentException("Invalid port range '" + spec + "': end is less than start.");
+            }
+            return new ParsedPortRange(start, end, protocol, true);
+        }
+
+        var port = parsePortNumber(portSegment, spec);
+        return new ParsedPortRange(port, port, protocol, false);
+    }
+
+    private static int parsePortNumber(String token, String originalSpec) {
+        try {
+            var port = Integer.parseInt(token.trim());
+            if (port < 1 || port > 65535) {
+                throw new IllegalArgumentException("Port out of range in specification '" + originalSpec + "'.");
+            }
+            return port;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid port number in specification '" + originalSpec + "'.", e);
+        }
+    }
+
+    private static InternetProtocol parseInternetProtocol(String protocolToken) {
+        if (protocolToken == null || protocolToken.isBlank()) {
+            return InternetProtocol.TCP;
+        }
+        return switch (protocolToken.toLowerCase(Locale.ROOT)) {
+            case "tcp" -> InternetProtocol.TCP;
+            case "udp" -> InternetProtocol.UDP;
+            case "sctp" -> InternetProtocol.SCTP;
+            default -> throw new IllegalArgumentException("Unsupported port protocol '" + protocolToken + "'.");
+        };
+    }
+
+    private record ParsedPortRange(int start, int end, InternetProtocol protocol, boolean isRange) {
     }
 
     private static String normalizeNetworkName(String networkName) {

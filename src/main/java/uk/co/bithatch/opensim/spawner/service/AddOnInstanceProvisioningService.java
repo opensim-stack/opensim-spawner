@@ -353,6 +353,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             var plan = profileService.resolvePlan(addOnInstance, containerRequestFields);
             LOG.info("Resolved {} container spec(s) for add-on {}.", plan.containers().size(), name);
             materializeFiles(plan, addOnInstance, materializedFiles);
+			wireInitScripts(plan, addOnInstance);
 
             createdContainerIds.addAll(dockerService.createContainers(plan.containers()));
             LOG.info("Created {} container(s) for add-on {}.", createdContainerIds.size(), addOnInstance);
@@ -449,6 +450,36 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		LOG.info("Materializing add-on '{}' using manifest directory '{}'.", bot.getName(), manifestDir);
 		withManifestContext(bot.getName(), () -> materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot,  new LinkedHashMap<>())));
     }
+
+	private void wireInitScripts(ResolvedAddOnPlan plan, AddOnInstanceData addOnInstance) {
+		var containersWithInit = plan.containers().stream()
+				.filter(container -> container.getInit() != null && !container.getInit().isEmpty())
+				.toList();
+		if (containersWithInit.isEmpty()) {
+			return;
+		}
+
+		var manifestDir = properties.getAddOnsDir().resolve(addOnInstance.getName()).toAbsolutePath().normalize();
+		var initScript = manifestDir.resolve("init.sh").normalize();
+		if (!initScript.startsWith(manifestDir) || !Files.isRegularFile(initScript)) {
+			throw new IllegalStateException("Add-on '" + addOnInstance.getName()
+					+ "' defines init containers, but manifest-local init.sh was not found at " + initScript + ".");
+		}
+
+		for (var parent : containersWithInit) {
+			for (var initSpec : parent.getInit().values()) {
+				if (initSpec.getInit() != null && !initSpec.getInit().isEmpty()) {
+					throw new IllegalArgumentException("Nested init containers are not supported.");
+				}
+				initSpec.getVolumes().putIfAbsent(initScript.toString(), "/init.sh");
+			}
+		}
+
+		LOG.info("Wired init.sh '{}' into {} init container specification(s) for add-on '{}'.",
+				initScript,
+				containersWithInit.stream().mapToInt(parent -> parent.getInit().size()).sum(),
+				addOnInstance.getName());
+	}
 
 	@Override
 	protected String loadManagedFileTemplate(String name, String targetName) {
