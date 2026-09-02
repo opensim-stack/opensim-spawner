@@ -10,7 +10,8 @@
         },
         "aliases": ["%env.COMPOSE_PROJECT_NAME%-grid-services"],
         "ports" : {
-          "8002" : "%sim.port%"
+          "%sim.port%/tcp" : "%sim.port%",
+          "%cfg.firstPort%-%cfg.lastPort%/udp" : "%cfg.firstPort%-%cfg.lastPort%"
         },
         "volumes": {
           "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
@@ -35,8 +36,8 @@
         },
         "aliases": ["%env.COMPOSE_PROJECT_NAME%-grid-services"],
         "ports" : {
-          "9000/tcp" : "%sim.port%",
-          "9000/udp" : "%sim.port%"
+          "%sim.port%/tcp" : "%sim.port%",
+          "%cfg.firstPort%-%cfg.lastPort%/udp" : "%cfg.firstPort%-%cfg.lastPort%"
         },
         "volumes": {
           "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
@@ -64,9 +65,6 @@
         "name": "%env.COMPOSE_PROJECT_NAME%-grid-%sim.normalisedName%",
         "environment": {
             "CONFIG_DIR": "/config/sims/%sim.name%"
-        },
-        "ports" : {
-          "9000/udp" : "%sim.port%"
         },
         "volumes": {
           "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",

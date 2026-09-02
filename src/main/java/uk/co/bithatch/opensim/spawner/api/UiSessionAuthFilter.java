@@ -13,23 +13,19 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
-import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
-import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Component
 @Order(10)
 public class UiSessionAuthFilter extends OncePerRequestFilter {
 
     private final SpawnerProperties properties;
-    private final SimulatorProvisioningService simulatorProvisioningService;
-    private final BotProvisioningService botProvisioningService;
+    private final GridStateRepository gridStateRepository;
 
     public UiSessionAuthFilter(SpawnerProperties properties,
-            SimulatorProvisioningService simulatorProvisioningService,
-            BotProvisioningService botProvisioningService) {
+            GridStateRepository gridStateRepository) {
         this.properties = properties;
-        this.simulatorProvisioningService = simulatorProvisioningService;
-        this.botProvisioningService = botProvisioningService;
+        this.gridStateRepository = gridStateRepository;
     }
 
     @Override
@@ -62,7 +58,7 @@ public class UiSessionAuthFilter extends OncePerRequestFilter {
         if (!isGuidedProvisioningMode()) {
             return false;
         }
-        return simulatorProvisioningService.listNames().isEmpty() && botProvisioningService.listNames().isEmpty();
+        return !gridStateRepository.get().isInitialized();
     }
 
     private boolean isGuidedProvisioningMode() {

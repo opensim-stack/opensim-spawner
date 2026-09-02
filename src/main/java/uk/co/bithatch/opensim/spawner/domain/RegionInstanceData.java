@@ -9,6 +9,7 @@ public class RegionInstanceData {
 	private String uuid;
 	private String oar;
 	private String name;
+	private int port;
 
 	public String getName() {
 		return name;
@@ -64,6 +65,14 @@ public class RegionInstanceData {
 
 	public void setOar(String oar) {
 		this.oar = oar;
+	}
+
+	public int getPort() {
+		return port;
+	}
+
+	public void setPort(int port) {
+		this.port = port;
 	}
 
 }

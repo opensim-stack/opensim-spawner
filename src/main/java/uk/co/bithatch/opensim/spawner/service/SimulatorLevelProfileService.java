@@ -39,14 +39,13 @@ public class SimulatorLevelProfileService extends AbstractComponentProfileServic
         variables.put("sim.level", sim.getLevel() == null ? "" : sim.getLevel().name());
         if(sim.getRegions() != null && sim.getRegions().length > 0) {
 			var region = sim.getRegions()[0];
-			var regionX = String.valueOf(region.getX());
-			var regionY = String.valueOf(region.getY());
-			var regionUUID = region.getUuid();
-			var regionName = region.getName();
-			variables.put("region.name", regionName);
-			variables.put("region.x", regionX);
-			variables.put("region.y", regionY);
-			variables.put("region.uuid", regionUUID);
+			variables.put("region.name", region.getName());
+			variables.put("region.x", String.valueOf(region.getX()));
+			variables.put("region.y", String.valueOf(region.getY()));
+			variables.put("region.uuid", region.getUuid());
+			variables.put("region.port", String.valueOf(region.getPort()));
+			variables.put("region.width", String.valueOf(region.getWidth()));
+			variables.put("region.height", String.valueOf(region.getHeight()));
 		}
         
         return variables;

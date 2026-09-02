@@ -28,7 +28,6 @@ const prevButton = document.getElementById('wizard-prev');
 const nextButton = document.getElementById('wizard-next');
 const nextButtonLabel = document.getElementById('wizard-next-label');
 const nextButtonSpinner = document.getElementById('wizard-next-spinner');
-const skipLink = document.getElementById('wizard-skip-link');
 
 const modeDescription = document.getElementById('wizard-mode-description');
 const gridModeGroup = document.getElementById('wizard-grid-mode-group');
@@ -385,9 +384,6 @@ const renderStep = () => {
   if (prevButton) {
     prevButton.classList.toggle('hidden', currentStep === 1);
   }
-  if (skipLink) {
-    skipLink.classList.toggle('hidden', currentStep !== 1);
-  }
   if (nextButtonLabel) {
     nextButtonLabel.textContent = currentStep === STEPS.length ? 'Finish' : 'Next';
   }
@@ -395,7 +391,7 @@ const renderStep = () => {
   if (currentStep === 4) {
     updateRegionSimulatorName();
   }
-  if (currentStep === 5) {
+  if (currentStep === STEPS.length) {
     renderSummary();
   }
 };

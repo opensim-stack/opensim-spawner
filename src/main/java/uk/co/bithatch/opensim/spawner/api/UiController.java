@@ -17,7 +17,6 @@ import org.springframework.web.server.ResponseStatusException;
 import jakarta.servlet.http.HttpServletRequest;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.service.ApprovalService;
-import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.SetupWizardService;
@@ -31,7 +30,6 @@ public class UiController {
     private final SetupWizardService setupWizardService;
     private final OpenSimService openSimService;
     private final SimulatorProvisioningService simulatorProvisioningService;
-    private final BotProvisioningService botProvisioningService;
     private final GridStateRepository gridStateRepository;
 
     public UiController(SpawnerProperties properties,
@@ -39,14 +37,12 @@ public class UiController {
             SetupWizardService setupWizardService,
             OpenSimService openSimService,
             SimulatorProvisioningService simulatorProvisioningService,
-            BotProvisioningService botProvisioningService,
             GridStateRepository gridStateRepository) {
         this.properties = properties;
         this.approvalService = approvalService;
         this.setupWizardService = setupWizardService;
         this.openSimService = openSimService;
         this.simulatorProvisioningService = simulatorProvisioningService;
-        this.botProvisioningService = botProvisioningService;
         this.gridStateRepository = gridStateRepository;
     }
 
@@ -256,7 +252,7 @@ public class UiController {
         if (!isGuidedProvisioningMode()) {
             return false;
         }
-        return simulatorProvisioningService.listNames().isEmpty() && botProvisioningService.listNames().isEmpty();
+        return !gridStateRepository.get().isInitialized();
     }
 
     private boolean isGuidedProvisioningMode() {

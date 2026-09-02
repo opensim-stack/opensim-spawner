@@ -33,6 +33,7 @@ public class RestOpenSimService implements OpenSimService {
     private final SimulatorStateRepository simStateRepository;
     private final GridStateRepository gridStateRepository;
     private final Object consoleOperationLock = new Object();
+    private final PortService portService;
 
     @FunctionalInterface
     private interface ConsoleCallback<T> {
@@ -42,8 +43,10 @@ public class RestOpenSimService implements OpenSimService {
     public RestOpenSimService(
     		SpawnerProperties properties,
 			SimulatorStateRepository stateRepository,
-			GridStateRepository gridStateRepository
+			GridStateRepository gridStateRepository,
+			PortService portService
     	) {
+    	this.portService = portService;
         this.properties = properties;
         this.simStateRepository = stateRepository;
         this.gridStateRepository = gridStateRepository;
@@ -200,8 +203,7 @@ public class RestOpenSimService implements OpenSimService {
         var estateName = defaultString(request.estateName(), properties.getOpensimEstateName());
         var ownerFirst = nonBlankOrNull(request.estateOwnerFirst());
         var ownerLast = nonBlankOrNull(request.estateOwnerLast());
-        var existingRegions = showRegions(simulatorName);
-        var listenPort = nextRegionPort(simulator, existingRegions.size());
+        var listenPort = portService.nextPort(null);
 
         try {
             LOG.info("Creating region '{}' on simulator {} at {},{} in estate {}.",
@@ -214,10 +216,11 @@ public class RestOpenSimService implements OpenSimService {
                     .createRegionBuilder(regionName,
                             "0.0.0.0",
                             listenPort,
-                            "127.0.0.1",
+                            properties.getOpensimHostname(),
                             request.x(),
                             request.y(),
                             estateName)
+                    .persist(true)
                     .isPublic(request.isPublic())
                     .enableVoice(request.enableVoice());
             if (ownerFirst != null && ownerLast != null) {
@@ -410,15 +413,6 @@ public class RestOpenSimService implements OpenSimService {
         if (simulator.getLevel() == null || !simulator.getLevel().requiresRegion()) {
             throw new IllegalArgumentException("Regions are only supported for GRID and STANDALONE simulators.");
         }
-    }
-
-    private int nextRegionPort(SimulatorInstanceData simulator, int knownRegionCount) {
-        var basePort = simulator.getPort() <= 0 ? properties.getFirstPort() : simulator.getPort();
-        var candidate = basePort + Math.max(0, knownRegionCount);
-        if (candidate <= 0 || candidate > 65535) {
-            throw new IllegalArgumentException("Calculated region listen port is invalid.");
-        }
-        return candidate;
     }
 
     private static int parseCoordinate(String[] coords, int index) {

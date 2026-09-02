@@ -55,9 +55,13 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 				var regions = sim.getRegions();
 				if (regions != null && regions.length > 0 && regions[0] != null) {
 					var region = regions[0];
-					variables.put("sim.region.name", region.getName() == null ? "" : region.getName());
-					variables.put("sim.region.x", String.valueOf(region.getX()));
-					variables.put("sim.region.y", String.valueOf(region.getY()));
+					variables.put("region.name", region.getName() == null ? "" : region.getName());
+					variables.put("region.x", String.valueOf(region.getX()));
+					variables.put("region.y", String.valueOf(region.getY()));
+					variables.put("region.uuid", String.valueOf(region.getUuid()));
+					variables.put("region.port", String.valueOf(region.getPort()));
+					variables.put("region.height", String.valueOf(region.getHeight()));
+					variables.put("region.width", String.valueOf(region.getWidth()));
 				}
 			});
 		}

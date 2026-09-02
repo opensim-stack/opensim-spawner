@@ -216,6 +216,10 @@ public class SetupWizardService {
                 created.put("bot", botProvisioningService.toResponse(createdBot));
             }
 
+            var state = gridStateRepository.get();
+            state.setInitialized(true);
+            gridStateRepository.save();
+
             var response = new LinkedHashMap<String, Object>();
             response.put("ok", true);
             response.put("mode", primaryLevel.name());

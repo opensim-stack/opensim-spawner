@@ -12,6 +12,15 @@ public class GridState implements DomainObject {
 	private Map<String, String> tokens = new HashMap<>();
 	private String consoleUser;
 	private String consolePass;
+	private boolean initialized;
+
+	public boolean isInitialized() {
+		return initialized;
+	}
+
+	public void setInitialized(boolean initialized) {
+		this.initialized = initialized;
+	}
 
 	public String getConsoleUser() {
 		return consoleUser;

@@ -2,7 +2,6 @@ package uk.co.bithatch.opensim.spawner.service;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +33,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 	private final RandomPasswordService passwordService;
 	private final OpenSimService openSimService;
 	private final SimulatorLevelProfileService profileService;
+	private final PortService portService;
     
 	public SimulatorProvisioningService(
 			SimulatorStateRepository stateRepository,
@@ -43,35 +43,15 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
             RandomPasswordService passwordService,
             TemplateResolver templateResolver,
 			SpawnerProperties properties,
-            OARs oars
+            OARs oars,
+            PortService portService
 			) {
 		super(stateRepository, dockerService, templateResolver, properties);
+		this.portService = portService;
 		this.oars = oars;
 		this.openSimService = openSimService;
 		this.passwordService = passwordService;
 		this.profileService = profileService;
-	}
-
-	public int nextPort(SimulatorLevel level) {
-		if (level == SimulatorLevel.ROBUST) {
-			return properties.getOpensimRobustPublicPort();
-		}
-		else {
-			var usedPorts = new HashSet<Integer>();
-			stateRepository.list().stream()
-				.filter(sim -> sim.getLevel() == level)
-				.forEach(sim -> {
-					if (sim.getPort() != 0) {
-						usedPorts.add(sim.getPort());
-					}
-				});
-			if(!usedPorts.contains(properties.getFirstPort())) {
-				return properties.getFirstPort();
-			}
-			else {
-				return usedPorts.stream().max(Integer::compareTo).get() + 1;
-			}
-		}
 	}
 
   public boolean hasActiveGridLoginService() {
@@ -111,7 +91,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
         var level = SimulatorLevel.fromNullable(levelName);
         validateRequestedLevel(level);
 
-        var port = defaultValue(createRequestFields.get("port"), () -> String.valueOf(nextPort(level)));
+        var port = defaultValue(createRequestFields.get("port"), () -> String.valueOf(portService.nextPort(level)));
 
         var sim = new SimulatorInstanceData();
         sim.setName(name);
@@ -147,6 +127,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
             region.setUuid(defaultValue(createRequestFields.get("regionUuid"), () -> UUID.randomUUID().toString()));
             region.setX(Integer.parseInt(defaultValue(createRequestFields.get("regionX"), () -> "1000")));
             region.setY(Integer.parseInt(defaultValue(createRequestFields.get("regionY"), () -> "1000")));
+            region.setPort(sim.getPort());
             if(oar != null) {
 	            region.setWidth(oar.sx());
 	            region.setHeight(oar.sy());

@@ -39,6 +39,7 @@ public class SpawnerProperties {
 	private String opensimUserLast;
 	private String opensimProvisionMode;
 	private String opensimGridServices;
+	private String opensimHostname;
 	private Path addOnsDir;
 	private String addOnsRepository;
 	private boolean addOnsRefreshAtStartup;
@@ -46,12 +47,21 @@ public class SpawnerProperties {
 	private Path dataDir;
 	private Path workspaceDir;
 	private int firstPort;
+	private int lastPort;
 	private int opensimRegionX;
 	private int opensimRegionY;
 	private int opensimMaxBots;
 	private int opensimMaxSimulators;
 	private int opensimRobustPublicPort;
 	private int opensimRobustPrivatePort;
+
+	public String getOpensimHostname() {
+		return opensimHostname;
+	}
+
+	public void setOpensimHostname(String opensimHostname) {
+		this.opensimHostname = opensimHostname;
+	}
 
 	public Path getAddOnsDir() {
 		return addOnsDir;
@@ -301,6 +311,14 @@ public class SpawnerProperties {
 		this.token = token == null ? "" : token;
 	}
 
+	public int getLastPort() {
+		return lastPort;
+	}
+
+	public void setLastPort(int lastPort) {
+		this.lastPort = lastPort;
+	}
+
 	public int getFirstPort() {
 		return firstPort;
 	}
@@ -377,6 +395,7 @@ public class SpawnerProperties {
 		var map = new HashMap<String, String>();
 		map.put("cfg.createBotUser", String.valueOf(opensimCreateBotUser));
 		map.put("cfg.token", token);
+		map.put("cfg.token", opensimHostname);
 		map.put("cfg.metaverse2mcpImage", metaverse2mcpImage);
 		map.put("cfg.opencodeImage", opencodeImage);
 		map.put("cfg.handlerConfig", opensimHandlerConfig);
@@ -409,6 +428,7 @@ public class SpawnerProperties {
 		map.put("cfg.dataDir", dataDir.toAbsolutePath().normalize().toString());
 		map.put("cfg.workspaceDir", workspaceDir.toAbsolutePath().normalize().toString());
 		map.put("cfg.firstPort", String.valueOf(firstPort));
+		map.put("cfg.lastPort", String.valueOf(lastPort));
 		map.put("cfg.regionX", String.valueOf(opensimRegionX));
 		map.put("cfg.regionY", String.valueOf(opensimRegionY));
 		map.put("cfg.maxBots", String.valueOf(opensimMaxBots));

@@ -53,32 +53,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const shouldLaunchSetupWizard = async () => {
-    try {
-      const [simResponse, botResponse] = await Promise.all([
-        fetch('/api/simulator'),
-        fetch('/api/bot')
-      ]);
-
-      if (!simResponse.ok || !botResponse.ok) {
-        return false;
-      }
-
-      const [simulators, bots] = await Promise.all([simResponse.json(), botResponse.json()]);
-      const hasSimulators = Array.isArray(simulators) && simulators.length > 0;
-      const hasBots = Array.isArray(bots) && bots.length > 0;
-      return !hasSimulators && !hasBots;
-    } catch (_err) {
-      return false;
-    }
-  };
-
-  const resolveNextTarget = async (status) => {
+  const resolveNextTarget = (status, setup) => {
     if (status?.admin === false) {
       return '/ui/change-password.html';
     }
-    const firstRun = await shouldLaunchSetupWizard();
-    if (firstRun && !next.startsWith('/ui/setup.html')) {
+    if (setup?.guided && setup?.required && !next.startsWith('/ui/setup.html')) {
       return '/ui/setup.html';
     }
     return next;
@@ -86,7 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   fetchGridServiceStatus();
 
-  fetchSetupStatus()
+  const setupStatusPromise = fetchSetupStatus();
+
+  setupStatusPromise
     .then((setup) => {
       if (setup.guided && setup.required) {
         window.location.href = '/ui/setup.html';
@@ -100,7 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
     .then((response) => response.ok ? response.json() : { authenticated: false })
     .then(async (status) => {
       if (status && status.authenticated === true) {
-        window.location.href = await resolveNextTarget(status);
+        const setup = await setupStatusPromise;
+        window.location.href = resolveNextTarget(status, setup);
       }
     })
     .catch(() => {
@@ -130,7 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const authPayload = await response.json().catch(() => ({ admin: true }));
-      window.location.href = await resolveNextTarget(authPayload);
+      const setup = await setupStatusPromise;
+      window.location.href = resolveNextTarget(authPayload, setup);
     } catch (err) {
       errorEl.textContent = err instanceof Error ? err.message : 'Login failed.';
       errorEl.classList.remove('hidden');

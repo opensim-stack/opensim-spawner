@@ -241,6 +241,7 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
 		}
 		
     	var grid = gridStateRepository.get();
+		variables.putAll(properties.buildVariables());
 
         variables.put("grid.adminToken", grid.getAdminToken());
         variables.put("grid.name", grid.getName());
