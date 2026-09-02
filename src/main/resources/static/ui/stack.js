@@ -1,4 +1,4 @@
-import { actionIconSvg, consoleTargetForContainer, fetchWithTimeout, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
+import { actionIconSvg, consoleTargetForContainer, fetchWithTimeout, logsTargetForContainer, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
 
 const stackList = document.getElementById('stack-list');
 const stackEmpty = document.getElementById('stack-empty');
@@ -13,7 +13,8 @@ const buttonClassesByAction = {
   start: 'text-emerald-200 border-emerald-400/40 hover:bg-emerald-600/20',
   stop: 'text-amber-200 border-amber-400/40 hover:bg-amber-600/20',
   restart: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20',
-  console: 'text-neon-accent border-neon-primary/40 hover:bg-neon-primary/10'
+  console: 'text-neon-accent border-neon-primary/40 hover:bg-neon-primary/10',
+  logs: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20'
 };
 
 const actionVerb = (action) => {
@@ -111,7 +112,7 @@ const callAction = async (containerName, action) => {
 };
 
 const actionButton = (action, containerName) => {
-  const button = document.createElement(action === 'console' ? 'a' : 'button');
+  const button = document.createElement(action === 'console' || action === 'logs' ? 'a' : 'button');
   const className = buttonClassesByAction[action] || '';
   button.className = `inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors ${className}`;
   button.dataset.action = action;
@@ -122,6 +123,10 @@ const actionButton = (action, containerName) => {
   if (action === 'console') {
     button.href = `/ui/console.html?container=${encodeURIComponent(containerName)}`;
     button.target = consoleTargetForContainer(containerName);
+    button.rel = 'noopener';
+  } else if (action === 'logs') {
+    button.href = `/ui/logs.html?container=${encodeURIComponent(containerName)}`;
+    button.target = logsTargetForContainer(containerName);
     button.rel = 'noopener';
   }
 
@@ -163,6 +168,7 @@ const renderRow = (container) => {
   const stopButton = actionButton('stop', container.containerName);
   const restartButton = actionButton('restart', container.containerName);
   const consoleButton = actionButton('console', container.containerName);
+  const logsButton = actionButton('logs', container.containerName);
 
   [startButton, stopButton, restartButton].forEach((button) => {
     button.addEventListener('click', async () => {
@@ -195,6 +201,7 @@ const renderRow = (container) => {
   actions.appendChild(stopButton);
   actions.appendChild(restartButton);
   actions.appendChild(consoleButton);
+  actions.appendChild(logsButton);
 
   row.appendChild(left);
   row.appendChild(actions);

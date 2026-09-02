@@ -1,5 +1,6 @@
 import {
   buildConsoleIconLink,
+  buildLogsIconLink,
   fetchWithTimeout,
   iconSpan,
   renderContainerStatusRows,
@@ -75,7 +76,7 @@ const levelIcon = (level) => {
 };
 
 const splitBotName = (displayName) => {
-  const trimmed = (displayName || '').trim();
+  const trimmed = String(displayName || '').trim();
   if (!trimmed) {
     return { first: '', last: '' };
   }
@@ -338,6 +339,9 @@ const createCard = (status) => {
   const preferredConsoleLink = preferredConsole
     ? buildConsoleIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred console', 'text-neon-accent hover:text-neon-secondary')
     : '';
+  const preferredLogsLink = preferredConsole
+    ? buildLogsIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred logs', 'text-sky-300 hover:text-sky-200')
+    : '';
   const containerRows = renderContainerStatusRows(containers);
 
   card.innerHTML = `
@@ -348,6 +352,7 @@ const createCard = (status) => {
       </div>
       <div class="flex items-start gap-2">
         ${preferredConsoleLink}
+        ${preferredLogsLink}
         <div class="w-14 h-14 rounded-xl bg-neon-primary/20 border border-neon-primary/40 flex items-center justify-center text-neon-primary font-bold">
           ${levelIcon(level)}
         </div>
