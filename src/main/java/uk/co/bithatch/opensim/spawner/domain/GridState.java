@@ -8,7 +8,34 @@ public class GridState implements DomainObject {
 	private String adminToken;
 	private String name;
 	private String nick;
+	private String welcomeMessage;
 	private Map<String, String> tokens = new HashMap<>();
+	private String consoleUser;
+	private String consolePass;
+
+	public String getConsoleUser() {
+		return consoleUser;
+	}
+
+	public void setConsoleUser(String consoleUser) {
+		this.consoleUser = consoleUser;
+	}
+
+	public String getConsolePass() {
+		return consolePass;
+	}
+
+	public void setConsolePass(String consolePass) {
+		this.consolePass = consolePass;
+	}
+
+	public String getWelcomeMessage() {
+		return welcomeMessage;
+	}
+
+	public void setWelcomeMessage(String welcomeMessage) {
+		this.welcomeMessage = welcomeMessage;
+	}
 
 	public Map<String, String> getTokens() {
 		return tokens;

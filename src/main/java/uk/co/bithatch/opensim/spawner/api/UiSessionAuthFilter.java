@@ -12,10 +12,25 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
+import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 
 @Component
 @Order(10)
 public class UiSessionAuthFilter extends OncePerRequestFilter {
+
+    private final SpawnerProperties properties;
+    private final SimulatorProvisioningService simulatorProvisioningService;
+    private final BotProvisioningService botProvisioningService;
+
+    public UiSessionAuthFilter(SpawnerProperties properties,
+            SimulatorProvisioningService simulatorProvisioningService,
+            BotProvisioningService botProvisioningService) {
+        this.properties = properties;
+        this.simulatorProvisioningService = simulatorProvisioningService;
+        this.botProvisioningService = botProvisioningService;
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -36,7 +51,23 @@ public class UiSessionAuthFilter extends OncePerRequestFilter {
             return true;
         }
 
+        if (requiresGuidedSetup() && ("/ui/setup.html".equals(path) || "/ui/index.html".equals(path))) {
+            return true;
+        }
+
         return !path.endsWith(".html");
+    }
+
+    private boolean requiresGuidedSetup() {
+        if (!isGuidedProvisioningMode()) {
+            return false;
+        }
+        return simulatorProvisioningService.listNames().isEmpty() && botProvisioningService.listNames().isEmpty();
+    }
+
+    private boolean isGuidedProvisioningMode() {
+        var mode = properties.getOpensimProvisionMode();
+        return mode != null && "guided".equalsIgnoreCase(mode.trim());
     }
 
     @Override

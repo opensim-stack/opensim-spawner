@@ -13,6 +13,7 @@ import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Service
 public class SetupWizardService {
@@ -23,16 +24,19 @@ public class SetupWizardService {
     private final BotProvisioningService botProvisioningService;
     private final OpenSimService openSimService;
     private final RandomPasswordService passwordService;
+    private final GridStateRepository gridStateRepository;
 
     public SetupWizardService(SimulatorProvisioningService simulatorProvisioningService,
             BotProvisioningService botProvisioningService,
             OpenSimService openSimService,
             RandomPasswordService passwordService,
+            GridStateRepository gridStateRepository,
             SpawnerProperties properties) {
         this.simulatorProvisioningService = simulatorProvisioningService;
         this.botProvisioningService = botProvisioningService;
         this.openSimService = openSimService;
         this.passwordService = passwordService;
+        this.gridStateRepository = gridStateRepository;
         
         if(!properties.getOpensimProvisionMode().equalsIgnoreCase("guided")) {
         	runSetup(Map.of(
@@ -40,6 +44,13 @@ public class SetupWizardService {
 							properties.getOpensimProvisionMode().equalsIgnoreCase("standalone") 
 							? "STANDALONE" 
 							: "ROBUST",
+          "grid", Map.of(
+              "name", properties.getOpensimGridName(),
+              "nick", properties.getOpensimGridNick(),
+              "welcomeMessage", properties.getOpensimWelcomeMessage()),
+          "admin", Map.of(
+              "username", properties.getOpensimConsoleUser(),
+              "password", properties.getOpensimConsolePass()),
 					"simulator", Map.of(
 							"primaryName", properties.getOpensimGridName(),
 							"regionName", properties.getOpensimEstateName(),
@@ -65,6 +76,36 @@ public class SetupWizardService {
 
     public Map<String, Object> runSetup(Map<String, Object> payload) {
         var request = payload == null ? Map.<String, Object>of() : payload;
+
+        var grid = mapValue(request.get("grid"));
+        var admin = mapValue(request.get("admin"));
+        var existingGridState = gridStateRepository.get();
+        var configuredGridName = firstNonBlank(
+                stringValue(grid.get("name")),
+                stringValue(grid.get("gridName")),
+                existingGridState.getName());
+        var configuredGridNick = firstNonBlank(
+                stringValue(grid.get("nick")),
+                stringValue(grid.get("gridNick")),
+                existingGridState.getNick());
+        var configuredWelcomeMessage = grid.containsKey("welcomeMessage") || grid.containsKey("welcome")
+                ? firstNonBlank(stringValue(grid.get("welcomeMessage")), stringValue(grid.get("welcome")))
+                : normalize(existingGridState.getWelcomeMessage());
+        var configuredConsoleUser = firstNonBlank(
+                stringValue(admin.get("username")),
+                stringValue(admin.get("user")),
+                stringValue(grid.get("consoleUser")),
+                existingGridState.getConsoleUser());
+        var configuredConsolePassword = firstNonBlank(
+                stringValue(admin.get("password")),
+                stringValue(grid.get("consolePass")),
+                existingGridState.getConsolePass());
+
+        applyGridState(configuredGridName,
+                configuredGridNick,
+                configuredWelcomeMessage,
+                configuredConsoleUser,
+                configuredConsolePassword);
 
         var mode = normalize(requiredString(request, "mode", "Setup mode is required."));
         var simulator = mapValue(request.get("simulator"));
@@ -281,5 +322,20 @@ public class SetupWizardService {
 
     private static String normalizeNameFromSimulator(String simulatorName) {
         return normalize(simulatorName).replaceAll("\\s+", "");
+    }
+
+    private void applyGridState(String gridName,
+            String gridNick,
+            String welcomeMessage,
+            String consoleUser,
+            String consolePass) {
+        var state = gridStateRepository.get();
+        state.setName(requiredNonBlank(gridName, "Grid name is required."));
+        state.setNick(requiredNonBlank(gridNick, "Grid nick is required."));
+        // Welcome message may intentionally be cleared to blank.
+        state.setWelcomeMessage(normalize(welcomeMessage));
+        state.setConsoleUser(requiredNonBlank(consoleUser, "Administrator user is required."));
+        state.setConsolePass(requiredNonBlank(consolePass, "Administrator password is required."));
+        gridStateRepository.save();
     }
 }

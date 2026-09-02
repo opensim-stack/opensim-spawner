@@ -17,9 +17,11 @@ import org.springframework.web.server.ResponseStatusException;
 import jakarta.servlet.http.HttpServletRequest;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.service.ApprovalService;
+import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.SetupWizardService;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Controller
 public class UiController {
@@ -29,17 +31,23 @@ public class UiController {
     private final SetupWizardService setupWizardService;
     private final OpenSimService openSimService;
     private final SimulatorProvisioningService simulatorProvisioningService;
+    private final BotProvisioningService botProvisioningService;
+    private final GridStateRepository gridStateRepository;
 
     public UiController(SpawnerProperties properties,
             ApprovalService approvalService,
             SetupWizardService setupWizardService,
             OpenSimService openSimService,
-            SimulatorProvisioningService simulatorProvisioningService) {
+            SimulatorProvisioningService simulatorProvisioningService,
+            BotProvisioningService botProvisioningService,
+            GridStateRepository gridStateRepository) {
         this.properties = properties;
         this.approvalService = approvalService;
         this.setupWizardService = setupWizardService;
         this.openSimService = openSimService;
         this.simulatorProvisioningService = simulatorProvisioningService;
+        this.botProvisioningService = botProvisioningService;
+        this.gridStateRepository = gridStateRepository;
     }
 
     @GetMapping("/")
@@ -54,6 +62,9 @@ public class UiController {
 
     @GetMapping("/ui/index.html")
     public String uiIndexRedirect() {
+        if (requiresGuidedSetup()) {
+            return "redirect:/ui/setup.html";
+        }
         return "redirect:/ui/bots.html";
     }
 
@@ -83,12 +94,24 @@ public class UiController {
         return response;
     }
 
+    @GetMapping(path = "/ui/api/setup/status", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> setupStatus() {
+        var response = new LinkedHashMap<String, Object>();
+        response.put("guided", isGuidedProvisioningMode());
+        response.put("required", requiresGuidedSetup());
+        return response;
+    }
+
     @GetMapping(path = "/ui/api/config", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public Map<String, Object> uiConfig() {
+        var gridState = gridStateRepository.get();
         var response = new LinkedHashMap<String, Object>();
-        response.put("gridName", normalize(properties.getOpensimGridName()));
-        response.put("gridNick", normalize(properties.getOpensimGridNick()));
+        response.put("gridName", firstNonBlank(gridState.getName(), properties.getOpensimGridName()));
+        response.put("gridNick", firstNonBlank(gridState.getNick(), properties.getOpensimGridNick()));
+        response.put("welcomeMessage", firstNonBlank(gridState.getWelcomeMessage(), properties.getOpensimWelcomeMessage()));
+        response.put("consoleUser", normalize(gridState.getConsoleUser()));
         return response;
     }
 
@@ -97,8 +120,9 @@ public class UiController {
     public ResponseEntity<Map<String, Object>> login(@RequestParam String username,
             @RequestParam String password,
             HttpServletRequest request) {
-        var expectedUser = normalize(properties.getOpensimConsoleUser());
-        var expectedPass = normalize(properties.getOpensimConsolePass());
+        var gridState = gridStateRepository.get();
+        var expectedUser = normalize(gridState.getConsoleUser());
+        var expectedPass = normalize(gridState.getConsolePass());
         var session = request.getSession(true);
 
         if (!expectedUser.isEmpty() && !expectedPass.isEmpty()
@@ -220,11 +244,23 @@ public class UiController {
     @ResponseBody
     public Map<String, Object> runSetupWizard(@RequestBody(required = false) Map<String, Object> payload,
             HttpServletRequest request) {
-        // Setup operations are admin-only because they mutate stack and simulator state.
-        if (!UiAuthSupport.isAdmin(request.getSession(false))) {
+        // First guided setup can be run anonymously. All other setup operations require admin.
+        var allowedAnonymousFirstRun = requiresGuidedSetup();
+        if (!allowedAnonymousFirstRun && !UiAuthSupport.isAdmin(request.getSession(false))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access is required.");
         }
         return setupWizardService.runSetup(payload);
+    }
+
+    private boolean requiresGuidedSetup() {
+        if (!isGuidedProvisioningMode()) {
+            return false;
+        }
+        return simulatorProvisioningService.listNames().isEmpty() && botProvisioningService.listNames().isEmpty();
+    }
+
+    private boolean isGuidedProvisioningMode() {
+        return "guided".equalsIgnoreCase(normalize(properties.getOpensimProvisionMode()));
     }
 
     private static UserName parseUserName(String raw) {
@@ -249,6 +285,16 @@ public class UiController {
 
     private static String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (var value : values) {
+            var normalized = normalize(value);
+            if (!normalized.isBlank()) {
+                return normalized;
+            }
+        }
+        return "";
     }
 
     private static ResponseEntity<Map<String, Object>> unauthorized(String message) {

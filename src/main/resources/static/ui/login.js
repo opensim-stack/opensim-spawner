@@ -37,6 +37,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const fetchSetupStatus = async () => {
+    try {
+      const response = await fetch('/ui/api/setup/status');
+      if (!response.ok) {
+        return { guided: false, required: false };
+      }
+      const payload = await response.json();
+      return {
+        guided: !!payload?.guided,
+        required: !!payload?.required
+      };
+    } catch (_err) {
+      return { guided: false, required: false };
+    }
+  };
+
   const shouldLaunchSetupWizard = async () => {
     try {
       const [simResponse, botResponse] = await Promise.all([
@@ -69,6 +85,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   fetchGridServiceStatus();
+
+  fetchSetupStatus()
+    .then((setup) => {
+      if (setup.guided && setup.required) {
+        window.location.href = '/ui/setup.html';
+      }
+    })
+    .catch(() => {
+      // Ignore setup status errors and keep login form visible.
+    });
 
   fetch('/ui/api/auth/status')
     .then((response) => response.ok ? response.json() : { authenticated: false })

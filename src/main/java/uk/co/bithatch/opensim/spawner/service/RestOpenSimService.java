@@ -484,8 +484,9 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     private OpensimRESTConsole openConsole(SimulatorInstanceData simulator) {
-        var user = Optional.ofNullable(properties.getOpensimConsoleUser()).filter(value -> !value.isBlank());
-        var pass = Optional.ofNullable(properties.getOpensimConsolePass())
+    	var gstate = gridStateRepository.get();
+        var user = Optional.ofNullable(gstate.getConsoleUser()).filter(value -> !value.isBlank());
+        var pass = Optional.ofNullable(gstate.getConsolePass())
                 .filter(value -> !value.isBlank())
                 .map(String::toCharArray);
         

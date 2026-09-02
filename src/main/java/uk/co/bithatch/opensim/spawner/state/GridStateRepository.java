@@ -45,6 +45,7 @@ public class GridStateRepository  {
 		if (Files.exists(file)) {
 			try {
 				state = objectMapper.readValue(file.toFile(), GridState.class);
+				backfillMissingDefaults();
 			} catch (IOException e) {
 				throw new IllegalStateException("Failed to load grid state from " + file + ".", e);
 			}
@@ -54,9 +55,40 @@ public class GridStateRepository  {
 			state.setAdminToken(UUID.randomUUID().toString());
 			state.setName(properties.getOpensimGridName());
 			state.setNick(properties.getOpensimGridNick());
+			state.setWelcomeMessage(properties.getOpensimWelcomeMessage());
+			if (!isGuidedMode()) {
+				state.setConsolePass(properties.getOpensimConsolePass());
+				state.setConsoleUser(properties.getOpensimConsoleUser());
+			}
 			save();
 		}
     }
+
+	private void backfillMissingDefaults() {
+		if (isGuidedMode()) {
+			return;
+		}
+		var changed = false;
+		if (isBlank(state.getConsoleUser()) && !isBlank(properties.getOpensimConsoleUser())) {
+			state.setConsoleUser(properties.getOpensimConsoleUser().trim());
+			changed = true;
+		}
+		if (isBlank(state.getConsolePass()) && !isBlank(properties.getOpensimConsolePass())) {
+			state.setConsolePass(properties.getOpensimConsolePass().trim());
+			changed = true;
+		}
+		if (changed) {
+			save();
+		}
+	}
+
+	private static boolean isBlank(String value) {
+		return value == null || value.trim().isEmpty();
+	}
+
+	private boolean isGuidedMode() {
+		return "guided".equalsIgnoreCase(properties.getOpensimProvisionMode());
+	}
     
     public synchronized void save() {
 		try {

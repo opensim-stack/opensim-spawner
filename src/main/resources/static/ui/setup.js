@@ -5,7 +5,8 @@ const STEPS = [
   { number: 2, title: 'Bot Details' },
   { number: 3, title: 'User Details' },
   { number: 4, title: 'Region Details' },
-  { number: 5, title: 'Summary' }
+  { number: 5, title: 'Administrator User' },
+  { number: 6, title: 'Summary' }
 ];
 
 const modeDescriptions = {
@@ -32,6 +33,9 @@ const skipLink = document.getElementById('wizard-skip-link');
 const modeDescription = document.getElementById('wizard-mode-description');
 const gridModeGroup = document.getElementById('wizard-grid-mode-group');
 const simulatorName = document.getElementById('wizard-simulator-name');
+const gridName = document.getElementById('wizard-grid-name');
+const gridNick = document.getElementById('wizard-grid-nick');
+const gridWelcomeMessage = document.getElementById('wizard-grid-welcome-message');
 
 const createBotToggle = document.getElementById('wizard-create-bot');
 const botFields = document.getElementById('wizard-bot-fields');
@@ -53,6 +57,10 @@ const regionPort = document.getElementById('wizard-region-port');
 const regionX = document.getElementById('wizard-region-x');
 const regionY = document.getElementById('wizard-region-y');
 const regionOar = document.getElementById('wizard-region-oar');
+
+const adminUser = document.getElementById('wizard-admin-user');
+const adminPassword = document.getElementById('wizard-admin-password');
+const adminPasswordConfirm = document.getElementById('wizard-admin-password-confirm');
 
 const summaryContainer = document.getElementById('wizard-summary');
 
@@ -182,6 +190,11 @@ const suggestedRegionSimulatorName = () => {
 const wizardState = () => {
   const mode = selectedGridMode();
   const primaryName = String(simulatorName?.value || '').trim();
+  const gridNameValue = String(gridName?.value || '').trim();
+  const gridNickValue = String(gridNick?.value || '').trim();
+  const gridWelcomeMessageValue = String(gridWelcomeMessage?.value || '').trim();
+  const adminUserValue = String(adminUser?.value || '').trim();
+  const adminPasswordValue = String(adminPassword?.value || '');
   const createBot = !!createBotToggle?.checked;
   const regionName = String(regionSimulatorName?.value || primaryName).trim();
   const normalizedFirst = normalizeIdentityFirstName();
@@ -192,6 +205,15 @@ const wizardState = () => {
 
   return {
     mode,
+    grid: {
+      name: gridNameValue,
+      nick: gridNickValue,
+      welcomeMessage: gridWelcomeMessageValue
+    },
+    admin: {
+      username: adminUserValue,
+      password: adminPasswordValue
+    },
     simulator: {
       primaryName,
       regionName,
@@ -311,6 +333,9 @@ const renderSummary = () => {
     <div class="rounded-lg border border-neon-primary/20 bg-dark-700/30 p-4">
       <h3 class="text-lg font-semibold text-white">Grid</h3>
       <p class="mt-2 text-sm text-gray-300">Mode: ${state.mode}</p>
+      <p class="text-sm text-gray-400">Grid Name: ${formatMaybe(state.grid.name)}</p>
+      <p class="text-sm text-gray-400">Grid Nick: ${formatMaybe(state.grid.nick)}</p>
+      <p class="text-sm text-gray-400">Welcome Message: ${formatMaybe(state.grid.welcomeMessage)}</p>
       <p class="text-sm text-gray-400">Simulator Level: ${state.simulator.level}</p>
       <p class="text-sm text-gray-400">Primary Simulator: ${formatMaybe(state.simulator.primaryName)}</p>
       <p class="text-sm text-gray-400">Region Simulator: ${formatMaybe(state.simulator.regionName)}</p>
@@ -323,6 +348,12 @@ const renderSummary = () => {
       <p class="mt-2 text-sm text-gray-300">${state.user.first} ${state.user.last}</p>
       <p class="text-sm text-gray-400">Email: ${formatMaybe(state.user.email)}</p>
       <p class="text-sm text-gray-400">Bot Handler: ${state.user.botHandler ? 'Yes' : 'No'}</p>
+    </div>
+
+    <div class="rounded-lg border border-neon-primary/20 bg-dark-700/30 p-4">
+      <h3 class="text-lg font-semibold text-white">Administrator</h3>
+      <p class="mt-2 text-sm text-gray-300">User: ${formatMaybe(state.admin.username)}</p>
+      <p class="text-sm text-gray-400">Password: (hidden)</p>
     </div>
 
     <div class="rounded-lg border border-neon-primary/20 bg-dark-700/30 p-4">
@@ -378,6 +409,12 @@ const validateStep = () => {
     }
     if (!SIMULATOR_NAME_PATTERN.test(state.simulator.primaryName)) {
       return 'Primary simulator name must use letters, numbers, underscores or dashes only.';
+    }
+    if (!state.grid.name) {
+      return 'Grid name is required.';
+    }
+    if (!state.grid.nick) {
+      return 'Grid nick is required.';
     }
   }
 
@@ -441,6 +478,21 @@ const validateStep = () => {
     }
   }
 
+  if (currentStep === 5) {
+    if (!state.admin.username) {
+      return 'Administrator user is required.';
+    }
+    if (!state.admin.password) {
+      return 'Administrator password is required.';
+    }
+    if (state.admin.password.length < MIN_PASSWORD_LENGTH) {
+      return `Administrator password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+    }
+    if (state.admin.password !== String(adminPasswordConfirm?.value || '')) {
+      return 'Administrator password and confirm password must match.';
+    }
+  }
+
   return '';
 };
 
@@ -500,21 +552,38 @@ const loadOars = async () => {
   }
 };
 
-const shouldLaunchWizard = async () => {
-  const [simResponse, botResponse] = await Promise.all([
-    fetchWithTimeout('/api/simulator'),
-    fetchWithTimeout('/api/bot')
-  ]);
+const loadGridDefaults = async () => {
+  try {
+    const response = await fetchWithTimeout('/ui/api/config');
+    if (!response.ok) {
+      throw new Error(`Could not load grid defaults (${response.status}).`);
+    }
 
-  if (!simResponse.ok || !botResponse.ok) {
-    throw new Error('Failed to check existing setup resources.');
+    const config = await response.json();
+    if (gridName && !String(gridName.value || '').trim()) {
+      gridName.value = String(config?.gridName || '').trim();
+    }
+    if (gridNick && !String(gridNick.value || '').trim()) {
+      gridNick.value = String(config?.gridNick || '').trim();
+    }
+    if (gridWelcomeMessage && !String(gridWelcomeMessage.value || '').trim()) {
+      gridWelcomeMessage.value = String(config?.welcomeMessage || '').trim();
+    }
+    if (adminUser && !String(adminUser.value || '').trim()) {
+      adminUser.value = String(config?.consoleUser || '').trim() || 'Administrator';
+    }
+  } catch (err) {
+    showToast(toastContainer, err instanceof Error ? err.message : 'Could not load grid defaults.', 'error');
   }
+};
 
-  const simulators = await simResponse.json();
-  const bots = await botResponse.json();
-  const hasSimulators = Array.isArray(simulators) && simulators.length > 0;
-  const hasBots = Array.isArray(bots) && bots.length > 0;
-  return !hasSimulators && !hasBots;
+const shouldLaunchWizard = async () => {
+  const response = await fetchWithTimeout('/ui/api/setup/status');
+  if (!response.ok) {
+    throw new Error('Failed to check setup status.');
+  }
+  const payload = await response.json();
+  return !!payload?.guided && !!payload?.required;
 };
 
 const runSetupWizardStub = async (details) => {
@@ -611,6 +680,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   hideError();
   renderGridModeOptions();
   renderGenderOptions();
+  await loadGridDefaults();
   applyModeDescription();
   syncBotFieldState();
   syncNamePlaceholders();

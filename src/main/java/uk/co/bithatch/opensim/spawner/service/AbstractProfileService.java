@@ -245,6 +245,9 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
         variables.put("grid.adminToken", grid.getAdminToken());
         variables.put("grid.name", grid.getName());
         variables.put("grid.nick", grid.getNick());
+        variables.put("grid.welcomeMessage", grid.getWelcomeMessage());
+        variables.put("grid.consoleUser", grid.getConsoleUser());
+        variables.put("grid.consolePass", grid.getConsolePass());
         
     	grid.getTokens().forEach((key, value) -> variables.put("token." + key, value));    	
     	

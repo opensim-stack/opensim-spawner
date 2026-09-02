@@ -46,7 +46,7 @@
       </header>
 
       <section class="flex-1 overflow-y-auto px-6 py-6 lg:px-8 lg:py-8">
-        <div id="wizard-step-1" class="wizard-step space-y-6">
+        <div id="wizard-step-1" class="wizard-step flex min-h-[30rem] flex-col gap-6">
           <div id="wizard-grid-mode-group" class="grid grid-cols-1 gap-4 lg:grid-cols-2"></div>
 
           <p id="wizard-mode-description" class="rounded-lg border border-neon-accent/30 bg-neon-accent/10 px-4 py-3 text-gray-200"></p>
@@ -57,6 +57,28 @@
               class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
               pattern="[A-Za-z0-9_-]+"
               placeholder="MySimulator">
+          </label>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-sm text-gray-300">Grid Name</span>
+              <input id="wizard-grid-name" type="text" required
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                placeholder="My OpenSim Grid">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Grid Nick</span>
+              <input id="wizard-grid-nick" type="text" required
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+                placeholder="mygrid">
+            </label>
+          </div>
+
+          <label class="flex flex-1 flex-col">
+            <span class="text-sm text-gray-300">Welcome Message</span>
+            <textarea id="wizard-grid-welcome-message"
+              class="mt-1 w-full flex-1 rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary min-h-[12rem] resize-y"
+              placeholder="Welcome to my OpenSim grid"></textarea>
           </label>
         </div>
 
@@ -164,7 +186,34 @@
           </label>
         </div>
 
-        <div id="wizard-step-5" class="wizard-step hidden space-y-4">
+        <div id="wizard-step-5" class="wizard-step hidden space-y-5">
+          <div class="rounded-lg border border-amber-300/50 bg-amber-900/25 px-4 py-3 text-amber-100">
+            <p class="font-semibold">Administrator account</p>
+            <p class="mt-1 text-sm">This is an important account. These credentials are used for the grid services console and for web UI administrator access.</p>
+          </div>
+
+          <label class="block">
+            <span class="text-sm text-gray-300">Administrator User</span>
+            <input id="wizard-admin-user" type="text" required value="Administrator"
+              class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary"
+              placeholder="Administrator">
+          </label>
+
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label class="block">
+              <span class="text-sm text-gray-300">Administrator Password</span>
+              <input id="wizard-admin-password" required type="password" minlength="8"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Confirm Administrator Password</span>
+              <input id="wizard-admin-password-confirm" required type="password" minlength="8"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
+          </div>
+        </div>
+
+        <div id="wizard-step-6" class="wizard-step hidden space-y-4">
           <p class="text-gray-300">Review your setup choices. When you click Finish, the wizard will pass everything into a setup stub method that you can wire to real provisioning logic.</p>
           <div id="wizard-summary" class="space-y-4 rounded-xl border border-neon-primary/20 bg-dark-900/40 p-4"></div>
         </div>
