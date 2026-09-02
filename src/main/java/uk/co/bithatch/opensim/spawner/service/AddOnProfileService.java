@@ -38,7 +38,6 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 	@Override
 	public Map<String, String> buildTypeVariables(AddOnInstanceData addOnInstance, Map<String, String> variables) {
 
-		variables.putAll(properties.buildVariables());
 
 		if (addOnInstance.getLevel() == AddOnLevel.SIMULATOR) {
 			var attachedName = addOnInstance.getGridServiceSimulatorName();
