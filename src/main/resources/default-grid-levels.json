@@ -72,6 +72,9 @@
           "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
           "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
         },
+        "ports" : {
+          "%sim.port%/udp" : "%sim.port%"
+        },
         "files": {
           "/config/sims/%sim.name%/OpenSim.ini": "configuration/grid/OpenSim.ini",
           "/config/sims/%sim.name%/config-include/Grid.ini": "configuration/grid/config-include/Grid.ini",

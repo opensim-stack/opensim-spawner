@@ -395,7 +395,7 @@ public class SpawnerProperties {
 		var map = new HashMap<String, String>();
 		map.put("cfg.createBotUser", String.valueOf(opensimCreateBotUser));
 		map.put("cfg.token", token);
-		map.put("cfg.token", opensimHostname);
+		map.put("cfg.hostname", opensimHostname);
 		map.put("cfg.metaverse2mcpImage", metaverse2mcpImage);
 		map.put("cfg.opencodeImage", opencodeImage);
 		map.put("cfg.handlerConfig", opensimHandlerConfig);

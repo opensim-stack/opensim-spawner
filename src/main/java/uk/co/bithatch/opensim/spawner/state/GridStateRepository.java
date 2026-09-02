@@ -25,7 +25,17 @@ public class GridStateRepository  {
     @Autowired
     public GridStateRepository(ObjectMapper objectMapper, SpawnerProperties properties) {
     	this.properties = properties;
-    	this.file = properties.getDataDir().resolve("grids");
+    	var dataDir = properties.getDataDir();
+		var oldGridsFile = dataDir.resolve("grids");
+    	var gridsFile = dataDir.resolve("grids.json");
+    	if(Files.exists(oldGridsFile) && !Files.exists(gridsFile)) {
+    		try {
+				Files.move(oldGridsFile, gridsFile);
+			} catch (IOException e) {
+				throw new IllegalStateException("Failed to move old grids file to new grids.json file.", e);
+			}
+		}
+		this.file = gridsFile;
     	this.objectMapper = objectMapper;
     	load();
     }
