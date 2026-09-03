@@ -80,6 +80,10 @@ public class BotInstanceData extends ContainerGroupInstanceData<BotLevel> {
         return first + "-" + last;
     }
 
+    // `name` is derived, but persisted JSON can include it; keep deserialization tolerant.
+    public void setName(String ignored) {
+    }
+
 	@Override
 	public String displayName() {
 		return first + " " + last;

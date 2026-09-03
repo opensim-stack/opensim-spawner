@@ -421,12 +421,12 @@ public class SpawnerProperties {
 		map.put("cfg.userLast", opensimUserLast);
 		map.put("cfg.provisionMode", opensimProvisionMode);
 		map.put("cfg.gridServices", opensimGridServices);
-		map.put("cfg.addOnsDir", addOnsDir.toAbsolutePath().normalize().toString());
+		map.put("cfg.addOnsDir", normalizePath(addOnsDir));
 		map.put("cfg.addOnsRepository", addOnsRepository);
 		map.put("cfg.addOnsRefreshAtStartup", String.valueOf(addOnsRefreshAtStartup));
-		map.put("cfg.configDir", configDir.toAbsolutePath().normalize().toString());
-		map.put("cfg.dataDir", dataDir.toAbsolutePath().normalize().toString());
-		map.put("cfg.workspaceDir", workspaceDir.toAbsolutePath().normalize().toString());
+		map.put("cfg.configDir", normalizePath(configDir));
+		map.put("cfg.dataDir", normalizePath(dataDir));
+		map.put("cfg.workspaceDir", normalizePath(workspaceDir));
 		map.put("cfg.firstPort", String.valueOf(firstPort));
 		map.put("cfg.lastPort", String.valueOf(lastPort));
 		map.put("cfg.regionX", String.valueOf(opensimRegionX));
@@ -436,5 +436,9 @@ public class SpawnerProperties {
 		map.put("cfg.robustPublicPort", String.valueOf(opensimRobustPublicPort));	
 		map.put("cfg.robustPrivatePort", String.valueOf(opensimRobustPrivatePort));
 		return map;
+	}
+
+	private static String normalizePath(Path path) {
+		return path == null ? "" : path.toAbsolutePath().normalize().toString();
 	}
 }

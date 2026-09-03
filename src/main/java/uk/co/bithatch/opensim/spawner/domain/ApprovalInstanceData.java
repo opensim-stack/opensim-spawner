@@ -52,4 +52,8 @@ public class ApprovalInstanceData implements DomainObject {
     public String getName() {
         return first + "-" + last;
     }
+
+    // `name` is a computed view; ignore deserialization attempts for compatibility.
+    public void setName(String ignored) {
+    }
 }

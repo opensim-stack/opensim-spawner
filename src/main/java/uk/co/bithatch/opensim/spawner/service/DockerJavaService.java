@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,7 +146,7 @@ public class DockerJavaService implements DockerService {
         }
 
         spec.getExtraHosts().forEach((host, ip) -> hostConfig.withExtraHosts(host + ":" + ip));
-        var portBindings = toPortBindings(spec.getPorts());
+        var portBindings = toPortBindings(spec.getPorts(), spec.getName());
         if (!portBindings.isEmpty()) {
             hostConfig.withPortBindings(portBindings);
         }
@@ -154,6 +155,11 @@ public class DockerJavaService implements DockerService {
                 .withName(spec.getName())
                 .withHostConfig(hostConfig)
                 .withEnv(toEnvList(spec.getEnvironment()));
+
+        var exposedPorts = toExposedPorts(portBindings);
+        if (!exposedPorts.isEmpty()) {
+            createCommand.withExposedPorts(exposedPorts);
+        }
 
         if (entrypoint != null && !entrypoint.isEmpty()) {
             createCommand.withEntrypoint(entrypoint);
@@ -201,6 +207,7 @@ public class DockerJavaService implements DockerService {
         for (var id : containerIds) {
             LOG.info("Starting container {}.", id);
             dockerClient.startContainerCmd(id).exec();
+            logEffectivePortMappings(id);
             attachLogStreaming(id);
             LOG.info("Started container {}.", id);
         }
@@ -222,9 +229,63 @@ public class DockerJavaService implements DockerService {
             LOG.info("Restarting container {}.", id);
             detachLogStreaming(id);
             dockerClient.restartContainerCmd(id).exec();
+            logEffectivePortMappings(id);
             attachLogStreaming(id);
             LOG.info("Restarted container {}.", id);
         }
+    }
+
+    private void logEffectivePortMappings(String containerId) {
+        try {
+            var inspect = dockerClient.inspectContainerCmd(containerId).exec();
+            var displayName = inspect.getName() == null ? resolveContainerDisplayName(containerId)
+                    : inspect.getName().replaceFirst("^/", "");
+            var hostConfigPorts = inspect.getHostConfig() == null ? null : inspect.getHostConfig().getPortBindings();
+            var networkPorts = inspect.getNetworkSettings() == null ? null : inspect.getNetworkSettings().getPorts();
+
+            LOG.info("Container {} ({}) effective Docker port mappings - HostConfig.PortBindings: {}; NetworkSettings.Ports: {}.",
+                    displayName,
+                    containerId,
+                    formatDockerPorts(hostConfigPorts),
+                    formatDockerPorts(networkPorts));
+        } catch (RuntimeException e) {
+            LOG.warn("Unable to inspect effective Docker port mappings for container {}.", containerId, e);
+        }
+    }
+
+    private static String formatDockerPorts(Ports ports) {
+        if (ports == null || ports.getBindings() == null || ports.getBindings().isEmpty()) {
+            return "<none>";
+        }
+
+        return ports.getBindings().entrySet().stream()
+                .sorted((left, right) -> left.getKey().toString().compareTo(right.getKey().toString()))
+                .map(entry -> {
+                    var bindings = entry.getValue();
+                    if (bindings == null || bindings.length == 0) {
+                        return entry.getKey() + "=[]";
+                    }
+                    var rendered = Arrays.stream(bindings)
+                            .map(DockerJavaService::formatPortBinding)
+                            .collect(Collectors.joining(","));
+                    return entry.getKey() + "=[" + rendered + "]";
+                })
+                .collect(Collectors.joining("; "));
+    }
+
+    private static String formatPortBinding(Ports.Binding binding) {
+        if (binding == null) {
+            return "<null>";
+        }
+        var hostIp = binding.getHostIp();
+        var hostPort = binding.getHostPortSpec();
+        if (hostPort == null || hostPort.isBlank()) {
+            hostPort = "<none>";
+        }
+        if (hostIp == null || hostIp.isBlank()) {
+            return hostPort;
+        }
+        return hostIp + ":" + hostPort;
     }
 
     @Override
@@ -374,12 +435,85 @@ public class DockerJavaService implements DockerService {
         return binds;
     }
 
-    private static List<PortBinding> toPortBindings(Map<String, String> ports) {
+    private static List<PortBinding> toPortBindings(Map<String, String> ports, String containerName) {
+        if (ports == null || ports.isEmpty()) {
+            LOG.info("Container {} has no configured port mappings.", displayContainerName(containerName));
+            return List.of();
+        }
+
+        LOG.info("Container {} requested {} port mapping definition(s): {}",
+                displayContainerName(containerName),
+                ports.size(),
+                ports);
+
         var bindings = new ArrayList<PortBinding>();
         for (var entry : ports.entrySet()) {
-            bindings.addAll(expandPortBinding(entry.getKey(), entry.getValue()));
+            var containerSpec = entry.getKey();
+            var hostSpec = entry.getValue();
+
+            var expanded = expandPortBinding(containerSpec, hostSpec);
+            bindings.addAll(expanded);
+
+            logPortExpansion(containerName, containerSpec, hostSpec, expanded.size());
         }
+
+        LOG.info("Container {} resolved {} concrete Docker port binding(s): {}",
+                displayContainerName(containerName),
+                bindings.size(),
+                bindings.stream().map(String::valueOf).collect(Collectors.joining(", ")));
+
+        if (LOG.isDebugEnabled()) {
+            // Debug dump to aid diagnosis when only the start of a range appears to bind remotely.
+            for (var binding : bindings) {
+                LOG.debug("Container {} concrete binding: {}",
+                        displayContainerName(containerName),
+                        String.valueOf(binding));
+            }
+        }
+
         return bindings;
+    }
+
+    private static List<ExposedPort> toExposedPorts(List<PortBinding> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return List.of();
+        }
+        var exposed = new ArrayList<ExposedPort>();
+        for (var binding : bindings) {
+            if (binding == null || binding.getExposedPort() == null) {
+                continue;
+            }
+            var port = binding.getExposedPort();
+            if (!exposed.contains(port)) {
+                exposed.add(port);
+            }
+        }
+        return exposed;
+    }
+
+    private static void logPortExpansion(String containerName, String containerSpec, String hostSpec, int expandedCount) {
+        var containerRange = parsePortRange(containerSpec, true);
+        var hostRange = parsePortRange(hostSpec, false);
+        if (containerRange.isRange() && hostRange.isRange()) {
+            LOG.info("Container {} range mapping {}-{}{} -> {}-{} expanded to {} binding(s).",
+                    displayContainerName(containerName),
+                    containerRange.start(),
+                    containerRange.end(),
+                    "/" + containerRange.protocol().name().toLowerCase(Locale.ROOT),
+                    hostRange.start(),
+                    hostRange.end(),
+                    expandedCount);
+        } else {
+            LOG.info("Container {} single port mapping {} -> {} expanded to {} binding(s).",
+                    displayContainerName(containerName),
+                    containerSpec,
+                    hostSpec,
+                    expandedCount);
+        }
+    }
+
+    private static String displayContainerName(String containerName) {
+        return containerName == null || containerName.isBlank() ? "<unnamed>" : containerName;
     }
 
     private static List<PortBinding> expandPortBinding(String containerSpec, String hostSpec) {
