@@ -46,6 +46,11 @@
             <version>${docker-java.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.sshtools</groupId>
+            <artifactId>jini-lib</artifactId>
+            <version>0.6.7</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

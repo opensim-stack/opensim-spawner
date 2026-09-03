@@ -34,6 +34,7 @@ public class RestOpenSimService implements OpenSimService {
     private final GridStateRepository gridStateRepository;
     private final Object consoleOperationLock = new Object();
     private final PortService portService;
+    private final SimulatorRegionSyncService simulatorRegionSyncService;
 
     @FunctionalInterface
     private interface ConsoleCallback<T> {
@@ -44,9 +45,11 @@ public class RestOpenSimService implements OpenSimService {
     		SpawnerProperties properties,
 			SimulatorStateRepository stateRepository,
 			GridStateRepository gridStateRepository,
-			PortService portService
+			PortService portService,
+			SimulatorRegionSyncService simulatorRegionSyncService
     	) {
     	this.portService = portService;
+        this.simulatorRegionSyncService = simulatorRegionSyncService;
         this.properties = properties;
         this.simStateRepository = stateRepository;
         this.gridStateRepository = gridStateRepository;
@@ -228,6 +231,7 @@ public class RestOpenSimService implements OpenSimService {
             }
 
             var created = openRemoteAdmin(simulator).createRegion(builder.build());
+            simulatorRegionSyncService.synchronizeSimulator(simulator.getName());
             var refreshed = showRegions(simulatorName);
             return refreshed.stream()
                     .filter(region -> region.id().equalsIgnoreCase(created.regionUuid()))
