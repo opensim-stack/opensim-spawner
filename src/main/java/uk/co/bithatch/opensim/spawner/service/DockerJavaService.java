@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,16 +62,17 @@ public class DockerJavaService implements DockerService {
 
     @Override
     public List<String> createContainers(Collection<ContainerSpec> specs) {
-        var ids = new ArrayList<String>();
+        var containerRefs = new ArrayList<String>();
         for (var spec : specs) {
             LOG.info("Creating container {}.", spec);
 
             runInitContainers(spec);
             CreateContainerResponse response = createContainerCommand(spec, properties.getOpensimRestartPolicy(), null).exec();
-            ids.add(response.getId());
+            var stableReference = spec.getName() == null || spec.getName().isBlank() ? response.getId() : spec.getName();
+            containerRefs.add(stableReference);
             LOG.info("Created container {} with id {}.", spec.getName(), response.getId());
         }
-        return ids;
+        return containerRefs;
     }
 
     private void runInitContainers(ContainerSpec parentSpec) {
@@ -203,35 +205,50 @@ public class DockerJavaService implements DockerService {
     }
 
     @Override
-    public void startContainers(List<String> containerIds) {
-        for (var id : containerIds) {
-            LOG.info("Starting container {}.", id);
+    public void startContainers(List<String> containerRefs) {
+        var idsByName = indexContainerIdsByName();
+        for (var ref : containerRefs) {
+            var id = resolveContainerId(ref, idsByName);
+            if (id == null) {
+                throw new NotFoundException("Container not found: " + ref);
+            }
+            LOG.info("Starting container {} (resolved id={}).", ref, id);
             dockerClient.startContainerCmd(id).exec();
             logEffectivePortMappings(id);
             attachLogStreaming(id);
-            LOG.info("Started container {}.", id);
+            LOG.info("Started container {}.", ref);
         }
     }
 
     @Override
-    public void stopContainers(List<String> containerIds) {
-        for (var id : containerIds) {
-            LOG.info("Stopping container {}.", id);
+    public void stopContainers(List<String> containerRefs) {
+        var idsByName = indexContainerIdsByName();
+        for (var ref : containerRefs) {
+            var id = resolveContainerId(ref, idsByName);
+            if (id == null) {
+                throw new NotFoundException("Container not found: " + ref);
+            }
+            LOG.info("Stopping container {} (resolved id={}).", ref, id);
             detachLogStreaming(id);
             dockerClient.stopContainerCmd(id).exec();
-            LOG.info("Stopped container {}.", id);
+            LOG.info("Stopped container {}.", ref);
         }
     }
 
     @Override
-    public void restartContainers(List<String> containerIds) {
-        for (var id : containerIds) {
-            LOG.info("Restarting container {}.", id);
+    public void restartContainers(List<String> containerRefs) {
+        var idsByName = indexContainerIdsByName();
+        for (var ref : containerRefs) {
+            var id = resolveContainerId(ref, idsByName);
+            if (id == null) {
+                throw new NotFoundException("Container not found: " + ref);
+            }
+            LOG.info("Restarting container {} (resolved id={}).", ref, id);
             detachLogStreaming(id);
             dockerClient.restartContainerCmd(id).exec();
             logEffectivePortMappings(id);
             attachLogStreaming(id);
-            LOG.info("Restarted container {}.", id);
+            LOG.info("Restarted container {}.", ref);
         }
     }
 
@@ -289,53 +306,114 @@ public class DockerJavaService implements DockerService {
     }
 
     @Override
-    public void attachContainerLogs(List<String> containerIds) {
-        for (var id : containerIds) {
+    public void attachContainerLogs(List<String> containerRefs) {
+        var idsByName = indexContainerIdsByName();
+        for (var ref : containerRefs) {
+            var id = resolveContainerId(ref, idsByName);
+            if (id == null) {
+                LOG.warn("Container {} not found while attaching logs.", ref);
+                continue;
+            }
             attachLogStreaming(id);
         }
     }
 
     @Override
-    public List<ContainerStatus> getContainerStatuses(List<String> containerIds) {
+    public List<ContainerStatus> getContainerStatuses(List<String> containerRefs) {
         var statuses = new ArrayList<ContainerStatus>();
-        for (var id : containerIds) {
+        var idsByName = indexContainerIdsByName();
+        for (var ref : containerRefs) {
+            var id = resolveContainerId(ref, idsByName);
+            if (id == null) {
+                LOG.warn("Container {} not found while fetching status.", ref);
+                statuses.add(new ContainerStatus(ref, "missing", false, ""));
+                continue;
+            }
             try {
                 var inspect = dockerClient.inspectContainerCmd(id).exec();
                 var state = inspect.getState();
                 var name = inspect.getName() == null ? "" : inspect.getName().replaceFirst("^/", "");
-                LOG.info("Container status {} ({}): {}.", name, id, state == null ? "unknown" : String.valueOf(state.getStatus()));
-                statuses.add(new ContainerStatus(
+                LOG.info("Container status {} (ref={}, id={}): {}.",
+                        name,
+                        ref,
                         id,
+                        state == null ? "unknown" : String.valueOf(state.getStatus()));
+                statuses.add(new ContainerStatus(
+                        ref,
                         state == null ? "unknown" : String.valueOf(state.getStatus()),
                         state != null && Boolean.TRUE.equals(state.getRunning()),
                         name));
             } catch (NotFoundException e) {
-                LOG.warn("Container {} not found while fetching status.", id);
-                statuses.add(new ContainerStatus(id, "missing", false, ""));
+                LOG.warn("Container {} (resolved id={}) not found while fetching status.", ref, id);
+                statuses.add(new ContainerStatus(ref, "missing", false, ""));
             } catch (RuntimeException e) {
-                LOG.error("Failed to inspect container {}.", id, e);
-                throw new ExternalDependencyException("Failed to inspect Docker container " + id + ". " + e.getMessage(), e);
+                LOG.error("Failed to inspect container {} (resolved id={}).", ref, id, e);
+                throw new ExternalDependencyException("Failed to inspect Docker container " + ref + ". " + e.getMessage(), e);
             }
         }
         return statuses;
     }
 
     @Override
-    public void removeContainers(List<String> containerIds) {
-        for (var id : containerIds) {
+    public void removeContainers(List<String> containerRefs) {
+        var idsByName = indexContainerIdsByName();
+        for (var ref : containerRefs) {
+            var id = resolveContainerId(ref, idsByName);
+            if (id == null) {
+                LOG.warn("Container {} already removed.", ref);
+                continue;
+            }
             try {
-                LOG.info("Removing container {} (force=true, removeVolumes=true).", id);
+                LOG.info("Removing container {} (resolved id={}, force=true, removeVolumes=true).", ref, id);
                 detachLogStreaming(id);
                 dockerClient.removeContainerCmd(id).withForce(true).withRemoveVolumes(true).exec();
-                LOG.info("Removed container {}.", id);
+                LOG.info("Removed container {}.", ref);
             } catch (NotFoundException ignored) {
-                LOG.warn("Container {} already removed.", id);
+                LOG.warn("Container {} already removed.", ref);
                 // Rollback is best effort; already removed containers are acceptable.
             } catch (RuntimeException e) {
-                LOG.error("Failed to remove container {}.", id, e);
+                LOG.error("Failed to remove container {} (resolved id={}).", ref, id, e);
                 throw e;
             }
         }
+    }
+
+    private Map<String, String> indexContainerIdsByName() {
+        var idsByName = new LinkedHashMap<String, String>();
+        for (var container : dockerClient.listContainersCmd().withShowAll(true).exec()) {
+            var id = container == null ? null : container.getId();
+            var names = container == null ? null : container.getNames();
+            if (id == null || names == null) {
+                continue;
+            }
+            for (var rawName : names) {
+                var name = normalizeContainerName(rawName);
+                if (name != null) {
+                    idsByName.put(name, id);
+                }
+            }
+        }
+        return idsByName;
+    }
+
+    private String resolveContainerId(String containerRef, Map<String, String> idsByName) {
+        if (containerRef == null || containerRef.isBlank()) {
+            return null;
+        }
+
+        try {
+            return dockerClient.inspectContainerCmd(containerRef).exec().getId();
+        } catch (NotFoundException ignored) {
+            var normalized = normalizeContainerName(containerRef);
+            return normalized == null ? null : idsByName.get(normalized);
+        }
+    }
+
+    private static String normalizeContainerName(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return null;
+        }
+        return rawName.startsWith("/") ? rawName.substring(1) : rawName;
     }
 
     @Override

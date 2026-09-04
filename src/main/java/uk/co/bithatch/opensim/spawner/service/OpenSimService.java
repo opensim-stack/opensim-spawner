@@ -1,6 +1,10 @@
 package uk.co.bithatch.opensim.spawner.service;
 
 import java.util.Map;
+import java.util.Optional;
+
+import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
+
 import java.util.List;
 
 public interface OpenSimService {
@@ -46,4 +50,8 @@ public interface OpenSimService {
     List<EstateData> showEstates(String simulatorName);
 
     RegionData createRegion(String simulatorName, CreateRegionData request);
+
+	Optional<AgentLocation> findAgentByName(String first, String last);
+
+	Optional<AgentLocation> findAgentByUuid(String uuid);
 }

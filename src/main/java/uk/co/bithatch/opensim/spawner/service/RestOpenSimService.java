@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import uk.co.bithatch.opensim.jlib.OpensimRESTConsole;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient;
+import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
@@ -149,6 +151,36 @@ public class RestOpenSimService implements OpenSimService {
             throw new ExternalDependencyException("Failed to reset OpenSimulator password via REST console. " + e.getMessage(), e);
         }
     }
+
+    @Override
+    public Optional<AgentLocation> findAgentByName(String first, String last) {
+		try {
+			LOG.info("Looking up OpenSim agent {} {}.", first, last);
+			var admin= openRemoteAdmin();
+			return admin.findAgent(
+					first + " " + last, 
+					null, 
+					simStateRepository.list().stream().flatMap(s -> Arrays.asList(s.getRegions()).stream()).
+						collect(Collectors.toMap(r -> r.getName(), r -> r.getUuid())));
+		} catch (RuntimeException e) {
+			throw new ExternalDependencyException("Failed to query OpenSimulator agent via REST console. " + e.getMessage(), e);
+		}
+	}
+
+    @Override
+    public Optional<AgentLocation> findAgentByUuid(String uuid) {
+		try {
+			LOG.info("Looking up OpenSim agent {}.", uuid);
+			var admin= openRemoteAdmin();
+			return admin.findAgent(
+					null, 
+					uuid, 
+					simStateRepository.list().stream().flatMap(s -> Arrays.asList(s.getRegions()).stream()).
+						collect(Collectors.toMap(r -> r.getName(), r -> r.getUuid())));
+		} catch (RuntimeException e) {
+			throw new ExternalDependencyException("Failed to query OpenSimulator agent via REST console. " + e.getMessage(), e);
+		}
+	}
 
     @Override
     public boolean authenticate(String first, String last, char[] password) {
