@@ -157,6 +157,8 @@ public class SimulatorController {
             @RequestParam String estateName,
             @RequestParam(defaultValue = "true") boolean isPublic,
             @RequestParam(defaultValue = "true") boolean enableVoice,
+            @RequestParam(required = false) Integer regionPort,
+            @RequestParam(required = false) String regionOar,
             @RequestParam(required = false) String estateOwnerFirst,
             @RequestParam(required = false) String estateOwnerLast) {
         if (!provisioningService.exists(name)) {
@@ -170,6 +172,8 @@ public class SimulatorController {
                             isPublic,
                             enableVoice,
                             estateName,
+                            regionPort,
+                            regionOar,
                             estateOwnerFirst,
                             estateOwnerLast));
         } catch (IllegalArgumentException e) {

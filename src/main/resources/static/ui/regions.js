@@ -16,7 +16,12 @@ const detailName = document.getElementById('detail-name');
 const detailId = document.getElementById('detail-id');
 const detailPosition = document.getElementById('detail-position');
 const detailSize = document.getElementById('detail-size');
+const detailPort = document.getElementById('detail-port');
 const detailFlags = document.getElementById('detail-flags');
+const regionOptionsForm = document.getElementById('region-options-form');
+const detailOptionPublic = document.getElementById('detail-option-public');
+const detailOptionVoice = document.getElementById('detail-option-voice');
+const saveRegionOptionsButton = document.getElementById('save-region-options');
 const toastContainer = document.getElementById('toast-container');
 
 const addRegionModal = document.getElementById('add-region-modal');
@@ -28,6 +33,9 @@ const addRegionXInput = document.getElementById('add-region-x');
 const addRegionYInput = document.getElementById('add-region-y');
 const addRegionPublicInput = document.getElementById('add-region-public');
 const addRegionVoiceInput = document.getElementById('add-region-voice');
+const addRegionNextFreePortInput = document.getElementById('add-region-next-free-port');
+const addRegionPortInput = document.getElementById('add-region-port');
+const addRegionOarSelect = document.getElementById('add-region-oar');
 const addRegionEstateSelect = document.getElementById('add-region-estate');
 const addEstateOwnerFields = document.getElementById('add-estate-owner-fields');
 const addEstateOwnerFirstInput = document.getElementById('add-estate-owner-first');
@@ -46,6 +54,7 @@ let simulatorName = '';
 let simulatorStatus = null;
 let regions = [];
 let estates = [];
+let oars = [];
 let selectedRegionId = '';
 let refreshInFlight = null;
 
@@ -104,8 +113,37 @@ const setSelectedRegion = (region) => {
   renderGrid();
 };
 
+const hasRegionFlag = (region, flagName) => {
+  const needle = String(flagName || '').trim().toLowerCase();
+  if (!needle) {
+    return false;
+  }
+  const flags = Array.isArray(region?.flags) ? region.flags : [];
+  return flags.some((flag) => String(flag || '').trim().toLowerCase() === needle);
+};
+
+const inferRegionPublic = (region) => {
+  if (hasRegionFlag(region, 'private')) {
+    return false;
+  }
+  if (hasRegionFlag(region, 'public')) {
+    return true;
+  }
+  return true;
+};
+
+const inferRegionVoice = (region) => {
+  if (hasRegionFlag(region, 'novoice') || hasRegionFlag(region, 'novoicechat') || hasRegionFlag(region, 'voiceoff')) {
+    return false;
+  }
+  if (hasRegionFlag(region, 'voice') || hasRegionFlag(region, 'enablevoice')) {
+    return true;
+  }
+  return true;
+};
+
 const renderDetails = (region) => {
-  if (!detailsPanel || !detailsEmpty || !detailName || !detailId || !detailPosition || !detailSize || !detailFlags) {
+  if (!detailsPanel || !detailsEmpty || !detailName || !detailId || !detailPosition || !detailSize || !detailPort || !detailFlags || !detailOptionPublic || !detailOptionVoice) {
     return;
   }
 
@@ -121,6 +159,10 @@ const renderDetails = (region) => {
   detailId.textContent = String(region.id || '');
   detailPosition.textContent = String(region.position || `${region.x},${region.y}`);
   detailSize.textContent = String(region.size || 'Unknown');
+  const regionPort = Number(region?.port);
+  detailPort.textContent = Number.isFinite(regionPort) && regionPort > 0 ? String(regionPort) : 'Unknown';
+  detailOptionPublic.checked = inferRegionPublic(region);
+  detailOptionVoice.checked = inferRegionVoice(region);
 
   const flags = Array.isArray(region.flags) ? region.flags : [];
   detailFlags.innerHTML = '';
@@ -153,26 +195,33 @@ const createRegionCell = (region) => {
   }
 
   const worldMapUrl = buildWorldMapUrl(region);
+  const port = Number(region?.port);
+  const shortPort = Number.isFinite(port) && port > 0 ? String(port) : 'n/a';
   button.innerHTML = worldMapUrl
     ? `<img src="${worldMapUrl}" alt="World map for ${region.name}" loading="lazy" class="h-full w-full object-cover bg-dark-900/50">
        <div class="absolute top-0 left-0 right-0 bg-black/55 text-xs px-2 py-1 text-gray-100 truncate">${region.name}</div>
-       <div class="absolute bottom-0 left-0 right-0 bg-black/55 text-xs px-2 py-1 text-gray-100 truncate">${region.position || `${region.x},${region.y}`}</div>`
+       <div class="absolute bottom-0 left-0 right-0 bg-black/55 text-xs px-2 py-1 text-gray-100 truncate">${region.position || `${region.x},${region.y}`}</div>
+       <div class="absolute bottom-1 right-1 rounded bg-neon-accent/90 px-1.5 py-0.5 text-[10px] font-semibold text-dark-900">:${shortPort}</div>`
     : `<div class="h-full w-full bg-dark-900/70 text-gray-300 flex items-center justify-center text-sm text-center px-3">Map unavailable</div>
        <div class="absolute top-0 left-0 right-0 bg-black/55 text-xs px-2 py-1 text-gray-100 truncate">${region.name}</div>
-       <div class="absolute bottom-0 left-0 right-0 bg-black/55 text-xs px-2 py-1 text-gray-100 truncate">${region.position || `${region.x},${region.y}`}</div>`;
+       <div class="absolute bottom-0 left-0 right-0 bg-black/55 text-xs px-2 py-1 text-gray-100 truncate">${region.position || `${region.x},${region.y}`}</div>
+       <div class="absolute bottom-1 right-1 rounded bg-neon-accent/90 px-1.5 py-0.5 text-[10px] font-semibold text-dark-900">:${shortPort}</div>`;
 
   button.addEventListener('click', () => setSelectedRegion(region));
   return button;
 };
 
 const openAddRegionDialog = () => {
-  if (!addRegionModal || !addRegionForm || !addRegionNameInput || !addRegionXInput || !addRegionYInput || !addRegionPublicInput || !addRegionVoiceInput || !addRegionError) {
+  if (!addRegionModal || !addRegionForm || !addRegionNameInput || !addRegionXInput || !addRegionYInput || !addRegionPublicInput || !addRegionVoiceInput || !addRegionNextFreePortInput || !addRegionPortInput || !addRegionError) {
     return;
   }
 
   addRegionForm.reset();
   addRegionPublicInput.checked = true;
   addRegionVoiceInput.checked = true;
+  addRegionNextFreePortInput.checked = true;
+  addRegionPortInput.value = '';
+  addRegionPortInput.disabled = true;
   addRegionError.classList.add('hidden');
   addRegionError.textContent = '';
 
@@ -181,10 +230,22 @@ const openAddRegionDialog = () => {
   addRegionYInput.value = String(suggested.y);
 
   populateEstateOptions();
+  populateOarOptions();
   syncEstateOwnerFields();
 
   addRegionModal.classList.remove('hidden');
   addRegionNameInput.focus();
+};
+
+const syncRegionPortField = () => {
+  if (!addRegionPortInput || !addRegionNextFreePortInput) {
+    return;
+  }
+  const useNext = !!addRegionNextFreePortInput.checked;
+  addRegionPortInput.disabled = useNext;
+  if (useNext) {
+    addRegionPortInput.value = '';
+  }
 };
 
 const closeAddRegionDialog = () => {
@@ -244,6 +305,7 @@ const loadSimulatorStatus = async () => {
 const loadRegionData = async () => {
   const regionsResponse = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(simulatorName)}/regions`);
   const estatesResponse = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(simulatorName)}/estates`);
+  const oarsResponse = await fetchWithTimeout('/api/simulator/oars');
 
   if (!regionsResponse.ok) {
     const body = await regionsResponse.text();
@@ -253,17 +315,45 @@ const loadRegionData = async () => {
     const body = await estatesResponse.text();
     throw new Error(body || `Could not load estates (${estatesResponse.status}).`);
   }
+  if (!oarsResponse.ok) {
+    const body = await oarsResponse.text();
+    throw new Error(body || `Could not load appearances (${oarsResponse.status}).`);
+  }
 
   const loadedRegions = await regionsResponse.json();
   const loadedEstates = await estatesResponse.json();
+  const loadedOars = await oarsResponse.json();
 
   regions = Array.isArray(loadedRegions)
     ? loadedRegions.slice().sort((a, b) => Number(a?.x || 0) - Number(b?.x || 0) || Number(a?.y || 0) - Number(b?.y || 0))
     : [];
   estates = Array.isArray(loadedEstates) ? loadedEstates : [];
+  oars = Array.isArray(loadedOars) ? loadedOars : [];
 
   renderGrid();
   resolveSelectedRegion();
+};
+
+const populateOarOptions = () => {
+  if (!addRegionOarSelect) {
+    return;
+  }
+  addRegionOarSelect.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = 'None';
+  addRegionOarSelect.appendChild(none);
+
+  oars.forEach((entry) => {
+    const key = String(entry?.key || '').trim();
+    if (!key) {
+      return;
+    }
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = String(entry?.name || key);
+    addRegionOarSelect.appendChild(option);
+  });
 };
 
 const populateEstateOptions = () => {
@@ -367,7 +457,7 @@ const loadPage = async () => {
 
 const submitCreateRegion = async (event) => {
   event.preventDefault();
-  if (!addRegionNameInput || !addRegionXInput || !addRegionYInput || !addRegionEstateSelect || !addEstateOwnerFirstInput || !addEstateOwnerLastInput || !addRegionPublicInput || !addRegionVoiceInput || !addRegionError || !submitAddRegionButton) {
+  if (!addRegionNameInput || !addRegionXInput || !addRegionYInput || !addRegionEstateSelect || !addEstateOwnerFirstInput || !addEstateOwnerLastInput || !addRegionPublicInput || !addRegionVoiceInput || !addRegionNextFreePortInput || !addRegionPortInput || !addRegionOarSelect || !addRegionError || !submitAddRegionButton) {
     return;
   }
 
@@ -375,6 +465,8 @@ const submitCreateRegion = async (event) => {
   const regionX = addRegionXInput.value.trim();
   const regionY = addRegionYInput.value.trim();
   const estateSelection = addRegionEstateSelect.value;
+  const regionPort = addRegionPortInput.value.trim();
+  const regionOar = addRegionOarSelect.value.trim();
   const ownerFirst = addEstateOwnerFirstInput.value.trim();
   const ownerLast = addEstateOwnerLastInput.value.trim();
 
@@ -387,6 +479,19 @@ const submitCreateRegion = async (event) => {
     addRegionError.textContent = 'X and Y must be valid numbers.';
     addRegionError.classList.remove('hidden');
     return;
+  }
+  if (!addRegionNextFreePortInput.checked) {
+    if (!regionPort || !Number.isInteger(Number(regionPort))) {
+      addRegionError.textContent = 'Port must be a whole number when Next Free Port is disabled.';
+      addRegionError.classList.remove('hidden');
+      return;
+    }
+    const numericPort = Number(regionPort);
+    if (numericPort < 1 || numericPort > 65535) {
+      addRegionError.textContent = 'Port must be between 1 and 65535.';
+      addRegionError.classList.remove('hidden');
+      return;
+    }
   }
   if (!estateSelection) {
     addRegionError.textContent = 'Estate name is required.';
@@ -411,6 +516,12 @@ const submitCreateRegion = async (event) => {
   payload.set('estateName', estateName);
   payload.set('isPublic', addRegionPublicInput.checked ? 'true' : 'false');
   payload.set('enableVoice', addRegionVoiceInput.checked ? 'true' : 'false');
+  if (!addRegionNextFreePortInput.checked && regionPort) {
+    payload.set('regionPort', regionPort);
+  }
+  if (regionOar) {
+    payload.set('regionOar', regionOar);
+  }
   if (isNewEstate) {
     payload.set('estateOwnerFirst', ownerFirst);
     payload.set('estateOwnerLast', ownerLast);
@@ -468,7 +579,138 @@ const submitCreateRegion = async (event) => {
   }
 };
 
+const callRegionOptionsUpdate = async (regionId, isPublic, enableVoice) => {
+  const payload = new URLSearchParams();
+  payload.set('isPublic', isPublic ? 'true' : 'false');
+  payload.set('enableVoice', enableVoice ? 'true' : 'false');
+  const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(simulatorName)}/regions/${encodeURIComponent(regionId)}/options`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload.toString()
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Failed to save options (${response.status}).`);
+  }
+};
+
+const callRegionAction = async (regionId, action) => {
+  const payload = new URLSearchParams();
+  payload.set('action', action);
+  const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(simulatorName)}/regions/${encodeURIComponent(regionId)}/actions`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload.toString()
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Action '${action}' failed (${response.status}).`);
+  }
+};
+
+const actionLabel = (action) => {
+  switch (action) {
+    case 'restart':
+      return 'Restart';
+    case 'shutdown':
+      return 'Shutdown';
+    case 'close':
+      return 'Close';
+    case 'delete':
+      return 'Delete';
+    default:
+      return action;
+  }
+};
+
+const actionIcon = (action) => {
+  switch (action) {
+    case 'close':
+      return 'stop';
+    default:
+      return action;
+  }
+};
+
+const syncActionButtonIcons = () => {
+  document.querySelectorAll('button[data-region-action]').forEach((button) => {
+    const action = String(button.getAttribute('data-region-action') || '').toLowerCase();
+    if (!action) {
+      return;
+    }
+    button.innerHTML = `${iconSpan(actionIcon(action), 'h-4 w-4 inline-block align-middle shrink-0')}<span>${actionLabel(action)}</span>`;
+  });
+};
+
+const submitRegionOptions = async (event) => {
+  event.preventDefault();
+  const selected = regions.find((region) => String(region?.id || '') === selectedRegionId);
+  if (!selected || !detailOptionPublic || !detailOptionVoice || !saveRegionOptionsButton) {
+    return;
+  }
+
+  saveRegionOptionsButton.disabled = true;
+  try {
+    await withWorkingOverlay(async () => {
+      await callRegionOptionsUpdate(selected.id, detailOptionPublic.checked, detailOptionVoice.checked);
+      await loadRegionData();
+      const refreshed = regions.find((region) => String(region?.id || '') === String(selected.id));
+      if (refreshed) {
+        setSelectedRegion(refreshed);
+      }
+      showToast(toastContainer, `Saved options for ${selected.name}.`, 'success');
+    }, `Saving options for ${selected.name} ...`);
+  } catch (err) {
+    showToast(toastContainer, err instanceof Error ? err.message : 'Failed to save region options.', 'error');
+  } finally {
+    saveRegionOptionsButton.disabled = false;
+  }
+};
+
+const confirmRegionAction = (action, regionName) => {
+  if (action === 'close') {
+    return window.confirm(`Close region ${regionName}?`);
+  }
+  if (action === 'delete') {
+    return window.confirm(`Delete region ${regionName}? This cannot be undone.`);
+  }
+  return true;
+};
+
+const handleRegionActionClick = async (button) => {
+  const action = String(button.getAttribute('data-region-action') || '').toLowerCase();
+  const selected = regions.find((region) => String(region?.id || '') === selectedRegionId);
+  if (!action || !selected) {
+    return;
+  }
+
+  if (!confirmRegionAction(action, selected.name)) {
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    await withWorkingOverlay(async () => {
+      await callRegionAction(selected.id, action);
+      await loadRegionData();
+      const refreshed = regions.find((region) => String(region?.id || '') === String(selected.id));
+      if (refreshed) {
+        setSelectedRegion(refreshed);
+      } else {
+        resolveSelectedRegion();
+      }
+      showToast(toastContainer, `Sent '${action}' for ${selected.name}.`, 'success');
+    }, `${actionLabel(action)} region ${selected.name} ...`);
+  } catch (err) {
+    showToast(toastContainer, err instanceof Error ? err.message : `Failed to ${action} region.`, 'error');
+  } finally {
+    button.disabled = false;
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+  syncActionButtonIcons();
+
   gridSizeXInput?.addEventListener('change', () => renderGrid());
   gridSizeYInput?.addEventListener('change', () => renderGrid());
 
@@ -500,7 +742,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   addRegionEstateSelect?.addEventListener('change', () => syncEstateOwnerFields());
+  addRegionNextFreePortInput?.addEventListener('change', () => syncRegionPortField());
   addRegionForm?.addEventListener('submit', submitCreateRegion);
+  regionOptionsForm?.addEventListener('submit', submitRegionOptions);
+  document.querySelectorAll('button[data-region-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      await handleRegionActionClick(button);
+    });
+  });
 
   loadPage().catch((err) => {
     if (regionsSubtitle) {

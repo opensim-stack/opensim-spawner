@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
@@ -199,31 +198,7 @@ public abstract class AbstractContainerGroupProvisioningService<
     }
 
     protected java.nio.file.Path copyArchiveToWorkspace(String resourcePath, List<java.nio.file.Path> writtenFiles) {
-        var classpathPath = resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath;
-        if (classpathPath.isBlank()) {
-            throw new IllegalArgumentException("Appearance archive path is blank.");
-        }
-
-        var fileName = java.nio.file.Path.of(classpathPath).getFileName();
-        if (fileName == null || fileName.toString().isBlank()) {
-            throw new IllegalArgumentException("Appearance archive path '" + resourcePath + "' does not contain a file name.");
-        }
-
-        var targetPath = properties.getWorkspaceDir().resolve(fileName.toString());
-        try {
-            Files.createDirectories(properties.getWorkspaceDir());
-            if (!Files.exists(targetPath)) {
-                var resource = new ClassPathResource(classpathPath);
-                try (var input = resource.getInputStream()) {
-                    Files.copy(input, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                }
-                writtenFiles.add(targetPath);
-                LOG.info("Copied appearance archive resource '{}' to '{}'.", resourcePath, targetPath);
-            }
-            return targetPath.toAbsolutePath();
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to copy appearance archive '" + resourcePath + "' to workspace.", e);
-        }
+        return ArchiveWorkspaceResolver.resolveArchivePath(resourcePath, properties.getWorkspaceDir(), writtenFiles, LOG);
     }
 
     protected void waitForStartupWindow(List<String> containerIds, Duration startupWindow, Duration pollInterval) {

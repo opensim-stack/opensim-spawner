@@ -25,8 +25,13 @@ public interface OpenSimService {
             boolean isPublic,
             boolean enableVoice,
             String estateName,
+            Integer port,
+            String oar,
             String estateOwnerFirst,
             String estateOwnerLast) {
+    }
+
+    record RegionOptionsData(boolean isPublic, boolean enableVoice) {
     }
 
     void createUser(String first, String last, String password, String email, String uuid, String model);
@@ -50,6 +55,14 @@ public interface OpenSimService {
     List<EstateData> showEstates(String simulatorName);
 
     RegionData createRegion(String simulatorName, CreateRegionData request);
+
+    RegionData modifyRegion(String simulatorName, String regionId, RegionOptionsData request);
+
+    void restartRegion(String simulatorName, String regionId);
+
+    void closeRegion(String simulatorName, String regionId);
+
+    void deleteRegion(String simulatorName, String regionId);
 
 	Optional<AgentLocation> findAgentByName(String first, String last);
 

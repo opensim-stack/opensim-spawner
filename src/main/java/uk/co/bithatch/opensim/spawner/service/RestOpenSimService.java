@@ -20,6 +20,7 @@ import uk.co.bithatch.opensim.jlib.OpensimRESTConsole;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.domain.RegionInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
@@ -28,6 +29,8 @@ import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
 public class RestOpenSimService implements OpenSimService {
 
     private static final Logger LOG = LoggerFactory.getLogger(RestOpenSimService.class);
+    private static final int MAX_IMPORT_RETRIES = 100;
+    private static final long IMPORT_RETRY_DELAY_MS = 10000L;
     private static final Pattern ESTATE_LINE_PATTERN = Pattern
             .compile("^(?<name>.+?)\\s+(?<id>\\d+)\\s+(?<ownerFirst>\\S+)\\s+(?<ownerLast>\\S+)\\s*$");
 
@@ -36,7 +39,7 @@ public class RestOpenSimService implements OpenSimService {
     private final GridStateRepository gridStateRepository;
     private final Object consoleOperationLock = new Object();
     private final PortService portService;
-    private final SimulatorRegionSyncService simulatorRegionSyncService;
+    private final OARs oars;
 
     @FunctionalInterface
     private interface ConsoleCallback<T> {
@@ -48,10 +51,10 @@ public class RestOpenSimService implements OpenSimService {
 			SimulatorStateRepository stateRepository,
 			GridStateRepository gridStateRepository,
 			PortService portService,
-			SimulatorRegionSyncService simulatorRegionSyncService
+			OARs oars
     	) {
     	this.portService = portService;
-        this.simulatorRegionSyncService = simulatorRegionSyncService;
+        this.oars = oars;
         this.properties = properties;
         this.simStateRepository = stateRepository;
         this.gridStateRepository = gridStateRepository;
@@ -238,7 +241,15 @@ public class RestOpenSimService implements OpenSimService {
         var estateName = defaultString(request.estateName(), properties.getOpensimEstateName());
         var ownerFirst = nonBlankOrNull(request.estateOwnerFirst());
         var ownerLast = nonBlankOrNull(request.estateOwnerLast());
-        var listenPort = portService.nextPort(null);
+        var listenPort = request.port() == null ? portService.nextPort(null) : request.port().intValue();
+        if (listenPort <= 0 || listenPort > 65535) {
+            throw new IllegalArgumentException("Region port must be between 1 and 65535.");
+        }
+        var requestedOar = nonBlankOrNull(request.oar());
+        var oar = requestedOar == null ? null : oars.getOAR(requestedOar);
+        if (requestedOar != null && oar == null) {
+            throw new IllegalArgumentException("Unknown OAR '" + requestedOar + "'.");
+        }
 
         try {
             LOG.info("Creating region '{}' on simulator {} at {},{} in estate {}.",
@@ -262,8 +273,52 @@ public class RestOpenSimService implements OpenSimService {
                 builder.estateOwnerFirst(ownerFirst).estateOwnerLast(ownerLast);
             }
 
-            var created = openRemoteAdmin(simulator).createRegion(builder.build());
-            simulatorRegionSyncService.synchronizeSimulator(simulator.getName());
+            var admin = openRemoteAdmin(simulator);
+            var created = admin.createRegion(builder.build());
+
+            var newRegion = new RegionInstanceData();
+            newRegion.setName(created.regionName());
+            newRegion.setUuid(created.regionUuid());
+            newRegion.setX(request.x());
+            newRegion.setY(request.y());
+            newRegion.setPort(listenPort);
+            newRegion.setOar(requestedOar);
+
+            var regions = simulator.getRegions();
+            if (regions == null || regions.length == 0) {
+                simulator.setRegions(new RegionInstanceData[] { newRegion });
+            } else {
+                int existingIndex = -1;
+                for (int i = 0; i < regions.length; i++) {
+                    var existing = regions[i];
+                    if (existing == null) {
+                        continue;
+                    }
+                    if ((existing.getUuid() != null && created.regionUuid().equalsIgnoreCase(existing.getUuid()))
+                            || (existing.getName() != null && created.regionName().equalsIgnoreCase(existing.getName()))) {
+                        existingIndex = i;
+                        break;
+                    }
+                }
+                if (existingIndex >= 0) {
+                    regions[existingIndex] = newRegion;
+                    simulator.setRegions(regions);
+                } else {
+                    var expanded = Arrays.copyOf(regions, regions.length + 1);
+                    expanded[regions.length] = newRegion;
+                    simulator.setRegions(expanded);
+                }
+            }
+            simStateRepository.save(simulator);
+
+            if (oar != null) {
+                var workspaceArchivePath = ArchiveWorkspaceResolver.resolveArchivePath(
+                        oar.archivePath(),
+                        properties.getWorkspaceDir(),
+                        null,
+                        LOG);
+                loadOarWithRetry(admin, created.regionUuid(), workspaceArchivePath.toString());
+            }
             var refreshed = showRegions(simulatorName);
             return refreshed.stream()
                     .filter(region -> region.id().equalsIgnoreCase(created.regionUuid()))
@@ -283,6 +338,175 @@ public class RestOpenSimService implements OpenSimService {
                     "Failed to create OpenSimulator region via RemoteAdmin. " + e.getMessage(),
                     e);
         }
+    }
+
+    @Override
+    public RegionData modifyRegion(String simulatorName, String regionId, RegionOptionsData request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Region options request is required.");
+        }
+        var simulator = resolveSimulator(simulatorName);
+        validateRegionCapableSimulator(simulator);
+        var normalizedRegionId = normalizeRequired(regionId, "Region id is required.");
+        try {
+            openRemoteAdmin(simulator).modifyRegionById(normalizedRegionId, request.enableVoice(), request.isPublic());
+
+            var updatedRegion = showRegions(simulatorName).stream()
+                    .filter(region -> normalizedRegionId.equalsIgnoreCase(region.id()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Region '" + normalizedRegionId + "' not found after update."));
+
+            upsertRegion(simulator, toRegionInstanceData(updatedRegion, findRegionOar(simulator, normalizedRegionId)));
+            simStateRepository.save(simulator);
+            return updatedRegion;
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException(
+                    "Failed to modify OpenSimulator region via RemoteAdmin. " + e.getMessage(),
+                    e);
+        }
+    }
+
+    @Override
+    public void restartRegion(String simulatorName, String regionId) {
+        var simulator = resolveSimulator(simulatorName);
+        validateRegionCapableSimulator(simulator);
+        var normalizedRegionId = normalizeRequired(regionId, "Region id is required.");
+        try {
+            openRemoteAdmin(simulator).restart(normalizedRegionId);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException(
+                    "Failed to restart OpenSimulator region via RemoteAdmin. " + e.getMessage(),
+                    e);
+        }
+    }
+
+    @Override
+    public void closeRegion(String simulatorName, String regionId) {
+        var simulator = resolveSimulator(simulatorName);
+        validateRegionCapableSimulator(simulator);
+        var normalizedRegionId = normalizeRequired(regionId, "Region id is required.");
+        try {
+            openRemoteAdmin(simulator).closeRegionById(normalizedRegionId);
+            removeRegion(simulator, normalizedRegionId, null);
+            simStateRepository.save(simulator);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException(
+                    "Failed to close OpenSimulator region via RemoteAdmin. " + e.getMessage(),
+                    e);
+        }
+    }
+
+    @Override
+    public void deleteRegion(String simulatorName, String regionId) {
+        var simulator = resolveSimulator(simulatorName);
+        validateRegionCapableSimulator(simulator);
+        var normalizedRegionId = normalizeRequired(regionId, "Region id is required.");
+        var targetRegion = showRegions(simulatorName).stream()
+                .filter(region -> normalizedRegionId.equalsIgnoreCase(region.id()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Region '" + normalizedRegionId + "' not found."));
+        try {
+            openRemoteAdmin(simulator).deleteRegion(targetRegion.name());
+            removeRegion(simulator, normalizedRegionId, targetRegion.name());
+            simStateRepository.save(simulator);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException(
+                    "Failed to delete OpenSimulator region via RemoteAdmin. " + e.getMessage(),
+                    e);
+        }
+    }
+
+    private void loadOarWithRetry(OpensimRemoteAdminClient admin, String regionId, String archivePath) {
+        RuntimeException last = null;
+        for (int i = 0; i < MAX_IMPORT_RETRIES; i++) {
+            try {
+                admin.loadOarById(regionId, archivePath);
+                return;
+            } catch (RuntimeException e) {
+                last = e;
+                if (i == MAX_IMPORT_RETRIES - 1) {
+                    throw e;
+                }
+                try {
+                    Thread.sleep(IMPORT_RETRY_DELAY_MS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting to retry region OAR import.", interrupted);
+                }
+            }
+        }
+        if (last != null) {
+            throw last;
+        }
+    }
+
+    private static String findRegionOar(SimulatorInstanceData simulator, String regionId) {
+        if (simulator.getRegions() == null) {
+            return null;
+        }
+        for (var region : simulator.getRegions()) {
+            if (region == null) {
+                continue;
+            }
+            if (matchesRegion(region, regionId, null)) {
+                return region.getOar();
+            }
+        }
+        return null;
+    }
+
+    private static RegionInstanceData toRegionInstanceData(RegionData region, String oar) {
+        var data = new RegionInstanceData();
+        data.setName(region.name());
+        data.setUuid(region.id());
+        data.setX(region.x());
+        data.setY(region.y());
+        data.setPort(region.port());
+        data.setOar(oar);
+        return data;
+    }
+
+    private static void upsertRegion(SimulatorInstanceData simulator, RegionInstanceData updatedRegion) {
+        var regions = simulator.getRegions();
+        if (regions == null || regions.length == 0) {
+            simulator.setRegions(new RegionInstanceData[] { updatedRegion });
+            return;
+        }
+        for (int i = 0; i < regions.length; i++) {
+            if (matchesRegion(regions[i], updatedRegion.getUuid(), updatedRegion.getName())) {
+                regions[i] = updatedRegion;
+                simulator.setRegions(regions);
+                return;
+            }
+        }
+        var expanded = Arrays.copyOf(regions, regions.length + 1);
+        expanded[regions.length] = updatedRegion;
+        simulator.setRegions(expanded);
+    }
+
+    private static void removeRegion(SimulatorInstanceData simulator, String regionId, String regionName) {
+        var regions = simulator.getRegions();
+        if (regions == null || regions.length == 0) {
+            return;
+        }
+        var remaining = Arrays.stream(regions)
+                .filter(region -> !matchesRegion(region, regionId, regionName))
+                .toArray(RegionInstanceData[]::new);
+        simulator.setRegions(remaining);
+    }
+
+    private static boolean matchesRegion(RegionInstanceData region, String regionId, String regionName) {
+        if (region == null) {
+            return false;
+        }
+        return equalsIgnoreCase(region.getUuid(), regionId)
+                || equalsIgnoreCase(region.getName(), regionId)
+                || equalsIgnoreCase(region.getUuid(), regionName)
+                || equalsIgnoreCase(region.getName(), regionName);
+    }
+
+    private static boolean equalsIgnoreCase(String left, String right) {
+        return left != null && right != null && left.equalsIgnoreCase(right);
     }
 
     private static Map<String, String> parseAccountDetails(List<String> lines) {
@@ -520,7 +744,7 @@ public class RestOpenSimService implements OpenSimService {
                 .filter(value -> !value.isBlank())
                 .map(String::toCharArray);
         
-        LOG.info("Opening OpenSim REST console at {} with user {} [{}].", simulatorBaseUrl(simulator.getPort()), user.orElse("<none>"), pass.orElse(null));
+        LOG.info("Opening OpenSim REST console at {} with user {}.", simulatorBaseUrl(simulator.getPort()), user.orElse("<none>"));
 
         return new OpensimRESTConsole(simulatorBaseUrl(simulator.getPort()), user, pass);
     }
