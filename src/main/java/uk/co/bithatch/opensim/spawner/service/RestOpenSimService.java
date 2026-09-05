@@ -155,7 +155,7 @@ public class RestOpenSimService implements OpenSimService {
     @Override
     public Optional<AgentLocation> findAgentByName(String first, String last) {
 		try {
-			LOG.info("Looking up OpenSim agent {} {}.", first, last);
+			LOG.info("Find up OpenSim agent {} {}.", first, last);
 			var admin= openRemoteAdmin();
 			return admin.findAgent(
 					first + " " + last, 
@@ -170,7 +170,7 @@ public class RestOpenSimService implements OpenSimService {
     @Override
     public Optional<AgentLocation> findAgentByUuid(String uuid) {
 		try {
-			LOG.info("Looking up OpenSim agent {}.", uuid);
+			LOG.info("Find up OpenSim agent {}.", uuid);
 			var admin= openRemoteAdmin();
 			return admin.findAgent(
 					null, 

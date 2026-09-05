@@ -29,7 +29,7 @@ public class AgentController {
         this.simulatorProvisioningService = simulatorProvisioningService;
     }
 
-    @GetMapping(path = "/agent/{first}/{last}/", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "/agent/{first}/{last}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> findAgent(@PathVariable String first, @PathVariable String last) {
         ensureGridLoginServiceAvailable();
         var account = openSimService.findAgentByName(first, last);
@@ -37,7 +37,7 @@ public class AgentController {
         return accountResponse(account);
     }
 
-    @GetMapping(path = "/agent-by-uuid/{uuid}/", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(path = "/agent-by-uuid/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> findAgentByUuid(@PathVariable String uuid) {
         ensureGridLoginServiceAvailable();
         var account = openSimService.findAgentByUuid(uuid);
