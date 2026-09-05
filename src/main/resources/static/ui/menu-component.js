@@ -18,7 +18,9 @@ class SpawnerSideMenu extends HTMLElement {
 
         <nav id="menu-nav" class="mt-6 space-y-2">${navMarkup}</nav>
 
-        <div class="mt-auto pt-6">
+        <div id="menu-bottom" class="mt-auto pt-6 space-y-2"></div>
+
+        <div class="pt-3">
           <button id="menu-signout" class="w-full px-4 py-2 rounded-lg border border-rose-400/50 text-rose-200 hover:bg-rose-500/10 transition-colors inline-flex items-center gap-2 justify-center">
             <span class="h-4 w-4">${this.icon('signout')}</span>
             <span>Sign Out</span>
@@ -56,6 +58,7 @@ class SpawnerSideMenu extends HTMLElement {
 
   async loadRoleMenu(active) {
     const nav = this.querySelector('#menu-nav');
+    const bottom = this.querySelector('#menu-bottom');
     if (!nav) {
       return;
     }
@@ -66,9 +69,18 @@ class SpawnerSideMenu extends HTMLElement {
         return;
       }
       const status = await response.json();
-      nav.innerHTML = status?.admin === true ? this.adminMenu(active) : this.userMenu(active);
+      const isAdmin = status?.admin === true;
+      nav.innerHTML = isAdmin ? this.adminMenu(active) : this.userMenu(active);
+      if (bottom) {
+        bottom.innerHTML = isAdmin
+          ? this.menuItem('/ui/configuration.html', 'Configuration', 'configuration', active === 'configuration')
+          : '';
+      }
     } catch (_err) {
       nav.innerHTML = this.adminMenu(active);
+      if (bottom) {
+        bottom.innerHTML = this.menuItem('/ui/configuration.html', 'Configuration', 'configuration', active === 'configuration');
+      }
     }
   }
 
@@ -126,6 +138,8 @@ class SpawnerSideMenu extends HTMLElement {
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="3.5" width="12" height="13" rx="1.5"></rect><path d="M7 7.5h6"></path><path d="M7 10h4"></path><path d="M7.5 13l1.4 1.4L12.5 11"></path></svg>';
       case 'change-password':
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="8" width="12" height="8" rx="2"></rect><path d="M7 8V6.8a3 3 0 0 1 6 0V8"></path><circle cx="10" cy="12" r="1.1"></circle></svg>';
+      case 'configuration':
+        return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 2.8v2.4"></path><path d="M10 14.8v2.4"></path><path d="M2.8 10h2.4"></path><path d="M14.8 10h2.4"></path><path d="m4.8 4.8 1.7 1.7"></path><path d="m13.5 13.5 1.7 1.7"></path><path d="m15.2 4.8-1.7 1.7"></path><path d="m6.5 13.5-1.7 1.7"></path><circle cx="10" cy="10" r="3.2"></circle></svg>';
       case 'signout':
         return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 4.5H5.5A1.5 1.5 0 0 0 4 6v8a1.5 1.5 0 0 0 1.5 1.5H8"></path><path d="M12 6.5 16 10l-4 3.5"></path><path d="M16 10H8"></path></svg>';
       default:

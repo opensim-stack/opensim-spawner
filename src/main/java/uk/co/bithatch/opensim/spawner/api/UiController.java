@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -109,6 +110,39 @@ public class UiController {
         response.put("welcomeMessage", firstNonBlank(gridState.getWelcomeMessage(), properties.getOpensimWelcomeMessage()));
         response.put("consoleUser", normalize(gridState.getConsoleUser()));
         return response;
+    }
+
+    @GetMapping(path = "/ui/api/updates", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> updatesConfig(HttpServletRequest request) {
+        requireAdmin(request);
+        var updates = gridStateRepository.get().getUpdates();
+        var response = new LinkedHashMap<String, Object>();
+        response.put("automaticUpdates", updates.isAutomaticUpdates());
+        response.put("tag", firstNonBlank(updates.getTag(), "latest"));
+        response.put("dockerHubUsername", normalize(updates.getDockerHubUsername()));
+        response.put("dockerHubToken", normalize(updates.getDockerHubToken()));
+        return response;
+    }
+
+    @PatchMapping(path = "/ui/api/updates", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> updateUpdatesConfig(@RequestParam(required = false) String automaticUpdates,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String dockerHubUsername,
+            @RequestParam(required = false) String dockerHubToken,
+            HttpServletRequest request) {
+        requireAdmin(request);
+        var updates = gridStateRepository.get().getUpdates();
+        updates.setAutomaticUpdates(parseBoolean(automaticUpdates, updates.isAutomaticUpdates()));
+        updates.setTag(firstNonBlank(tag, "latest"));
+        updates.setDockerHubUsername(normalize(dockerHubUsername));
+        updates.setDockerHubToken(normalize(dockerHubToken));
+        gridStateRepository.save();
+        return updatesConfig(request);
     }
 
     @PostMapping(path = "/ui/api/auth/login", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -298,5 +332,25 @@ public class UiController {
         response.put("ok", false);
         response.put("error", message);
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    private static boolean parseBoolean(String value, boolean fallback) {
+        var normalized = normalize(value);
+        if (normalized.isEmpty()) {
+            return fallback;
+        }
+        if ("true".equalsIgnoreCase(normalized) || "1".equals(normalized) || "on".equalsIgnoreCase(normalized)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(normalized) || "0".equals(normalized) || "off".equalsIgnoreCase(normalized)) {
+            return false;
+        }
+        return fallback;
+    }
+
+    private static void requireAdmin(HttpServletRequest request) {
+        if (!UiAuthSupport.isAdmin(request.getSession(false))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access is required.");
+        }
     }
 }

@@ -12,7 +12,19 @@ public class GridState implements DomainObject {
 	private Map<String, String> tokens = new HashMap<>();
 	private String consoleUser;
 	private String consolePass;
+	private UpdatesConfiguration updates = new UpdatesConfiguration();
 	private boolean initialized;
+
+	public UpdatesConfiguration getUpdates() {
+		if (updates == null) {
+			updates = new UpdatesConfiguration();
+		}
+		return updates;
+	}
+
+	public void setUpdates(UpdatesConfiguration updates) {
+		this.updates = updates == null ? new UpdatesConfiguration() : updates;
+	}
 
 	public boolean isInitialized() {
 		return initialized;

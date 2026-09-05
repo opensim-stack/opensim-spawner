@@ -75,17 +75,23 @@ public class GridStateRepository  {
     }
 
 	private void backfillMissingDefaults() {
-		if (isGuidedMode()) {
-			return;
-		}
 		var changed = false;
-		if (isBlank(state.getConsoleUser()) && !isBlank(properties.getOpensimConsoleUser())) {
-			state.setConsoleUser(properties.getOpensimConsoleUser().trim());
+
+		var updates = state.getUpdates();
+		if (updates.getTag().isBlank()) {
+			updates.setTag("latest");
 			changed = true;
 		}
-		if (isBlank(state.getConsolePass()) && !isBlank(properties.getOpensimConsolePass())) {
-			state.setConsolePass(properties.getOpensimConsolePass().trim());
-			changed = true;
+
+		if (!isGuidedMode()) {
+			if (isBlank(state.getConsoleUser()) && !isBlank(properties.getOpensimConsoleUser())) {
+				state.setConsoleUser(properties.getOpensimConsoleUser().trim());
+				changed = true;
+			}
+			if (isBlank(state.getConsolePass()) && !isBlank(properties.getOpensimConsolePass())) {
+				state.setConsolePass(properties.getOpensimConsolePass().trim());
+				changed = true;
+			}
 		}
 		if (changed) {
 			save();

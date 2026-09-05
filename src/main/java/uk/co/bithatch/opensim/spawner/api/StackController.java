@@ -7,6 +7,7 @@ import java.util.Map;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,7 +42,18 @@ public class StackController {
         response.put("action", action == null ? "" : action.trim().toLowerCase());
         response.put("status", status.status());
         response.put("running", status.running());
+        response.put("updateAvailable", status.updateAvailable());
         response.put("ok", true);
+        return response;
+    }
+
+    @PostMapping(path = "/update-all", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> updateAll() {
+        var statuses = stackContainerService.updateAllSequentially();
+        var response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        response.put("updated", statuses.stream().map(StackContainerView::containerName).toList());
+        response.put("count", statuses.size());
         return response;
     }
 }

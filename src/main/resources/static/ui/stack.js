@@ -3,7 +3,7 @@ import { actionIconSvg, consoleTargetForContainer, fetchWithTimeout, logsTargetF
 const stackList = document.getElementById('stack-list');
 const stackEmpty = document.getElementById('stack-empty');
 const refreshButton = document.getElementById('refresh-stack');
-const showEntireStackCheckbox = document.getElementById('show-entire-stack');
+const updateAllButton = document.getElementById('update-all');
 const toastContainer = document.getElementById('toast-container');
 const REQUEST_RECOVERY_WINDOW_MS = 180000;
 const REQUEST_RECOVERY_POLL_MS = 3000;
@@ -13,6 +13,7 @@ const buttonClassesByAction = {
   start: 'text-emerald-200 border-emerald-400/40 hover:bg-emerald-600/20',
   stop: 'text-amber-200 border-amber-400/40 hover:bg-amber-600/20',
   restart: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20',
+  update: 'text-violet-200 border-violet-400/40 hover:bg-violet-600/20',
   console: 'text-neon-accent border-neon-primary/40 hover:bg-neon-primary/10',
   logs: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20'
 };
@@ -25,71 +26,11 @@ const actionVerb = (action) => {
       return 'Stopping';
     case 'restart':
       return 'Restarting';
+    case 'update':
+      return 'Updating';
     default:
       return 'Updating';
   }
-};
-
-const splitBotName = (displayName) => {
-  const trimmed = String(displayName || '').trim();
-  if (!trimmed) {
-    return { first: '', last: '' };
-  }
-  const firstSpace = trimmed.indexOf(' ');
-  if (firstSpace < 0) {
-    return { first: trimmed, last: '' };
-  }
-  return {
-    first: trimmed.slice(0, firstSpace),
-    last: trimmed.slice(firstSpace + 1)
-  };
-};
-
-const fetchManagedContainerNames = async () => {
-  const names = new Set();
-
-  const simulatorListResponse = await fetchWithTimeout('/api/simulator');
-  if (simulatorListResponse.ok) {
-    const simulatorNames = await simulatorListResponse.json();
-    if (Array.isArray(simulatorNames)) {
-      const statuses = await Promise.all(simulatorNames.map(async (name) => {
-        const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`);
-        return response.ok ? response.json() : null;
-      }));
-      statuses.forEach((status) => {
-        const containers = Array.isArray(status?.containerStatus) ? status.containerStatus : [];
-        containers.forEach((container) => {
-          const containerName = String(container?.containerName || '').trim();
-          if (containerName) {
-            names.add(containerName);
-          }
-        });
-      });
-    }
-  }
-
-  const botListResponse = await fetchWithTimeout('/api/bot');
-  if (botListResponse.ok) {
-    const botNames = await botListResponse.json();
-    if (Array.isArray(botNames)) {
-      const statuses = await Promise.all(botNames.map(async (displayName) => {
-        const { first, last } = splitBotName(displayName);
-        const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
-        return response.ok ? response.json() : null;
-      }));
-      statuses.forEach((status) => {
-        const containers = Array.isArray(status?.containerStatus) ? status.containerStatus : [];
-        containers.forEach((container) => {
-          const containerName = String(container?.containerName || '').trim();
-          if (containerName) {
-            names.add(containerName);
-          }
-        });
-      });
-    }
-  }
-
-  return names;
 };
 
 const callAction = async (containerName, action) => {
@@ -108,6 +49,15 @@ const callAction = async (containerName, action) => {
     throw new Error(message || `Could not ${action} '${containerName}' (${response.status}).`);
   }
 
+  return response.json();
+};
+
+const callUpdateAll = async () => {
+  const response = await fetchWithTimeout('/api/stack/update-all', { method: 'POST' });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Could not update all stack containers (${response.status}).`);
+  }
   return response.json();
 };
 
@@ -158,6 +108,15 @@ const renderRow = (container) => {
   name.textContent = container.containerName;
   name.title = container.containerName;
 
+  if (container.updateAvailable) {
+    const updateMarker = document.createElement('span');
+    updateMarker.className = 'inline-flex items-center justify-center h-6 w-6 rounded-full border border-violet-400/40 bg-violet-500/10 text-violet-200';
+    updateMarker.title = 'Update available';
+    updateMarker.setAttribute('aria-label', 'Update available');
+    updateMarker.innerHTML = `<span class="h-3.5 w-3.5 shrink-0">${actionIconSvg('update')}</span>`;
+    left.appendChild(updateMarker);
+  }
+
   left.appendChild(name);
   left.appendChild(stateBadge(container.status, container.running));
 
@@ -167,20 +126,32 @@ const renderRow = (container) => {
   const startButton = actionButton('start', container.containerName);
   const stopButton = actionButton('stop', container.containerName);
   const restartButton = actionButton('restart', container.containerName);
+  const updateButton = actionButton('update', container.containerName);
   const consoleButton = actionButton('console', container.containerName);
   const logsButton = actionButton('logs', container.containerName);
 
-  [startButton, stopButton, restartButton].forEach((button) => {
+  updateButton.disabled = !container.updateAvailable;
+  updateButton.classList.toggle('opacity-40', !container.updateAvailable);
+  updateButton.classList.toggle('cursor-not-allowed', !container.updateAvailable);
+
+  [startButton, stopButton, restartButton, updateButton].forEach((button) => {
     button.addEventListener('click', async () => {
+      const action = button.dataset.action || '';
+      if (action === 'update' && !container.updateAvailable) {
+        return;
+      }
+      if (action === 'update' && !window.confirm(`Update container '${container.containerName}' now?`)) {
+        return;
+      }
+
       button.disabled = true;
       try {
         await withWorkingOverlay(async () => {
-          const result = await callAction(container.containerName, button.dataset.action || '');
+          const result = await callAction(container.containerName, action);
           showToast(toastContainer, `Container ${result.container}: ${result.action} requested (${result.status}).`, 'success');
           await loadStack();
-        }, `${actionVerb(button.dataset.action)} container ${container.containerName} ...`);
+        }, `${actionVerb(action)} container ${container.containerName} ...`);
       } catch (err) {
-        const action = button.dataset.action || '';
         const recovered = await withWorkingOverlay(
           async () => waitForStackActionOutcome(container.containerName, action),
           `Verifying ${actionVerb(action).toLowerCase()} result for container ${container.containerName} ...`
@@ -200,6 +171,7 @@ const renderRow = (container) => {
   actions.appendChild(startButton);
   actions.appendChild(stopButton);
   actions.appendChild(restartButton);
+  actions.appendChild(updateButton);
   actions.appendChild(consoleButton);
   actions.appendChild(logsButton);
 
@@ -228,17 +200,7 @@ const loadStack = async () => {
     return;
   }
 
-  let visibleContainers = containers;
-  if (!showEntireStackCheckbox?.checked) {
-    try {
-      const managed = await fetchManagedContainerNames();
-      visibleContainers = containers.filter((container) => !managed.has(String(container?.containerName || '').trim()));
-    } catch (_ignored) {
-      // If managed-group discovery fails, keep default list rather than hiding everything.
-    }
-  }
-
-  visibleContainers.forEach((container) => {
+  containers.forEach((container) => {
     if (container && typeof container.containerName === 'string' && container.containerName.trim()) {
       stackList.appendChild(renderRow(container));
     }
@@ -268,6 +230,9 @@ const waitForStackActionOutcome = async (containerName, action, maxWaitMs = REQU
           if (normalizedAction === 'stop' && !match.running) {
             return true;
           }
+          if (normalizedAction === 'update' && !match.updateAvailable) {
+            return true;
+          }
         }
       }
     } catch (_ignored) {
@@ -292,13 +257,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  showEntireStackCheckbox?.addEventListener('change', async () => {
+  updateAllButton?.addEventListener('click', async () => {
+    if (!window.confirm('Update all containers with available updates? This runs sequentially and can take a while.')) {
+      return;
+    }
     try {
       await withWorkingOverlay(async () => {
+        const response = await callUpdateAll();
         await loadStack();
-      }, 'Refreshing stack ...');
+        showToast(toastContainer, `Updated ${response.count || 0} container(s).`, 'success');
+      }, 'Updating containers sequentially ...');
     } catch (err) {
-      showToast(toastContainer, err instanceof Error ? err.message : 'Refresh failed.', 'error');
+      showToast(toastContainer, err instanceof Error ? err.message : 'Update all failed.', 'error');
     }
   });
 

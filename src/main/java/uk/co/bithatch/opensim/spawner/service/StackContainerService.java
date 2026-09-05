@@ -33,21 +33,26 @@ public class StackContainerService {
 
     private final SpawnerProperties properties;
     private final DockerClient dockerClient;
+    private final UpdateService updateService;
 
     @Autowired
-    public StackContainerService(SpawnerProperties properties) {
-        this(properties, buildDockerClient());
+    public StackContainerService(SpawnerProperties properties, UpdateService updateService) {
+        this(properties, buildDockerClient(), updateService);
     }
 
-    StackContainerService(SpawnerProperties properties, DockerClient dockerClient) {
+    StackContainerService(SpawnerProperties properties, DockerClient dockerClient, UpdateService updateService) {
         this.properties = properties;
         this.dockerClient = dockerClient;
+        this.updateService = updateService;
     }
 
     public List<StackContainerView> listStackContainers() {
         var projectPrefix = configuredProjectPrefix();
         var containers = dockerClient.listContainersCmd().withShowAll(true).exec();
         var response = new ArrayList<StackContainerView>();
+        var updateStatus = updateService == null
+                ? java.util.Map.<String, UpdateService.StackContainerUpdateStatus>of()
+                : updateService.containerUpdateStatus(false);
 
         for (var container : containers) {
             var containerName = primaryName(container == null ? null : container.getNames());
@@ -57,10 +62,13 @@ public class StackContainerService {
 
             var state = normalizeState(container == null ? null : container.getState(),
                     container == null ? null : container.getStatus());
+            var updateAvailable = updateStatus.get(containerName) != null
+                    && updateStatus.get(containerName).updateAvailable();
             response.add(new StackContainerView(
                     containerName,
                     state,
-                    "running".equalsIgnoreCase(container == null ? null : container.getState())));
+                    "running".equalsIgnoreCase(container == null ? null : container.getState()),
+                    updateAvailable));
         }
 
         response.sort(Comparator.comparing(StackContainerView::containerName));
@@ -85,8 +93,15 @@ public class StackContainerService {
                 case "start" -> dockerClient.startContainerCmd(normalizedName).exec();
                 case "stop" -> dockerClient.stopContainerCmd(normalizedName).exec();
                 case "restart" -> dockerClient.restartContainerCmd(normalizedName).exec();
+                case "update" -> {
+                    if (updateService == null) {
+                        throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                                "Update service is not available.");
+                    }
+                    updateService.updateContainer(normalizedName);
+                }
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Unsupported action '" + action + "'. Supported actions: start, stop, restart.");
+                        "Unsupported action '" + action + "'. Supported actions: start, stop, restart, update.");
             }
         } catch (ResponseStatusException e) {
             throw e;
@@ -96,17 +111,37 @@ public class StackContainerService {
         }
 
         try {
-            var inspect = dockerClient.inspectContainerCmd(normalizedName).exec();
-            var state = inspect.getState();
-            var running = state != null && Boolean.TRUE.equals(state.getRunning());
-            return new StackContainerView(
-                    normalizedName,
-                    normalizeState(state == null ? null : state.getStatus(), null),
-                    running);
+            return inspectView(normalizedName);
         } catch (RuntimeException e) {
             // The action has already been issued, so return best-effort status.
-            return new StackContainerView(normalizedName, "unknown", false);
+            return new StackContainerView(normalizedName, "unknown", false, false);
         }
+    }
+
+    public List<StackContainerView> updateAllSequentially() {
+        if (updateService == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Update service is not available.");
+        }
+        var updated = updateService.updateAllSequentially();
+        var views = new ArrayList<StackContainerView>();
+        for (var status : updated) {
+            views.add(inspectView(status.containerName()));
+        }
+        views.sort(Comparator.comparing(StackContainerView::containerName));
+        return views;
+    }
+
+    private StackContainerView inspectView(String containerName) {
+        var inspect = dockerClient.inspectContainerCmd(containerName).exec();
+        var state = inspect.getState();
+        var running = state != null && Boolean.TRUE.equals(state.getRunning());
+        var updates = updateService == null ? java.util.Map.<String, UpdateService.StackContainerUpdateStatus>of()
+                : updateService.containerUpdateStatus(true);
+        return new StackContainerView(
+                containerName,
+                normalizeState(state == null ? null : state.getStatus(), null),
+                running,
+                updates.containsKey(containerName) && updates.get(containerName).updateAvailable());
     }
 
     public List<NetworkContainerPortsView> listNetworkContainerPorts() {
