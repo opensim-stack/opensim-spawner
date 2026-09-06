@@ -2,7 +2,7 @@
 
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-bithatch%2Fopensim--spawner-latest?logo=docker&logoColor=white)](https://hub.docker.com/repository/docker/bithatch/opensim-spawner)
 
-HTTP API service that creates and coordinates OpenSim simulators and bot containers from a strict profilse.
+HTTP API service that creates and coordinates OpenSim simulators and bot containers from a strict profiles.
 
 *This is part of the [opensim-stack](https://opensim-stack.github.io/) and is intended to be used in conjunction with other parts of the stack. See [Docs](https://opensim-stack.github.io/docs/index.html) for full details.*
 
@@ -67,14 +67,6 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `MARIADB_DATABASE` | `opensim` |
 | `MARIADB_USER` | `opensim` |
 | `MARIADB_PASSWORD` | `opensimpassword` |
-| `OPENSIM_WEBRTC_VOICE_ENABLED` | `true` |
-| `OPENSIM_JANUS_PUBLIC_HOST` | `$OPENSIM_HOSTNAME` |
-| `JANUS_HTTP_PORT` | `14223` |
-| `JANUS_HTTP_BASEPATH` | `/voice` |
-| `JANUS_API_TOKEN` | `` |
-| `JANUS_HTTP_ADMIN_PORT` | `14225` |
-| `JANUS_HTTP_ADMIN_BASEPATH` | `/voiceAdmin` |
-| `JANUS_ADMIN_TOKEN` | `` |
 | `OPENSIM_HOSTNAME` | `opensim` |
 | `OPENSIM_ESTATE_NAME` | `Botland` |
 | `OPENSIM_USER_FIRST` | `Bot` |
@@ -100,15 +92,6 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `OPENSIM_LOGIN_START` | `last` |
 | `OPENSIM_LOGIN_URI` | `http://opensim:9000` |
 | `SPAWNER_HOST` | `opensim-spawner` |
-| `VOICE_ROUTING_ENABLED` | `true` |
-| `VOICE_BACKEND` | `webrtc` |
-| `PIPER_SCHEME` | `http` |
-| `PIPER_HOST` | `opensim-ai-piper-1` |
-| `PIPER_PORT` | `8995` |
-| `PIPER_TTS_PATH` | `/tts` |
-| `PIPER_VOICES_PATH` | `/voices` |
-| `PIPER_REQUEST_TIMEOUT_SECONDS` | `60` |
-| `PIPER_DEFAULT_VOICE` | `en_US-lessac-medium` |
 | `METAVERSE_MCP_TRANSPORT` | `http` |
 | `METAVERSE_MCP_HOST` | `0.0.0.0` |
 | `METAVERSE_MCP_PORT` | `8999` |

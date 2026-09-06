@@ -14,12 +14,21 @@ public class GridState implements DomainObject {
 	private String consolePass;
 	private UpdatesConfiguration updates = new UpdatesConfiguration();
 	private boolean initialized;
+	private Map<String, String> global = new HashMap<>();
 
 	public UpdatesConfiguration getUpdates() {
 		if (updates == null) {
 			updates = new UpdatesConfiguration();
 		}
 		return updates;
+	}
+
+	public Map<String, String> getGlobal() {
+		return global;
+	}
+
+	public void setGlobal(Map<String, String> global) {
+		this.global = global;
 	}
 
 	public void setUpdates(UpdatesConfiguration updates) {

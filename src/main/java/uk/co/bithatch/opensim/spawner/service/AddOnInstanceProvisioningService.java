@@ -4,12 +4,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -19,11 +21,20 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.sshtools.jini.Data;
+import com.sshtools.jini.INI;
+import com.sshtools.jini.INI.Section;
+import com.sshtools.jini.INIWriter;
+
+import uk.co.bithatch.opensim.jlib.Strings;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.AddOn;
 import uk.co.bithatch.opensim.spawner.domain.AddOnInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.AddOnLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
+import uk.co.bithatch.opensim.spawner.domain.DomainObject;
+import uk.co.bithatch.opensim.spawner.domain.HookType;
+import uk.co.bithatch.opensim.spawner.domain.Manifest;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedAddOnPlan;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedSimulatorPlan;
@@ -129,12 +140,21 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			var addOn = stateRepository.load(addOnName)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on not found."));
 			var contributions = resolveAddOnManagedContributions(addOn);
+			
+			var mfOpt = addOnRepository.load(addOnName);
+			mfOpt.ifPresent(mf -> {
+	            runHooks(HookType.PRE_UNINSTALL, mf, addOn);	
+			});
+			
 			if (addOn.getLevel() == AddOnLevel.SIMULATOR && !addOn.getContainerIds().isEmpty()) {
 				detachAddOnContainersFromGridSimulator(addOn.getGridServiceSimulatorName(), addOn.getContainerIds());
 			}
 			deleteContainerGroup(addOnName);
 			removeAddOnManagedContributions(contributions);
 			reconcileParentConfigurations(contributions, "disabled", addOnName);
+			mfOpt.ifPresent(mf -> {
+	            runHooks(HookType.POST_UNINSTALL, mf, addOn);	
+			});
 		}
 	}
 
@@ -350,6 +370,8 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 
             stateRepository.save(addOnInstance);
             
+            runHooks(HookType.PRE_INSTALL, manifest, addOnInstance);
+            
             var plan = profileService.resolvePlan(addOnInstance, containerRequestFields);
             LOG.info("Resolved {} container spec(s) for add-on {}.", plan.containers().size(), name);
             materializeFiles(plan, addOnInstance, materializedFiles);
@@ -363,6 +385,8 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			if (attachedGridSimulator != null && !createdContainerIds.isEmpty()) {
 			  attachAddOnContainersToGridSimulator(attachedGridSimulator.getName(), createdContainerIds);
 			}
+            
+            runHooks(HookType.POST_INSTALL, manifest, addOnInstance);
 
             dockerService.startContainers(createdContainerIds);
             LOG.info("Started {} container(s) for add-on {}.", createdContainerIds.size(), name);
@@ -380,6 +404,231 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             throw e;
         }
     }
+	
+	private void runHooks(HookType hookType, Manifest manifest, AddOnInstanceData addOnInstance) {
+		var hookScript = manifest.getHooks().get(hookType);
+		var variables = profileService.buildBaseVariables(addOnInstance,  new LinkedHashMap<>());
+		if(hookScript == null) {
+			LOG.info("No hook scripts for type {} in add-on {}", hookType, manifest.getName());
+		}
+		else {
+			LOG.info("Starting hook script for type {} in add-on {}", hookType, manifest.getName());
+			try {
+				for(var scriptDef : hookScript) {
+					var addOn = AddOnLevel.valueOf((String)scriptDef.getOrDefault("addOn", AddOnLevel.STACK.name()));
+					switch(addOn) {
+					case SIMULATOR:
+						var simType = SimulatorLevel.valueOf((String)scriptDef.getOrDefault("level", SimulatorLevel.STANDALONE.name()));
+						for(var sim : simulatorStateRepository.list().stream().filter(s -> s.getLevel() == simType).toList()) {
+							LOG.info("Executing {} hook script for add-on {} on simulator {}.", hookType, manifest.getName(), sim.getName());
+							runHooksForSimulator(sim, scriptDef, manifest, new LinkedHashMap<>(variables));
+						}
+						break;
+					default:
+						throw new UnsupportedOperationException("`addOn` type " + addOn + " not yet supported for install scripts.");
+					}
+				}
+			}
+			catch(Exception e) {
+				LOG.error("Failed to execute hook script for type {} in add-on {}.", hookType, manifest.getName(), e);
+			}
+		}
+	}
+	
+	private void runHooksForSimulator(SimulatorInstanceData sim, Map<String, Object> def, Manifest manifest, Map<String, String> variables) throws IOException {
+		var addOnDir = addOnRepository.resolve(manifest.getName())
+				.orElseThrow(() -> new IllegalStateException("Add-on manifest directory not found for " + manifest.getName() + ".")).toAbsolutePath().getParent();
+
+		variables = simulatorLevelProfileService.buildBaseVariables(sim, variables);
+		
+		switch((String)def.getOrDefault("type", "throw")) {
+		case "copy":
+		{
+			copyFile(def, addOnDir, variables);
+			break;
+		}
+		case "delete":
+		{
+			deleteFile(def, variables);
+			break;
+		}
+		case "deleteIni":
+		{
+			deleteIni(sim, def, variables);
+			break;
+		}
+		case "createIniKey":
+		{
+			createIniKey(sim, def, variables);
+			break;
+		}
+		case "exec":
+		{
+			exec(def, addOnDir, variables);
+			break;
+		}
+		case "throw":
+			throw new UnsupportedOperationException("Hook script type not specified for add-on install on simulator " + sim.getName() + ".");
+		}
+	}
+	
+	private void exec(Map<String, Object> def, Path addOnDir, Map<String, String> variables) throws IOException {
+		var cmdArgs = new ArrayList<String>();
+		if(def.containsKey("line")) {
+			cmdArgs.addAll(Strings.parseQuotedString(templateResolver.resolve((String)def.get("line"), variables)));
+		}
+		else if(def.containsKey("command")) {
+			cmdArgs.add(templateResolver.resolve((String)def.get("command"), variables));
+			if(def.containsKey("args")) {
+				@SuppressWarnings("unchecked")
+				var args = (List<String>)def.get("args");
+				for(var arg : args) {
+					cmdArgs.add(templateResolver.resolve(arg, variables));
+				}
+			}
+		}
+
+		else if(def.containsKey("script")) {
+			var scriptPath = addOnDir.resolve(getHookOpPath("script", def, variables)).normalize();
+			if(!def.containsKey("process") || (Boolean)def.get("process")) {
+				var target = Files.createTempFile("osais", "bash");
+				Files.writeString(target, templateResolver.resolve(loadFileTemplate(scriptPath.toAbsolutePath().toString()), variables), StandardCharsets.UTF_8);
+				cmdArgs.addAll(List.of("bash", target.toAbsolutePath().toString()));
+			}
+			else {
+				cmdArgs.addAll(List.of("bash", scriptPath.toAbsolutePath().toString()));
+			}
+		}
+		else {
+			throw new IllegalArgumentException("Hook script for add-on does not specify `line` or `command`.");
+		}
+		
+		var prcbldr = new ProcessBuilder(cmdArgs);
+		prcbldr.environment().putAll(variables.entrySet().stream().
+				map(e ->  {
+					if(e.getKey().startsWith("env.")) {
+						return Map.entry(e.getKey().substring(4), e.getValue() == null ? "" : e.getValue());
+					}
+					else {
+						return Map.entry(e.getKey().toUpperCase().replace('.', '_'), e.getValue() == null ? "" : e.getValue());
+					}
+				}).
+				collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+		prcbldr.directory(addOnDir.toFile());
+		prcbldr.inheritIO();
+		var process = prcbldr.start();
+		try {
+			var exitCode = process.waitFor();
+			if(exitCode != 0) {
+				throw new IllegalStateException("Hook script for add-on exited with code " + exitCode + ".");
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Hook script for add-on interrupted.", e);
+		}
+	}
+	
+	private void copyFile(Map<String, Object> def, Path addOnsDir, Map<String, String> variables) throws IOException {
+		var target = getHookOpPath("target", def, variables);
+		if(!target.isAbsolute()) {
+			throw new IllegalArgumentException("Hook script for add-on specifies non-absolute target path: " + target);
+		}
+		
+		var source = addOnsDir.resolve(getHookOpPath("source", def, variables)).normalize();
+		mkdirsForPath(target);
+		if(!def.containsKey("process") || (Boolean)def.get("process")) {
+			Files.writeString(target, templateResolver.resolve(loadFileTemplate(source.toAbsolutePath().toString()), variables), StandardCharsets.UTF_8);
+		}
+		else {
+			Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+		}
+		
+	}
+	
+	private Path mkdirsForPath(Path path) throws IOException {
+		var parent = path.getParent();
+		if(parent != null && !Files.exists(parent)) {
+			Files.createDirectories(parent);
+		}
+		return path;
+	}
+
+	private void deleteFile(Map<String, Object> def, Map<String, String> variables) throws IOException {
+		var path = getHookOpPath("path", def, variables);
+		Files.deleteIfExists(path);
+	}
+
+	private void createIniKey(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
+		
+		var path = getHookOpPath("path", def, variables);
+		
+		var ini = INI.fromFile(path);
+		var section = (String)def.get("section");
+		Data sectionData = ini;
+		if(section != null && !section.isBlank()) {
+			sectionData = ini.sectionOr(templateResolver.resolve(section,variables)).orElse(null);
+		}
+		if(sectionData == null) {
+			LOG.info("Hook script for add-on hook on {} specifies section '{}' in INI file {}, but section does not exist. Creataing.", dobj.getName(), section, path);
+			sectionData = ini.section(templateResolver.resolve(section,variables));
+		}
+		else {
+			var key = Optional.ofNullable((String)def.get("key"))
+					.map(template -> templateResolver.resolve(template, variables))
+					.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on on " + dobj.getName() + " does not specify INI key."));;
+					
+			sectionData.put(key, Optional.ofNullable((String)def.get("value"))
+					.map(template -> templateResolver.resolve(template, variables))
+					.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on on " + dobj.getName() + " does not specify INI value.")));
+			
+			new INIWriter.Builder().build().write(ini, path);
+		}
+	}
+
+	private void deleteIni(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
+		
+		var path = getHookOpPath("path", def, variables);
+		
+		var ini = INI.fromFile(path);
+		var section = (String)def.get("section");
+		Data sectionData = ini;
+		if(section != null && !section.isBlank()) {
+			sectionData = ini.sectionOr(templateResolver.resolve(section,variables)).orElse(null);
+		}
+		if(sectionData == null) {
+			LOG.warn("Hook script for add-on hook on {} specifies section '{}' in INI file {}, but section does not exist. Skipping.", dobj.getName(), section, path);
+		}
+		else {
+			if(def.containsKey("key")) {
+				var key = Optional.ofNullable((String)def.get("key"))
+						.map(template -> templateResolver.resolve(template, variables))
+						.get();
+						
+				if(sectionData.remove(key)) {
+					new INIWriter.Builder().build().write(ini, path);
+				}
+				else {
+					LOG.warn("Hook script for add-on on {} specifies key '{}' in INI file {}, but key does not exist. Skipping.", dobj.getName(), key, path);
+				}
+			}
+			else {
+				if(section == null || section.isBlank()) {
+					throw new IllegalArgumentException("Hook script for add-on on " + dobj.getName() + " does not specify INI section to delete.");
+				}
+				else {
+					((Section)ini).remove();
+					new INIWriter.Builder().build().write(ini, path);
+				}
+			}
+		}
+	}
+
+	private Path getHookOpPath(String key, Map<String, Object> def, Map<String, String> variables) {
+		return Optional.ofNullable((String)def.get(key))
+				.map(template -> templateResolver.resolve(template, variables))
+				.map(Path::of)
+				.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on does not specify `" + key + "`."));
+	}
 
 	private AddOnLevel resolveAddOnLevel(Map<AddOnLevel, Map<String, ContainerSpec>> extensions) {
 		if (extensions == null || extensions.isEmpty()) {

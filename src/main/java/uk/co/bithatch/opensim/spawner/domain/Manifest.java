@@ -15,6 +15,24 @@ public class Manifest implements DomainObject {
 	private Map<String, String> constants = new HashMap<>();
 	private Map<AddOnLevel, Map<String, ContainerSpec>> extensions = new HashMap<>();
 	private List<String> tokens = new ArrayList<>();
+	private Map<HookType, List<Map<String, Object>>> hooks = new HashMap<>();
+	private List<String> exports = new ArrayList<>();
+	
+	public List<String> getExports() {
+		return exports;
+	}
+
+	public void setExports(List<String> exports) {
+		this.exports = exports;
+	}
+
+	public Map<HookType, List<Map<String, Object>>> getHooks() {
+		return hooks;
+	}
+
+	public void setHooks(Map<HookType, List<Map<String, Object>>> hooks) {
+		this.hooks = hooks;
+	}
 
 	public String getName() {
 		return name;

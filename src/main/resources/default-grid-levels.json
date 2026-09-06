@@ -52,7 +52,6 @@
           "/config/sims/%sim.name%/config-include/StandaloneCommon.ini": "configuration/standalone/config-include/StandaloneCommon.ini",
           "/config/sims/%sim.name%/config-include/osslDefaultEnable.ini": "configuration/standalone/config-include/osslDefaultEnable.ini",
           "/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
-          "/config/sims/%sim.name%/config-include/os-webrtc-janus.ini": "configuration/standalone/config-include/os-webrtc-janus.ini",
           "/config/sims/%sim.name%/config-include/FlotsamCache.ini": "configuration/standalone/config-include/FlotsamCache.ini",
           "/config/sims/%sim.name%/Regions/Region.ini": "configuration/standalone/Regions/Region.ini"
         }
@@ -81,7 +80,6 @@
           "/config/sims/%sim.name%/config-include/GridCommon.ini": "configuration/grid/config-include/GridCommon.ini",
           "/config/sims/%sim.name%/config-include/osslDefaultEnable.ini": "configuration/grid/config-include/osslDefaultEnable.ini",
           "/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
-          "/config/sims/%sim.name%/config-include/os-webrtc-janus.ini": "configuration/grid/config-include/os-webrtc-janus.ini",
           "/config/sims/%sim.name%/config-include/FlotsamCache.ini": "configuration/grid/config-include/FlotsamCache.ini",
           "/config/sims/%sim.name%/Regions/Region.ini": "configuration/grid/Regions/Region.ini"
         }

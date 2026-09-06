@@ -2,6 +2,7 @@ package uk.co.bithatch.opensim.spawner.state;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,5 +34,10 @@ public class AddOnRepository extends AbstractStateRepository<Manifest> {
 	@Override
 	protected Path filePath(String name) {
 		return dataDir.resolve(name).resolve("manifest.json");
+	}
+
+	public Optional<Path> resolve(String name) {
+		var path = filePath(name);
+		return Files.exists(path) ? Optional.of(path) : Optional.empty();
 	}
 }
