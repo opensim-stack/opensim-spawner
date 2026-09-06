@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import uk.co.bithatch.opensim.spawner.domain.StackContainerView;
 import uk.co.bithatch.opensim.spawner.service.StackContainerService;
-import uk.co.bithatch.opensim.spawner.service.StackContainerView;
 
 @RestController
 @RequestMapping("/api/stack")

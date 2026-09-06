@@ -136,11 +136,17 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
             Map<String, String> requestFields) {
         var env = resolveMap(environmentNode, variables);
         var toRemove = new ArrayList<String>();
+        var gridState = gridStateRepository.get();
         for (var envEntry : env.entrySet()) {
-            var overrideValue = requestFields.get(envEntry.getKey());
-            if (overrideValue != null) {
-                envEntry.setValue(overrideValue);
-            }
+        	if(gridState.getGlobal().containsKey(envEntry.getKey())) {
+        		envEntry.setValue(templateResolver.resolve(gridState.getGlobal().get(envEntry.getKey()), variables));
+        	}
+        	else {
+        		var overrideValue = requestFields.get(envEntry.getKey());
+	            if (overrideValue != null) {
+	                envEntry.setValue(overrideValue);
+	            }
+        	}
 
             var val = envEntry.getValue();
             if (val.startsWith("%env.") && val.endsWith("%")) {

@@ -1,28 +1,37 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import static uk.co.bithatch.opensim.jlib.Strings.normalize;
+import static uk.co.bithatch.opensim.jlib.Strings.trimLeadingSlash;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
+import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.exception.NotFoundException;
+import com.github.dockerjava.api.model.AuthConfig;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.Frame;
@@ -37,8 +46,10 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 
 import jakarta.annotation.PreDestroy;
+import uk.co.bithatch.opensim.jlib.Strings;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
+import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Service
 public class DockerJavaService implements DockerService {
@@ -49,15 +60,183 @@ public class DockerJavaService implements DockerService {
     private final SpawnerProperties properties;
     private final Map<String, ResultCallback.Adapter<Frame>> activeLogStreams = new ConcurrentHashMap<>();
     private final Map<String, String> containerDisplayNames = new ConcurrentHashMap<>();
+	private final GridStateRepository gridStateRepository;
 
     @Autowired
-    public DockerJavaService(SpawnerProperties properties) {
-        this(properties, buildDockerClient());
+    public DockerJavaService(SpawnerProperties properties, GridStateRepository gridStateRepository) {
+        this(properties, buildDockerClient(), gridStateRepository);
     }
 
-    DockerJavaService(SpawnerProperties properties, DockerClient dockerClient) {
+    DockerJavaService(SpawnerProperties properties, DockerClient dockerClient, GridStateRepository gridStateRepository) {
         this.dockerClient = dockerClient;
         this.properties = properties;
+        this.gridStateRepository = gridStateRepository;
+    }
+
+    @Override
+    public String resolveLocalDigest(String targetImage) {
+        try {
+            var inspect = dockerClient.inspectImageCmd(targetImage).exec();
+            var repoDigests = inspect == null ? null : inspect.getRepoDigests();
+            if (repoDigests == null || repoDigests.isEmpty()) {
+                return DIGEST_UNKNOWN;
+            }
+
+            var repository = DockerService.dockerHubRepository(targetImage);
+            for (var repoDigest : repoDigests) {
+                if (repoDigest == null || !repoDigest.contains("@")) {
+                    continue;
+                }
+                var parts = repoDigest.split("@", 2);
+                if (parts.length != 2) {
+                    continue;
+                }
+                var digestRepository = DockerService.normalizeDockerIoRepository(parts[0]);
+                if (!repository.equals(digestRepository)) {
+                    continue;
+                }
+                var digest = parts[1].trim();
+                if (!digest.isBlank()) {
+                    return digest;
+                }
+            }
+
+            var first = repoDigests.get(0);
+            if (first != null && first.contains("@")) {
+                return first.split("@", 2)[1].trim();
+            }
+            return DIGEST_UNKNOWN;
+        } catch (NotFoundException e) {
+            return DIGEST_UNKNOWN;
+        } catch (RuntimeException e) {
+            LOG.warn("Could not inspect local image digest for {}.", targetImage, e);
+            return DIGEST_UNKNOWN;
+        }
+    }
+
+    @Override
+    public void pullImage(String image) {
+        try {
+            var command = dockerClient.pullImageCmd(image);
+            var updates = gridStateRepository.get().getUpdates();
+            var username = normalize(updates.getDockerHubUsername());
+            var token = normalize(updates.getDockerHubToken());
+            if (!username.isBlank() && !token.isBlank()) {
+                command = command.withAuthConfig(new AuthConfig()
+                        .withUsername(username)
+                        .withPassword(token)
+                        .withRegistryAddress("https://index.docker.io/v1/"));
+            }
+            command.start().awaitCompletion();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Interrupted while pulling Docker image " + image + ".", e);
+        } catch (RuntimeException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Failed to pull Docker image " + image + ": " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void recreateContainer(String containerName, String targetImage, Consumer<ContainerUpdateContext> context) {
+        var inspect = inspectContainer(containerName);
+        var oldContainerId = inspect.getId();
+        var oldContainerName = trimLeadingSlash(inspect.getName());
+        var preservedHostConfig = inspect.getHostConfig();
+        var preservedEnv = inspect.getConfig().getEnv();
+        var preservedAliases = collectNetworkAliases(inspect);
+
+        dockerClient.stopContainerCmd(oldContainerId).exec();
+        dockerClient.removeContainerCmd(oldContainerId).withForce(true).exec();
+
+        String createdContainerId = null;
+        try {
+            var create = dockerClient.createContainerCmd(targetImage)
+                    .withName(oldContainerName)
+                    .withEnv(preservedEnv)
+                    .withHostConfig(preservedHostConfig);
+            if (!preservedAliases.isEmpty()) {
+                create.withAliases(preservedAliases.toArray(String[]::new));
+            }
+
+            var config = inspect.getConfig();
+            if (config != null) {
+                if (config.getEnv() != null) {
+                    create.withEnv(config.getEnv());
+                }
+                if (config.getCmd() != null) {
+                    create.withCmd(config.getCmd());
+                }
+                if (config.getEntrypoint() != null) {
+                    create.withEntrypoint(config.getEntrypoint());
+                }
+                if (config.getWorkingDir() != null && !config.getWorkingDir().isBlank()) {
+                    create.withWorkingDir(config.getWorkingDir());
+                }
+                if (config.getUser() != null && !config.getUser().isBlank()) {
+                    create.withUser(config.getUser());
+                }
+                if (config.getDomainName() != null && !config.getDomainName().isBlank()) {
+                    create.withDomainName(config.getDomainName());
+                }
+                if (config.getHostName() != null && !config.getHostName().isBlank()) {
+                    create.withHostName(config.getHostName());
+                }
+                if (config.getLabels() != null && !config.getLabels().isEmpty()) {
+                    create.withLabels(config.getLabels());
+                }
+                if (config.getExposedPorts() != null && config.getExposedPorts().length > 0) {
+                    create.withExposedPorts(config.getExposedPorts());
+                }
+                create.withTty(Boolean.TRUE.equals(config.getTty()));
+            }
+            
+            context.accept(new ContainerUpdateContext() {
+				@Override
+				public void withEnv(String[] env) {
+					create.withEnv(env);
+				}
+
+				@Override
+				public String[] env() {
+					return create.getEnv();
+				}
+            });
+
+            var created = create.exec();
+            createdContainerId = created.getId();
+            dockerClient.startContainerCmd(createdContainerId).exec();
+        } catch (RuntimeException e) {
+            if (createdContainerId != null) {
+                try {
+                    dockerClient.removeContainerCmd(createdContainerId).withForce(true).exec();
+                } catch (RuntimeException ignored) {
+                    // Best effort cleanup of failed replacement container.
+                }
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Failed to replace container " + oldContainerName + " with updated image: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<String> listStackContainers() {
+        var projectPrefix = configuredProjectPrefix();
+        var containers = dockerClient.listContainersCmd().withShowAll(true).exec();
+        var response = new ArrayList<String>();
+
+        for (var container : containers) {
+            var containerName = primaryName(container == null ? null : container.getNames());
+            if (containerName == null || !containerName.startsWith(projectPrefix) || containerName.matches(".*-init-[0-9]+$")) {
+                continue;
+            }
+
+            response.add(containerName);
+        }
+
+        Collections.sort(response);
+        return response;
     }
 
     @Override
@@ -73,8 +252,30 @@ public class DockerJavaService implements DockerService {
             LOG.info("Created container {} with id {}.", spec.getName(), response.getId());
         }
         return containerRefs;
+    } 
+
+    private static String primaryName(String[] names) {
+        if (names == null || names.length == 0) {
+            return null;
+        }
+        for (var rawName : names) {
+            if (rawName == null || rawName.isBlank()) {
+                continue;
+            }
+            return rawName.startsWith("/") ? rawName.substring(1) : rawName;
+        }
+        return null;
     }
 
+	private String configuredProjectPrefix() {
+	    var prefix = properties.getComposeProjectName();
+	    if (prefix == null || prefix.isBlank()) {
+	        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+	                "COMPOSE_PROJECT_NAME is not configured for stack container discovery.");
+	    }
+	    return prefix.trim();
+	}
+	
     private void runInitContainers(ContainerSpec parentSpec) {
         var initSpecs = parentSpec.getInit();
         if (initSpecs == null || initSpecs.isEmpty()) {
@@ -153,10 +354,11 @@ public class DockerJavaService implements DockerService {
             hostConfig.withPortBindings(portBindings);
         }
 
+        var envList= Arrays.asList(Strings.mapToEnvVars(spec.getEnvironment()));
         var createCommand = dockerClient.createContainerCmd(spec.getImage())
                 .withName(spec.getName())
                 .withHostConfig(hostConfig)
-                .withEnv(toEnvList(spec.getEnvironment()));
+                .withEnv(envList);
 
         var exposedPorts = toExposedPorts(portBindings);
         if (!exposedPorts.isEmpty()) {
@@ -254,7 +456,7 @@ public class DockerJavaService implements DockerService {
 
     private void logEffectivePortMappings(String containerId) {
         try {
-            var inspect = dockerClient.inspectContainerCmd(containerId).exec();
+            var inspect = inspectContainer(containerId);
             var displayName = inspect.getName() == null ? resolveContainerDisplayName(containerId)
                     : inspect.getName().replaceFirst("^/", "");
             var hostConfigPorts = inspect.getHostConfig() == null ? null : inspect.getHostConfig().getPortBindings();
@@ -317,7 +519,35 @@ public class DockerJavaService implements DockerService {
             attachLogStreaming(id);
         }
     }
+    
+    @Override
+    public Map<String, String> getContainerVars(String ref) {
+        var idsByName = indexContainerIdsByName();
+        var id = resolveContainerId(ref, idsByName);
+        if (id == null) {
+            throw new IllegalArgumentException("Container {} not found while fetching status. " + ref);
+        }
+        try {
+            var inspect = inspectContainer(id);
+            return Strings.envVarsToMap(inspect.getConfig().getEnv());
+        } catch (RuntimeException e) {
+            LOG.error("Failed to inspect container {} (resolved id={}).", ref, id, e);
+            throw new ExternalDependencyException("Failed to inspect Docker container " + ref + ". " + e.getMessage(), e);
+        }
+    }
 
+    @Override
+	public ContainerDetails inspect(String id) {
+		var ir = inspectContainer(id);
+		return new ContainerDetails(
+				ir.getId(),
+				ir.getName(),
+				ir.getState().getStatus(),
+				ir.getState() == null ? false : Boolean.TRUE.equals(ir.getState().getRunning()),
+				ir.getConfig().getEnv(),
+				ir.getConfig().getImage());
+	}
+    
     @Override
     public List<ContainerStatus> getContainerStatuses(List<String> containerRefs) {
         var statuses = new ArrayList<ContainerStatus>();
@@ -330,7 +560,7 @@ public class DockerJavaService implements DockerService {
                 continue;
             }
             try {
-                var inspect = dockerClient.inspectContainerCmd(id).exec();
+                var inspect = inspectContainer(id);
                 var state = inspect.getState();
                 var name = inspect.getName() == null ? "" : inspect.getName().replaceFirst("^/", "");
                 LOG.info("Container status {} (ref={}, id={}): {}.",
@@ -378,6 +608,10 @@ public class DockerJavaService implements DockerService {
         }
     }
 
+	private InspectContainerResponse inspectContainer(String id) {
+		return dockerClient.inspectContainerCmd(id).exec();
+	}
+
     private Map<String, String> indexContainerIdsByName() {
         var idsByName = new LinkedHashMap<String, String>();
         for (var container : dockerClient.listContainersCmd().withShowAll(true).exec()) {
@@ -402,7 +636,7 @@ public class DockerJavaService implements DockerService {
         }
 
         try {
-            return dockerClient.inspectContainerCmd(containerRef).exec().getId();
+            return inspectContainer(containerRef).getId();
         } catch (NotFoundException ignored) {
             var normalized = normalizeContainerName(containerRef);
             return normalized == null ? null : idsByName.get(normalized);
@@ -483,26 +717,6 @@ public class DockerJavaService implements DockerService {
         } catch (NotFoundException e) {
             return false;
         }
-    }
-
-    private void pullImage(String image) {
-        try {
-            LOG.info("Pulling image {} due to pull policy {}.", image, properties.getOpensimPullPolicy());
-            dockerClient.pullImageCmd(image).start().awaitCompletion();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ExternalDependencyException("Interrupted while pulling Docker image " + image + ".", e);
-        } catch (RuntimeException e) {
-            throw new ExternalDependencyException("Failed to pull Docker image " + image + ". " + e.getMessage(), e);
-        }
-    }
-
-    private static List<String> toEnvList(Map<String, String> env) {
-        var values = new ArrayList<String>();
-        for (var entry : env.entrySet()) {
-            values.add(entry.getKey() + "=" + entry.getValue());
-        }
-        return values;
     }
 
     private static List<Bind> toBinds(Map<String, String> volumes) {
@@ -793,7 +1007,7 @@ public class DockerJavaService implements DockerService {
 
     private String resolveContainerDisplayName(String containerId) {
         try {
-            var inspect = dockerClient.inspectContainerCmd(containerId).exec();
+            var inspect = inspectContainer(containerId);
             var name = inspect.getName();
             if (name != null && !name.isBlank()) {
                 return name.replaceFirst("^/", "");
@@ -802,5 +1016,30 @@ public class DockerJavaService implements DockerService {
             LOG.debug("Falling back to container ID for display name of {}.", containerId, e);
         }
         return containerId.length() > 12 ? containerId.substring(0, 12) : containerId;
+    }
+
+    private static List<String> collectNetworkAliases(
+            InspectContainerResponse inspect) {
+        var aliases = new ArrayList<String>();
+        var networkSettings = inspect == null ? null : inspect.getNetworkSettings();
+        var networks = networkSettings == null ? null : networkSettings.getNetworks();
+        if (networks == null || networks.isEmpty()) {
+            return aliases;
+        }
+
+        for (var entry : networks.entrySet()) {
+            var endpoint = entry.getValue();
+            if (endpoint == null || endpoint.getAliases() == null) {
+                continue;
+            }
+
+            for (var alias : endpoint.getAliases()) {
+                var normalized = normalize(alias);
+                if (!normalized.isBlank() && !aliases.contains(normalized)) {
+                    aliases.add(normalized);
+                }
+            }
+        }
+        return aliases;
     }
 }

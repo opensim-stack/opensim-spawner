@@ -27,6 +27,7 @@ import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.domain.StackContainerView;
 
 @Service
 public class StackContainerService {
@@ -47,6 +48,7 @@ public class StackContainerService {
     }
 
     public List<StackContainerView> listStackContainers() {
+    	/* TODO refactor to use DockerServer */
         var projectPrefix = configuredProjectPrefix();
         var containers = dockerClient.listContainersCmd().withShowAll(true).exec();
         var response = new ArrayList<StackContainerView>();

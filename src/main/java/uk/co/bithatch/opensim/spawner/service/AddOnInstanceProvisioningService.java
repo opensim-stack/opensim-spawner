@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +34,7 @@ import uk.co.bithatch.opensim.spawner.domain.AddOnInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.AddOnLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.DomainObject;
+import uk.co.bithatch.opensim.spawner.domain.GridState;
 import uk.co.bithatch.opensim.spawner.domain.HookType;
 import uk.co.bithatch.opensim.spawner.domain.Manifest;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedAddOnPlan;
@@ -140,21 +142,35 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			var addOn = stateRepository.load(addOnName)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on not found."));
 			var contributions = resolveAddOnManagedContributions(addOn);
-			
+
+			var variables = profileService.buildBaseVariables(addOn,  new LinkedHashMap<>());
 			var mfOpt = addOnRepository.load(addOnName);
 			mfOpt.ifPresent(mf -> {
-	            runHooks(HookType.PRE_UNINSTALL, mf, addOn);	
+	            runHooks(HookType.PRE_UNINSTALL, mf, addOn, variables);	
+	        	removeExports(mf);
 			});
 			
 			if (addOn.getLevel() == AddOnLevel.SIMULATOR && !addOn.getContainerIds().isEmpty()) {
 				detachAddOnContainersFromGridSimulator(addOn.getGridServiceSimulatorName(), addOn.getContainerIds());
 			}
 			deleteContainerGroup(addOnName);
+            
 			removeAddOnManagedContributions(contributions);
 			reconcileParentConfigurations(contributions, "disabled", addOnName);
 			mfOpt.ifPresent(mf -> {
-	            runHooks(HookType.POST_UNINSTALL, mf, addOn);	
+	            restartContainersWithVariables(mf, addOn.getContainerIds());
+	            runHooks(HookType.POST_UNINSTALL, mf, addOn, variables);	
 			});
+		}
+	}
+
+	private void removeExports(Manifest mf) {
+		if(!mf.getExports().isEmpty()) {
+			var gridState = gridStateRepository.get();
+			for(var varName : mf.getExports()) {
+				gridState.getGlobal().remove(varName);
+			}
+			gridStateRepository.save();
 		}
 	}
 
@@ -348,12 +364,13 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
         var materializedFiles = new ArrayList<java.nio.file.Path>();
         var createdContainerIds = new ArrayList<String>();
         var containerRequestFields = new LinkedHashMap<>(createRequestFields);
+		var variables = profileService.buildBaseVariables(addOnInstance,  new LinkedHashMap<>());
         
         try {
+    		var gridState = gridStateRepository.get();
+			var changes = new AtomicBoolean(false);
         	if(!manifest.getTokens().isEmpty()) {
-        		var gridState = gridStateRepository.get();
 				LOG.info("Add-on {} has {} token(s) defined in manifest.", name, manifest.getTokens().size());
-				var changes = new AtomicBoolean(false);
 	        	manifest.getTokens().forEach(key -> {
 	        		if(!gridState.getTokens().containsKey(key)) {
 	        			var tokenValue = java.util.UUID.randomUUID().toString();
@@ -362,15 +379,16 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	        			changes.set(true);
 	        		}
 	        	});
-	        	if(changes.get()) {
-	        		gridStateRepository.save();
-	        		LOG.info("Grid state updated with new token(s) for add-on {}.", name);
-	        	}
 			}
 
+        	if(installExports(name, manifest, variables, gridState) || changes.get()) {
+        		gridStateRepository.save();
+        		LOG.info("Grid state updated with new token(s) for add-on {}.", name);
+        	}
+        	
             stateRepository.save(addOnInstance);
             
-            runHooks(HookType.PRE_INSTALL, manifest, addOnInstance);
+            runHooks(HookType.PRE_INSTALL, manifest, addOnInstance, variables);
             
             var plan = profileService.resolvePlan(addOnInstance, containerRequestFields);
             LOG.info("Resolved {} container spec(s) for add-on {}.", plan.containers().size(), name);
@@ -386,28 +404,85 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			  attachAddOnContainersToGridSimulator(attachedGridSimulator.getName(), createdContainerIds);
 			}
             
-            runHooks(HookType.POST_INSTALL, manifest, addOnInstance);
+            runHooks(HookType.POST_INSTALL, manifest, addOnInstance, variables);
 
             dockerService.startContainers(createdContainerIds);
             LOG.info("Started {} container(s) for add-on {}.", createdContainerIds.size(), name);
             waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
             LOG.info("Add-on {} provisioned successfully.", name);
             
+            restartContainersWithVariables(manifest, createdContainerIds);
 
             return addOnInstance;
         } catch (RuntimeException e) {
+        	removeExports(manifest);
             LOG.error("Provisioning failed for add-on {}. Starting rollback.", name, e);
+            runHooks(HookType.PRE_UNINSTALL, manifest, addOnInstance, variables);
             if (addOnInstance.getLevel() == AddOnLevel.SIMULATOR && !createdContainerIds.isEmpty()) {
             	detachAddOnContainersFromGridSimulator(addOnInstance.getGridServiceSimulatorName(), createdContainerIds);
             }
             rollbackFailedProvision(name, createdContainerIds, materializedFiles);
+            runHooks(HookType.POST_UNINSTALL, manifest, addOnInstance, variables);
             throw e;
         }
     }
+
+	private void restartContainersWithVariables(Manifest manifest, Collection<String> ignoredIds) {
+		var restartableContainers = new ArrayList<String>();
+		for(var ref : dockerService.listStackContainers()) {
+			if(ignoredIds.contains(ref)) {
+				continue;
+			}
+			var env = dockerService.getContainerVars(ref);
+			if(containsAny(env.keySet(), manifest.getExports())) {
+				LOG.info("Add-on export(s) detected in container {} environment: {}", ref, env);
+				restartableContainers.add(ref);
+			}
+		}
+		if(!restartableContainers.isEmpty()) {
+			LOG.info("Restarting {} container(s) to propagate add-on {} exports.", restartableContainers.size(), manifest.getName());
+			
+			// XXX Need to do more than restart containers here.
+			// Need to re-materialize files for these containers as well, because the 
+			// exported values may be used in managed files.
+			
+//			for(var ref : restartableContainers) {
+//				dockerService.recreateContainer(ref, (context) -> {
+//					context.withEnv();
+//				});
+//			}
+		}
+	}
 	
-	private void runHooks(HookType hookType, Manifest manifest, AddOnInstanceData addOnInstance) {
+	private boolean containsAny(Collection<String> collection, Collection<String> candidates) {
+		for(var candidate : candidates) {
+			if(collection.contains(candidate)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean installExports(String name, Manifest manifest, Map<String, String> variables, GridState gridState) {
+		var changes = false;
+		if(!manifest.getExports().isEmpty()) {
+			for(var varName : manifest.getExports()) {
+				var value = manifest.getConstants().get(varName);
+				if(value == null || value.isBlank()) {
+					throw new IllegalStateException("Add-on " + name + " export '" + varName + "' is not defined in manifest constants.");
+				}
+				else {
+					gridState.getGlobal().put(varName, templateResolver.resolve(value, variables));
+					LOG.info("Add-on {} export '{}' generated and added to grid state.", name, name);
+					changes = true;
+				}
+			}
+		}
+		return changes;
+	}
+	
+	private void runHooks(HookType hookType, Manifest manifest, AddOnInstanceData addOnInstance, Map<String, String> variables) {
 		var hookScript = manifest.getHooks().get(hookType);
-		var variables = profileService.buildBaseVariables(addOnInstance,  new LinkedHashMap<>());
 		if(hookScript == null) {
 			LOG.info("No hook scripts for type {} in add-on {}", hookType, manifest.getName());
 		}

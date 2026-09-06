@@ -7,9 +7,11 @@ import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -82,6 +84,34 @@ class BotProvisioningServiceTest {
         void setStatus(ContainerStatus status) {
             statusesByContainerId.put(status.containerId(), status);
         }
+
+		@Override
+		public List<String> listStackContainers() {
+			return new ArrayList<>();
+		}
+
+		@Override
+		public Map<String, String> getContainerVars(String ref) {
+			return new HashMap<>();
+		}
+
+		@Override
+		public void recreateContainer(String containerName, String targetImage, Consumer<ContainerUpdateContext> context) {
+		}
+
+		@Override
+		public void pullImage(String image) {
+		}
+
+		@Override
+		public String resolveLocalDigest(String targetImage) {
+			return null;
+		}
+
+		@Override
+		public ContainerDetails inspect(String id) {
+			return null;
+		}
     }
 
     @TempDir

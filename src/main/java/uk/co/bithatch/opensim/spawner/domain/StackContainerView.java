@@ -1,4 +1,4 @@
-package uk.co.bithatch.opensim.spawner.service;
+package uk.co.bithatch.opensim.spawner.domain;
 
 public record StackContainerView(
         String containerName,

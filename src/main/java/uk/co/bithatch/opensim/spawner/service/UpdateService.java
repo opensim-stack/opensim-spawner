@@ -1,8 +1,14 @@
 package uk.co.bithatch.opensim.spawner.service;
 
-import java.io.IOException;
+import static uk.co.bithatch.opensim.jlib.Strings.normalize;
+import static uk.co.bithatch.opensim.jlib.Strings.urlEncode;
+import static uk.co.bithatch.opensim.spawner.service.DockerService.DIGEST_UNKNOWN;
+import static uk.co.bithatch.opensim.spawner.service.DockerService.dockerHubRepository;
+import static uk.co.bithatch.opensim.spawner.service.DockerService.imageTag;
+import static uk.co.bithatch.opensim.spawner.service.DockerService.isDockerHubImage;
+import static uk.co.bithatch.opensim.spawner.service.DockerService.normalizeContainerName;
+
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -27,13 +33,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.exception.NotFoundException;
-import com.github.dockerjava.api.model.AuthConfig;
-import com.github.dockerjava.api.model.ContainerNetwork;
-import com.github.dockerjava.core.DefaultDockerClientConfig;
-import com.github.dockerjava.core.DockerClientBuilder;
-import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 
 import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
@@ -43,14 +42,13 @@ import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 public class UpdateService {
 
     private static final Logger LOG = LoggerFactory.getLogger(UpdateService.class);
-    private static final String DIGEST_UNKNOWN = "unknown";
     private static final Duration MANIFEST_CACHE_TTL = Duration.ofMinutes(15);
 
     private final SpawnerProperties properties;
     private final GridStateRepository gridStateRepository;
     private final ObjectMapper objectMapper;
-    private final DockerClient dockerClient;
     private final HttpClient httpClient;
+	private final DockerService dockerService;
 
     private volatile Instant lastRefresh = Instant.EPOCH;
     private volatile Map<String, StackContainerUpdateStatus> cachedStatusByContainer = Map.of();
@@ -58,19 +56,13 @@ public class UpdateService {
     @Autowired
     public UpdateService(SpawnerProperties properties,
             GridStateRepository gridStateRepository,
-            ObjectMapper objectMapper) {
-        this(properties, gridStateRepository, objectMapper, buildDockerClient());
-    }
-
-    UpdateService(SpawnerProperties properties,
-            GridStateRepository gridStateRepository,
             ObjectMapper objectMapper,
-            DockerClient dockerClient) {
+            DockerService dockerService) {
         this.properties = properties;
         this.gridStateRepository = gridStateRepository;
         this.objectMapper = objectMapper;
-        this.dockerClient = dockerClient;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+        this.dockerService = dockerService;
     }
 
     public synchronized Map<String, StackContainerUpdateStatus> containerUpdateStatus(boolean forceRefresh) {
@@ -89,8 +81,8 @@ public class UpdateService {
             return state;
         }
 
-        pullImage(state.targetImage());
-        recreateContainer(state.containerName(), state.targetImage());
+        dockerService.pullImage(state.targetImage());
+        dockerService.recreateContainer(state.containerName(), state.targetImage());
         var refreshed = inspectContainerForUpdate(normalizedName);
         cachedStatusByContainer = refreshStatusSnapshot();
         lastRefresh = Instant.now();
@@ -147,11 +139,7 @@ public class UpdateService {
 
     private Map<String, StackContainerUpdateStatus> refreshStatusSnapshot() {
         var byContainer = new LinkedHashMap<String, StackContainerUpdateStatus>();
-        for (var container : dockerClient.listContainersCmd().withShowAll(true).exec()) {
-            var containerName = primaryName(container == null ? null : container.getNames());
-            if (containerName == null || !isTrackedContainer(containerName)) {
-                continue;
-            }
+        for (var containerName : dockerService.listStackContainers()) {
             try {
                 var status = inspectContainerForUpdate(containerName);
                 byContainer.put(containerName, status);
@@ -165,10 +153,10 @@ public class UpdateService {
     }
 
     private StackContainerUpdateStatus inspectContainerForUpdate(String containerName) {
-        var inspect = dockerClient.inspectContainerCmd(containerName).exec();
-        var imageFromConfig = inspect.getConfig() == null ? "" : String.valueOf(inspect.getConfig().getImage());
-        var targetImage = toTaggedImage(imageFromConfig, configuredTag());
-        var localDigest = resolveLocalDigest(targetImage);
+        var inspect = dockerService.inspect(containerName);
+        var imageFromConfig = inspect.image();
+        var targetImage = DockerService.toTaggedImage(imageFromConfig, configuredTag());
+        var localDigest = dockerService.resolveLocalDigest(targetImage); 
         var remoteDigest = resolveRemoteDigest(targetImage);
         var updateAvailable = shouldUpdate(localDigest, remoteDigest);
         return new StackContainerUpdateStatus(containerName, targetImage, updateAvailable, localDigest, remoteDigest);
@@ -214,161 +202,6 @@ public class UpdateService {
             }
         }
         return result;
-    }
-
-    private void recreateContainer(String containerName, String targetImage) {
-        var inspect = dockerClient.inspectContainerCmd(containerName).exec();
-        var oldContainerId = inspect.getId();
-        var oldContainerName = trimLeadingSlash(inspect.getName());
-        var preservedHostConfig = inspect.getHostConfig();
-        var preservedAliases = collectNetworkAliases(inspect);
-
-        dockerClient.stopContainerCmd(oldContainerId).exec();
-        dockerClient.removeContainerCmd(oldContainerId).withForce(true).exec();
-
-        String createdContainerId = null;
-        try {
-            var create = dockerClient.createContainerCmd(targetImage)
-                    .withName(oldContainerName)
-                    .withHostConfig(preservedHostConfig);
-            if (!preservedAliases.isEmpty()) {
-                create.withAliases(preservedAliases.toArray(String[]::new));
-            }
-
-            var config = inspect.getConfig();
-            if (config != null) {
-                if (config.getEnv() != null) {
-                    create.withEnv(config.getEnv());
-                }
-                if (config.getCmd() != null) {
-                    create.withCmd(config.getCmd());
-                }
-                if (config.getEntrypoint() != null) {
-                    create.withEntrypoint(config.getEntrypoint());
-                }
-                if (config.getWorkingDir() != null && !config.getWorkingDir().isBlank()) {
-                    create.withWorkingDir(config.getWorkingDir());
-                }
-                if (config.getUser() != null && !config.getUser().isBlank()) {
-                    create.withUser(config.getUser());
-                }
-                if (config.getDomainName() != null && !config.getDomainName().isBlank()) {
-                    create.withDomainName(config.getDomainName());
-                }
-                if (config.getHostName() != null && !config.getHostName().isBlank()) {
-                    create.withHostName(config.getHostName());
-                }
-                if (config.getLabels() != null && !config.getLabels().isEmpty()) {
-                    create.withLabels(config.getLabels());
-                }
-                if (config.getExposedPorts() != null && config.getExposedPorts().length > 0) {
-                    create.withExposedPorts(config.getExposedPorts());
-                }
-                create.withTty(Boolean.TRUE.equals(config.getTty()));
-            }
-
-            var created = create.exec();
-            createdContainerId = created.getId();
-            dockerClient.startContainerCmd(createdContainerId).exec();
-        } catch (RuntimeException e) {
-            if (createdContainerId != null) {
-                try {
-                    dockerClient.removeContainerCmd(createdContainerId).withForce(true).exec();
-                } catch (RuntimeException ignored) {
-                    // Best effort cleanup of failed replacement container.
-                }
-            }
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "Failed to replace container " + oldContainerName + " with updated image: " + e.getMessage(), e);
-        }
-    }
-
-    private static List<String> collectNetworkAliases(
-            com.github.dockerjava.api.command.InspectContainerResponse inspect) {
-        var aliases = new ArrayList<String>();
-        var networkSettings = inspect == null ? null : inspect.getNetworkSettings();
-        var networks = networkSettings == null ? null : networkSettings.getNetworks();
-        if (networks == null || networks.isEmpty()) {
-            return aliases;
-        }
-
-        for (var entry : networks.entrySet()) {
-            var endpoint = entry.getValue();
-            if (endpoint == null || endpoint.getAliases() == null) {
-                continue;
-            }
-
-            for (var alias : endpoint.getAliases()) {
-                var normalized = normalize(alias);
-                if (!normalized.isBlank() && !aliases.contains(normalized)) {
-                    aliases.add(normalized);
-                }
-            }
-        }
-        return aliases;
-    }
-
-    private void pullImage(String image) {
-        try {
-            var command = dockerClient.pullImageCmd(image);
-            var updates = gridStateRepository.get().getUpdates();
-            var username = normalize(updates.getDockerHubUsername());
-            var token = normalize(updates.getDockerHubToken());
-            if (!username.isBlank() && !token.isBlank()) {
-                command = command.withAuthConfig(new AuthConfig()
-                        .withUsername(username)
-                        .withPassword(token)
-                        .withRegistryAddress("https://index.docker.io/v1/"));
-            }
-            command.start().awaitCompletion();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "Interrupted while pulling Docker image " + image + ".", e);
-        } catch (RuntimeException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
-                    "Failed to pull Docker image " + image + ": " + e.getMessage(), e);
-        }
-    }
-
-    private String resolveLocalDigest(String targetImage) {
-        try {
-            var inspect = dockerClient.inspectImageCmd(targetImage).exec();
-            var repoDigests = inspect == null ? null : inspect.getRepoDigests();
-            if (repoDigests == null || repoDigests.isEmpty()) {
-                return DIGEST_UNKNOWN;
-            }
-
-            var repository = dockerHubRepository(targetImage);
-            for (var repoDigest : repoDigests) {
-                if (repoDigest == null || !repoDigest.contains("@")) {
-                    continue;
-                }
-                var parts = repoDigest.split("@", 2);
-                if (parts.length != 2) {
-                    continue;
-                }
-                var digestRepository = normalizeDockerIoRepository(parts[0]);
-                if (!repository.equals(digestRepository)) {
-                    continue;
-                }
-                var digest = parts[1].trim();
-                if (!digest.isBlank()) {
-                    return digest;
-                }
-            }
-
-            var first = repoDigests.get(0);
-            if (first != null && first.contains("@")) {
-                return first.split("@", 2)[1].trim();
-            }
-            return DIGEST_UNKNOWN;
-        } catch (NotFoundException e) {
-            return DIGEST_UNKNOWN;
-        } catch (RuntimeException e) {
-            LOG.warn("Could not inspect local image digest for {}.", targetImage, e);
-            return DIGEST_UNKNOWN;
-        }
     }
 
     private String resolveRemoteDigest(String targetImage) {
@@ -459,90 +292,10 @@ public class UpdateService {
         return prefix.trim();
     }
 
-    private static String normalizeContainerName(String containerName) {
-        var normalized = normalize(containerName);
-        if (normalized.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing required field: container.");
-        }
-        return normalized;
-    }
-
-    private static String toTaggedImage(String imageRef, String tag) {
-        var normalizedImage = normalize(imageRef);
-        if (normalizedImage.isBlank()) {
-            return "";
-        }
-
-        var imageWithoutDigest = normalizedImage.contains("@")
-                ? normalizedImage.substring(0, normalizedImage.indexOf('@'))
-                : normalizedImage;
-        var lastSlash = imageWithoutDigest.lastIndexOf('/');
-        var lastColon = imageWithoutDigest.lastIndexOf(':');
-        var hasTag = lastColon > lastSlash;
-        var base = hasTag ? imageWithoutDigest.substring(0, lastColon) : imageWithoutDigest;
-        return base + ":" + normalize(tag, "latest");
-    }
-
-    private static boolean isDockerHubImage(String imageRef) {
-        var repository = repositoryPart(imageRef);
-        var slash = repository.indexOf('/');
-        if (slash < 0) {
-            return true;
-        }
-        var firstSegment = repository.substring(0, slash);
-        return !firstSegment.contains(".") && !firstSegment.contains(":") && !"localhost".equals(firstSegment);
-    }
-
-    private static String dockerHubRepository(String imageRef) {
-        return normalizeDockerIoRepository(repositoryPart(imageRef));
-    }
-
-    private static String normalizeDockerIoRepository(String repository) {
-        var normalized = normalize(repository).toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("docker.io/")) {
-            normalized = normalized.substring("docker.io/".length());
-        }
-        if (normalized.startsWith("index.docker.io/")) {
-            normalized = normalized.substring("index.docker.io/".length());
-        }
-        if (!normalized.contains("/")) {
-            return "library/" + normalized;
-        }
-        return normalized;
-    }
-
-    private static String repositoryPart(String imageRef) {
-        var normalized = normalize(imageRef);
-        if (normalized.isBlank()) {
-            return "";
-        }
-
-        var noDigest = normalized.contains("@") ? normalized.substring(0, normalized.indexOf('@')) : normalized;
-        var lastSlash = noDigest.lastIndexOf('/');
-        var lastColon = noDigest.lastIndexOf(':');
-        if (lastColon > lastSlash) {
-            return noDigest.substring(0, lastColon);
-        }
-        return noDigest;
-    }
-
-    private static String imageTag(String imageRef) {
-        var normalized = normalize(imageRef);
-        if (normalized.isBlank()) {
-            return "latest";
-        }
-
-        var noDigest = normalized.contains("@") ? normalized.substring(0, normalized.indexOf('@')) : normalized;
-        var lastSlash = noDigest.lastIndexOf('/');
-        var lastColon = noDigest.lastIndexOf(':');
-        if (lastColon > lastSlash) {
-            return noDigest.substring(lastColon + 1);
-        }
-        return "latest";
-    }
+   
 
     private static boolean isSpawnerImage(String imageRef) {
-        var repository = repositoryPart(imageRef);
+        var repository = DockerService.repositoryPart(imageRef);
         if (repository.isBlank()) {
             return false;
         }
@@ -550,55 +303,8 @@ public class UpdateService {
         return "opensim-spawner".equals(tail);
     }
 
-    private static String primaryName(String[] names) {
-        if (names == null || names.length == 0) {
-            return null;
-        }
-        for (var rawName : names) {
-            if (rawName == null || rawName.isBlank()) {
-                continue;
-            }
-            return trimLeadingSlash(rawName);
-        }
-        return null;
-    }
-
-    private static String trimLeadingSlash(String name) {
-        if (name == null) {
-            return "";
-        }
-        return name.startsWith("/") ? name.substring(1) : name;
-    }
-
-    private static String normalize(String value) {
-        return value == null ? "" : value.trim();
-    }
-
-    private static String normalize(String value, String fallback) {
-        var normalized = normalize(value);
-        return normalized.isBlank() ? fallback : normalized;
-    }
-
-    private static String urlEncode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
-    private static DockerClient buildDockerClient() {
-        var config = DefaultDockerClientConfig.createDefaultConfigBuilder().build();
-        var httpClient = new ApacheDockerHttpClient.Builder()
-                .dockerHost(config.getDockerHost())
-                .sslConfig(config.getSSLConfig())
-                .build();
-        return DockerClientBuilder.getInstance(config).withDockerHttpClient(httpClient).build();
-    }
-
     @PreDestroy
     public void shutdown() {
-        try {
-            dockerClient.close();
-        } catch (IOException ignored) {
-            // Best effort.
-        }
     }
 
     public record StackContainerUpdateStatus(
