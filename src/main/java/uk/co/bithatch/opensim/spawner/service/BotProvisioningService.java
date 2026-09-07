@@ -230,17 +230,22 @@ public class BotProvisioningService
 		validateParentCanCreate(parent, level);
 		var password = defaultValue(createRequestFields.get("password"), passwordService::nextPassword);
 		var email = defaultEmail(first, last, createRequestFields.get("email"));
-		var model = defaultValue(createRequestFields.get("model"), "Ruth");
 		var appearance = resolveRequestedAppearance(level, createRequestFields);
 		var gender = resolveRequestedGender(level, createRequestFields);
-		var uuid = defaultValue(createRequestFields.get("uuid"), () -> UUID.randomUUID().toString());
 		var token = UUID.randomUUID().toString();
-		LOG.info("Creating bot {} {} (level={}, parent='{}', email={}, uuid={}, model={}, appearance={}, gender={}).",
-				first, last, level.name(), parent, email, uuid, model, appearance,
+		
+		// TODO Consider allowing x/y to be specified in requestFields for more control over spawn location.
+		var x = Integer.parseInt(defaultValue(createRequestFields.get("x"), "-1"));
+		var y = Integer.parseInt(defaultValue(createRequestFields.get("y"), "-1"));
+		var region = defaultValue(createRequestFields.get("region"), "");
+		
+		LOG.info("Creating bot {} {} @ {}, {} (level={}, parent='{}', email={}, appearance={}, gender={}).",
+				first, last, x, y, level.name(), parent, email, appearance,
 				gender == null ? null : gender.name().toLowerCase(Locale.ROOT));
 
+		String uuid;
 		try {
-			openSimService.createUser(first, last, password, email, uuid, model);
+			uuid = openSimService.createUser(first, last, password, x, y, region, email);
 		} catch (ExternalDependencyException e) {
 			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
 					"OpenSimulator user creation failed: " + e.getMessage());
@@ -254,7 +259,6 @@ public class BotProvisioningService
 		containerRequestFields.remove("email");
 		containerRequestFields.remove("first");
 		containerRequestFields.remove("last");
-		containerRequestFields.remove("model");
 		containerRequestFields.remove("appearance");
 		containerRequestFields.remove("gender");
 		containerRequestFields.remove("password");
@@ -279,7 +283,6 @@ public class BotProvisioningService
 			bot.setParent(parent);
 			bot.setEmail(email);
 			bot.setUuid(uuid);
-			bot.setModel(model);
 			bot.setRequestFields(containerRequestFields);
 			stateRepository.save(bot);
 			provisionBot(bot, materializedFiles, createdContainerIds,

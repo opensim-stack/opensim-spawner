@@ -70,16 +70,14 @@ public class ApprovalService {
         var normalizedLast = normalizeName("last", last);
         var approval = loadRequired(normalizedFirst, normalizedLast);
 
-        var uuid = UUID.randomUUID().toString();
-        var model = "Ruth";
-
         openSimService.createUser(
                 approval.getFirst(),
                 approval.getLast(),
                 approval.getPassword(),
-                approval.getEmail(),
-                uuid,
-                model);
+                -1,
+                -1,
+                null,
+                approval.getEmail());
 
         if (asHandler) {
             botProvisioningService.addHandler("*", "*", approval.getFirst(), approval.getLast());

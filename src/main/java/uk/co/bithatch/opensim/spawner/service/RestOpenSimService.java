@@ -14,7 +14,9 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.jlib.OpensimRESTConsole;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient;
@@ -60,7 +62,9 @@ public class RestOpenSimService implements OpenSimService {
         this.gridStateRepository = gridStateRepository;
     }
 
+
     @Override
+    @Deprecated
     public void createUser(String first, String last, String password, String email, String uuid, String model) {
         try {
             LOG.info("Creating OpenSim user {} {} (email={}, uuid={}, model={}).", first, last, email, uuid, model);
@@ -69,6 +73,37 @@ public class RestOpenSimService implements OpenSimService {
                 return null;
             });
             LOG.info("Created OpenSim user {} {}.", first, last);
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException("Failed to create OpenSimulator user via REST console. " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public String createUser(String first, String last, String password, int x, int y, String region, String email) {
+        try {
+            LOG.info("Creating OpenSim user {} {} @ {}, {} (email={}).", first, last, x, y, email);
+            
+            if(x == -1 && y == -1) {
+            	RegionInstanceData r;
+            	if(region != null && !region.isBlank()) {
+    				r = simStateRepository.findRegion(region).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Region not found: " + region));
+    			} else {
+    				r = simStateRepository.findAnyRegion().orElse(null);
+    			}
+    			x = r.getX();
+    			y = r.getY();
+    		}
+            
+			var admin= openRemoteAdmin();
+			String uuid;
+			if(email == null || email.isBlank()) {
+				uuid = admin.createUser(first, last, password, x, y);
+			}
+			else {
+				uuid = admin.createUser(first, last, password, x, y, email);
+			}
+            LOG.info("Created OpenSim user {} {} [{}] @ {}, {}.", first, last, uuid, x, y);
+            return uuid;
         } catch (RuntimeException e) {
             throw new ExternalDependencyException("Failed to create OpenSimulator user via REST console. " + e.getMessage(), e);
         }

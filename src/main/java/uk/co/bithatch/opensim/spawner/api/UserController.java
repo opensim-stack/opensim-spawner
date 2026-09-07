@@ -3,7 +3,6 @@ package uk.co.bithatch.opensim.spawner.api;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -16,8 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
+import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 
 @RestController
@@ -43,13 +42,14 @@ public class UserController {
     public Map<String, Object> createUser(@RequestParam String first,
             @RequestParam String last,
             @RequestParam String password,
-            @RequestParam String email,
-            @RequestParam(required = false) String model,
-            @RequestParam(defaultValue = "false") boolean botHandler) {
+            @RequestParam(defaultValue = "") String email,
+            @RequestParam(defaultValue = "false") boolean botHandler,
+            @RequestParam(defaultValue = "") String region,
+            @RequestParam(defaultValue = "-1") int x,
+            @RequestParam(defaultValue = "-1") int y) {
         ensureGridLoginServiceAvailable();
-        var effectiveModel = (model == null || model.isBlank()) ? "Ruth" : model;
-        var uuid = UUID.randomUUID().toString();
-        openSimService.createUser(first, last, password, email, uuid, effectiveModel);
+        
+        var uuid = openSimService.createUser(first, last, password, x, y, region, email);
         if (botHandler) {
             botProvisioningService.addHandler("*", "*", first, last);
         }
@@ -59,7 +59,6 @@ public class UserController {
         response.put("first", first);
         response.put("last", last);
         response.put("email", email);
-        response.put("model", effectiveModel);
         response.put("botHandler", botHandler);
         response.put("uuid", uuid);
         return response;

@@ -34,7 +34,10 @@ public interface OpenSimService {
     record RegionOptionsData(boolean isPublic, boolean enableVoice) {
     }
 
+    @Deprecated
     void createUser(String first, String last, String password, String email, String uuid, String model);
+
+    String createUser(String first, String last, String password, int x, int y, String region,  String email);
 
     void loadInventoryArchive(String first, String last, String inventoryPath, String password, String archivePath);
 

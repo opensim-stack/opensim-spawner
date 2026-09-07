@@ -4,7 +4,6 @@ import static uk.co.bithatch.opensim.jlib.Strings.normalize;
 import static uk.co.bithatch.opensim.jlib.Strings.trimLeadingSlash;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -26,7 +24,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.InspectContainerResponse;
@@ -34,7 +31,6 @@ import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.AuthConfig;
 import com.github.dockerjava.api.model.Bind;
 import com.github.dockerjava.api.model.ExposedPort;
-import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.InternetProtocol;
 import com.github.dockerjava.api.model.PortBinding;
@@ -58,8 +54,6 @@ public class DockerJavaService implements DockerService {
 
     private final DockerClient dockerClient;
     private final SpawnerProperties properties;
-    private final Map<String, ResultCallback.Adapter<Frame>> activeLogStreams = new ConcurrentHashMap<>();
-    private final Map<String, String> containerDisplayNames = new ConcurrentHashMap<>();
 	private final GridStateRepository gridStateRepository;
 
     @Autowired
@@ -417,7 +411,6 @@ public class DockerJavaService implements DockerService {
             LOG.info("Starting container {} (resolved id={}).", ref, id);
             dockerClient.startContainerCmd(id).exec();
             logEffectivePortMappings(id);
-            attachLogStreaming(id);
             LOG.info("Started container {}.", ref);
         }
     }
@@ -431,7 +424,6 @@ public class DockerJavaService implements DockerService {
                 throw new NotFoundException("Container not found: " + ref);
             }
             LOG.info("Stopping container {} (resolved id={}).", ref, id);
-            detachLogStreaming(id);
             dockerClient.stopContainerCmd(id).exec();
             LOG.info("Stopped container {}.", ref);
         }
@@ -446,10 +438,8 @@ public class DockerJavaService implements DockerService {
                 throw new NotFoundException("Container not found: " + ref);
             }
             LOG.info("Restarting container {} (resolved id={}).", ref, id);
-            detachLogStreaming(id);
             dockerClient.restartContainerCmd(id).exec();
             logEffectivePortMappings(id);
-            attachLogStreaming(id);
             LOG.info("Restarted container {}.", ref);
         }
     }
@@ -516,7 +506,6 @@ public class DockerJavaService implements DockerService {
                 LOG.warn("Container {} not found while attaching logs.", ref);
                 continue;
             }
-            attachLogStreaming(id);
         }
     }
     
@@ -595,7 +584,6 @@ public class DockerJavaService implements DockerService {
             }
             try {
                 LOG.info("Removing container {} (resolved id={}, force=true, removeVolumes=true).", ref, id);
-                detachLogStreaming(id);
                 dockerClient.removeContainerCmd(id).withForce(true).withRemoveVolumes(true).exec();
                 LOG.info("Removed container {}.", ref);
             } catch (NotFoundException ignored) {
@@ -920,88 +908,11 @@ public class DockerJavaService implements DockerService {
     }
 
     @PreDestroy
-    public void shutdownLoggingAndDockerClient() {
-        for (var containerId : List.copyOf(activeLogStreams.keySet())) {
-            detachLogStreaming(containerId);
-        }
+    public void shutdownDockerClient() {
         try {
             dockerClient.close();
         } catch (IOException e) {
             LOG.warn("Failed to close Docker client cleanly during shutdown.", e);
-        }
-    }
-
-    private void attachLogStreaming(String containerId) {
-        if (containerId == null || containerId.isBlank()) {
-            return;
-        }
-        if (activeLogStreams.containsKey(containerId)) {
-            return;
-        }
-
-        var displayName = resolveContainerDisplayName(containerId);
-        containerDisplayNames.put(containerId, displayName);
-
-        var callback = new ResultCallback.Adapter<Frame>() {
-            @Override
-            public void onNext(Frame frame) {
-                var payload = frame == null ? null : frame.getPayload();
-                if (payload == null || payload.length == 0) {
-                    return;
-                }
-                var message = new String(payload, StandardCharsets.UTF_8).stripTrailing();
-                if (message.isEmpty()) {
-                    return;
-                }
-                for (var line : message.split("\\R")) {
-                    if (!line.isBlank()) {
-                        System.err.println("[container:" + displayName + "] " + line);
-                    }
-                }
-            }
-
-            @Override
-            public void onError(Throwable throwable) {
-                LOG.warn("Container log stream for {} ({}) ended with error: {}",
-                        displayName,
-                        containerId,
-                        throwable.getMessage());
-            }
-        };
-
-        if (activeLogStreams.putIfAbsent(containerId, callback) != null) {
-            return;
-        }
-
-        try {
-            dockerClient.logContainerCmd(containerId)
-                    .withStdOut(true)
-                    .withStdErr(true)
-                    .withFollowStream(true)
-                    .exec(callback);
-            LOG.info("Attached log stream for container {} ({}).", displayName, containerId);
-        } catch (RuntimeException e) {
-            activeLogStreams.remove(containerId);
-            containerDisplayNames.remove(containerId);
-            LOG.warn("Could not attach log stream for container {}.", containerId, e);
-        }
-    }
-
-    private void detachLogStreaming(String containerId) {
-        var displayName = containerDisplayNames.remove(containerId);
-        var callback = activeLogStreams.remove(containerId);
-        if (callback == null) {
-            return;
-        }
-        try {
-            callback.close();
-            if (displayName == null) {
-                LOG.info("Detached log stream for container {}.", containerId);
-            } else {
-                LOG.info("Detached log stream for container {} ({}).", displayName, containerId);
-            }
-        } catch (IOException e) {
-            LOG.warn("Failed to detach log stream for container {} cleanly.", containerId, e);
         }
     }
 
