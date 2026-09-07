@@ -13,8 +13,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 
-import jakarta.annotation.PreDestroy;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,6 +24,7 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 
+import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.StackContainerView;
 
@@ -48,7 +47,7 @@ public class StackContainerService {
     }
 
     public List<StackContainerView> listStackContainers() {
-    	/* TODO refactor to use DockerServer */
+    	/* TODO refactor to use DockerService */
         var projectPrefix = configuredProjectPrefix();
         var containers = dockerClient.listContainersCmd().withShowAll(true).exec();
         var response = new ArrayList<StackContainerView>();

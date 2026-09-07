@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
-import uk.co.bithatch.opensim.spawner.domain.AddOnLevel;
+import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.state.AddOnInstanceStateRepository;
 import uk.co.bithatch.opensim.spawner.state.BotStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
@@ -81,7 +81,7 @@ public class ContainerReferenceMigrationService {
                         () -> addOnInstanceStateRepository.save(addOn),
                         addOn::setContainerIds);
 
-                if (addOn.getLevel() == AddOnLevel.SIMULATOR
+                if (addOn.getLevel() == ContainerLevel.SIMULATOR
                         && addOn.getGridServiceSimulatorName() != null
                         && !addOn.getGridServiceSimulatorName().isBlank()) {
                     addOnNamesBySimulator.computeIfAbsent(addOn.getGridServiceSimulatorName(), _ignored -> new ArrayList<>())

@@ -13,7 +13,7 @@ public class Manifest implements DomainObject {
 	private String author;
 	private String icon;
 	private Map<String, String> constants = new HashMap<>();
-	private Map<AddOnLevel, Map<String, ContainerSpec>> extensions = new HashMap<>();
+	private Map<ContainerLevel, Map<String, ContainerSpec>> extensions = new HashMap<>();
 	private List<String> tokens = new ArrayList<>();
 	private Map<HookType, List<Map<String, Object>>> hooks = new HashMap<>();
 	private List<String> exports = new ArrayList<>();
@@ -82,11 +82,11 @@ public class Manifest implements DomainObject {
 		this.constants = constants;
 	}
 
-	public Map<AddOnLevel, Map<String, ContainerSpec>> getExtensions() {
+	public Map<ContainerLevel, Map<String, ContainerSpec>> getExtensions() {
 		return extensions;
 	}
 
-	public void setExtensions(Map<AddOnLevel, Map<String, ContainerSpec>> extensions) {
+	public void setExtensions(Map<ContainerLevel, Map<String, ContainerSpec>> extensions) {
 		this.extensions = extensions;
 	}
 

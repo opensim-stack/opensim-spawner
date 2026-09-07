@@ -1,5 +1,7 @@
 package uk.co.bithatch.opensim.spawner.domain;
 
+import java.util.Map;
+
 public class BotInstanceData extends ContainerGroupInstanceData<BotLevel> {
 
     private String first;
@@ -10,8 +12,11 @@ public class BotInstanceData extends ContainerGroupInstanceData<BotLevel> {
     private String uuid;
     private String model;
     private String token;
+    
+    public BotInstanceData() {
+	}
 
-    public String getToken() {
+	public String getToken() {
 		return token;
 	}
 

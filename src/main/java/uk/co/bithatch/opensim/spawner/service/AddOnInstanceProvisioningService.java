@@ -31,7 +31,9 @@ import uk.co.bithatch.opensim.jlib.Strings;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.AddOn;
 import uk.co.bithatch.opensim.spawner.domain.AddOnInstanceData;
-import uk.co.bithatch.opensim.spawner.domain.AddOnLevel;
+import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
+import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
+import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.DomainObject;
 import uk.co.bithatch.opensim.spawner.domain.GridState;
@@ -61,6 +63,9 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	private final SimulatorLevelProfileService simulatorLevelProfileService;
 	private final ThreadLocal<Path> currentManifestDir = new ThreadLocal<>();
 	private final GridStateRepository gridStateRepository;
+	private final SimulatorProvisioningService simulatorProvisioningService;
+	private final BotProvisioningService botProvisioningService;
+	private final StackContainerService stackContainerService;
 
 	public AddOnInstanceProvisioningService(AddOnRepository addOnRepository,
 			AddOnInstanceStateRepository addOnInstanceStateRepository, 		
@@ -72,9 +77,15 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			BotLevelProfileService botLevelProfileService,
 			SimulatorLevelProfileService simulatorLevelProfileService,
 			GridStateRepository gridStateRepository,
+			SimulatorProvisioningService simulatorProvisioningService,
+			BotProvisioningService botProvisioningService,
+			StackContainerService stackContainerService,
 			DockerService dockerService) {
 		super(addOnInstanceStateRepository, dockerService, templateResolver, properties		);
 		this.addOnRepository = addOnRepository;
+		this.stackContainerService = stackContainerService;
+		this.simulatorProvisioningService = simulatorProvisioningService;
+		this.botProvisioningService = botProvisioningService;
 		this.properties = properties;
 		this.profileService = profileService;
 		this.botStateRepository = botStateRepository;
@@ -150,7 +161,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	        	removeExports(mf);
 			});
 			
-			if (addOn.getLevel() == AddOnLevel.SIMULATOR && !addOn.getContainerIds().isEmpty()) {
+			if (addOn.getLevel() == ContainerLevel.SIMULATOR && !addOn.getContainerIds().isEmpty()) {
 				detachAddOnContainersFromGridSimulator(addOn.getGridServiceSimulatorName(), addOn.getContainerIds());
 			}
 			deleteContainerGroup(addOnName);
@@ -158,12 +169,31 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			removeAddOnManagedContributions(contributions);
 			reconcileParentConfigurations(contributions, "disabled", addOnName);
 			mfOpt.ifPresent(mf -> {
-	            restartContainersWithVariables(mf, addOn.getContainerIds());
+	            reprovisionContainersWithVariables(mf, addOn.getContainerIds());
 	            runHooks(HookType.POST_UNINSTALL, mf, addOn, variables);	
 			});
 		}
 	}
-
+    
+    private ContainerGroupInstanceData<?> instanceDataForContainer(String containerName) {
+    	var botInstance = botStateRepository.list().stream().filter(bot -> bot.getContainerIds() != null && bot.getContainerIds().contains(containerName)).findFirst()
+			.orElse(null);
+    	if(botInstance == null) {
+        	var simInstance = simulatorStateRepository.list().stream().filter(sim -> sim.getContainerIds() != null && 
+        		sim.getContainerIds().contains(containerName)).findFirst()
+    			.orElse(null);
+        	if(simInstance == null) {
+        		return null;
+        	}
+        	else {
+				return simInstance;
+			}
+    	}
+    	else {
+			return botInstance;
+		}
+	}
+    
 	private void removeExports(Manifest mf) {
 		if(!mf.getExports().isEmpty()) {
 			var gridState = gridStateRepository.get();
@@ -355,7 +385,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		addOnInstance.setLevel(addOnLevel);
 
 		SimulatorInstanceData attachedGridSimulator = null;
-		if (addOnLevel == AddOnLevel.SIMULATOR) {
+		if (addOnLevel == ContainerLevel.SIMULATOR) {
 		  attachedGridSimulator = requireGridServiceSimulator();
 		  addOnInstance.setGridServiceSimulatorName(attachedGridSimulator.getName());
 		  LOG.info("GRID add-on '{}' attached to grid-service simulator '{}'.", name, attachedGridSimulator.getName());
@@ -411,14 +441,14 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
             LOG.info("Add-on {} provisioned successfully.", name);
             
-            restartContainersWithVariables(manifest, createdContainerIds);
+            reprovisionContainersWithVariables(manifest, createdContainerIds);
 
             return addOnInstance;
         } catch (RuntimeException e) {
         	removeExports(manifest);
             LOG.error("Provisioning failed for add-on {}. Starting rollback.", name, e);
             runHooks(HookType.PRE_UNINSTALL, manifest, addOnInstance, variables);
-            if (addOnInstance.getLevel() == AddOnLevel.SIMULATOR && !createdContainerIds.isEmpty()) {
+            if (addOnInstance.getLevel() == ContainerLevel.SIMULATOR && !createdContainerIds.isEmpty()) {
             	detachAddOnContainersFromGridSimulator(addOnInstance.getGridServiceSimulatorName(), createdContainerIds);
             }
             rollbackFailedProvision(name, createdContainerIds, materializedFiles);
@@ -427,7 +457,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
         }
     }
 
-	private void restartContainersWithVariables(Manifest manifest, Collection<String> ignoredIds) {
+	private void reprovisionContainersWithVariables(Manifest manifest, Collection<String> ignoredIds) {
 		var restartableContainers = new ArrayList<String>();
 		for(var ref : dockerService.listStackContainers()) {
 			if(ignoredIds.contains(ref)) {
@@ -439,18 +469,20 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 				restartableContainers.add(ref);
 			}
 		}
+		
 		if(!restartableContainers.isEmpty()) {
-			LOG.info("Restarting {} container(s) to propagate add-on {} exports.", restartableContainers.size(), manifest.getName());
-			
-			// XXX Need to do more than restart containers here.
-			// Need to re-materialize files for these containers as well, because the 
-			// exported values may be used in managed files.
-			
-//			for(var ref : restartableContainers) {
-//				dockerService.recreateContainer(ref, (context) -> {
-//					context.withEnv();
-//				});
-//			}
+			LOG.info("Re-provision {} container(s) to propagate add-on {} exports.", restartableContainers.size(), manifest.getName());
+			for(var ref : restartableContainers) {
+				LOG.info("Re-provision container {} to propagate add-on {} exports.", ref, manifest.getName());
+				var cntr = instanceDataForContainer(ref);
+				if(cntr instanceof BotInstanceData bot) {
+					LOG.info("Re-provisioning bot {} to propagate add-on {} exports.", bot.displayName(), manifest.getName());
+					botProvisioningService.reprovisionBot(bot);
+				}
+				else {
+					throw new UnsupportedOperationException("Reprovisioning for this type of container not yet supported.");
+				}
+			}
 		}
 	}
 	
@@ -490,7 +522,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			LOG.info("Starting hook script for type {} in add-on {}", hookType, manifest.getName());
 			try {
 				for(var scriptDef : hookScript) {
-					var addOn = AddOnLevel.valueOf((String)scriptDef.getOrDefault("addOn", AddOnLevel.STACK.name()));
+					var addOn = ContainerLevel.valueOf((String)scriptDef.getOrDefault("addOn", ContainerLevel.STACK.name()));
 					switch(addOn) {
 					case SIMULATOR:
 						var simType = SimulatorLevel.valueOf((String)scriptDef.getOrDefault("level", SimulatorLevel.STANDALONE.name()));
@@ -705,7 +737,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 				.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on does not specify `" + key + "`."));
 	}
 
-	private AddOnLevel resolveAddOnLevel(Map<AddOnLevel, Map<String, ContainerSpec>> extensions) {
+	private ContainerLevel resolveAddOnLevel(Map<ContainerLevel, Map<String, ContainerSpec>> extensions) {
 		if (extensions == null || extensions.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add-on has no extensions.");
 		}
@@ -716,7 +748,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		}
 
 		var addOnType = extensions.keySet().iterator().next();
-		return AddOnLevel.valueOf(addOnType.name());
+		return ContainerLevel.valueOf(addOnType.name());
 	}
 
 	private SimulatorInstanceData requireGridServiceSimulator() {

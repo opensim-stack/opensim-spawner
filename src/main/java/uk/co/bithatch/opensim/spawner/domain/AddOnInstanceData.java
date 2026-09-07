@@ -1,6 +1,6 @@
 package uk.co.bithatch.opensim.spawner.domain;
 
-public class AddOnInstanceData extends ContainerGroupInstanceData<AddOnLevel> {
+public class AddOnInstanceData extends ContainerGroupInstanceData<ContainerLevel> {
 	
 	private String name;
 	private String gridServiceSimulatorName;

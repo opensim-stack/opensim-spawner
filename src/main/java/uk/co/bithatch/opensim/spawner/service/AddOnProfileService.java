@@ -3,6 +3,7 @@ package uk.co.bithatch.opensim.spawner.service;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -13,16 +14,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.AddOnInstanceData;
-import uk.co.bithatch.opensim.spawner.domain.AddOnLevel;
+import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedAddOnPlan;
+import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
 import uk.co.bithatch.opensim.spawner.state.AddOnRepository;
 import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
 
 @Service
-public class AddOnProfileService extends AbstractProfileService<AddOnInstanceData, ResolvedAddOnPlan, AddOnLevel> {
+public class AddOnProfileService extends AbstractProfileService<AddOnInstanceData, ResolvedAddOnPlan, ContainerLevel> {
 
 	private final AddOnRepository addOnRepository;
 	private final SimulatorStateRepository simulatorStateRepository;
@@ -39,7 +41,7 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 	public Map<String, String> buildTypeVariables(AddOnInstanceData addOnInstance, Map<String, String> variables) {
 
 
-		if (addOnInstance.getLevel() == AddOnLevel.SIMULATOR) {
+		if (addOnInstance.getLevel() == ContainerLevel.SIMULATOR) {
 			var attachedName = addOnInstance.getGridServiceSimulatorName();
 			var attached = (attachedName == null || attachedName.isBlank()) ? findGridServiceSimulator()
 					: simulatorStateRepository.load(attachedName);
@@ -95,7 +97,7 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 		return variables;
 	}
 
-	private java.util.Optional<uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData> findGridServiceSimulator() {
+	private Optional<SimulatorInstanceData> findGridServiceSimulator() {
 		return simulatorStateRepository.list().stream()
 				.filter(sim -> sim.getLevel() == SimulatorLevel.ROBUST || sim.getLevel() == SimulatorLevel.STANDALONE)
 				.findFirst();
@@ -107,7 +109,7 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 	}
 
 	@Override
-	protected JsonNode getLevelNode(AddOnLevel level, String name) {
+	protected JsonNode getLevelNode(ContainerLevel level, String name) {
 		return addOnRepository.loadRaw(name)
 				.orElseThrow(
 						() -> new IllegalStateException("Add-on level " + level.name() + " not found in " + name + "."))
