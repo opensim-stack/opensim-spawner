@@ -12,6 +12,8 @@ public class GridState implements DomainObject {
 	private Map<String, String> tokens = new HashMap<>();
 	private String consoleUser;
 	private String consolePass;
+	private String addOnsRepository;
+	private String addOnsBranch;
 	private UpdatesConfiguration updates = new UpdatesConfiguration();
 	private boolean initialized;
 	private Map<String, String> global = new HashMap<>();
@@ -59,6 +61,22 @@ public class GridState implements DomainObject {
 		this.consolePass = consolePass;
 	}
 
+	public String getAddOnsRepository() {
+		return normalize(addOnsRepository);
+	}
+
+	public void setAddOnsRepository(String addOnsRepository) {
+		this.addOnsRepository = normalize(addOnsRepository);
+	}
+
+	public String getAddOnsBranch() {
+		return normalize(addOnsBranch);
+	}
+
+	public void setAddOnsBranch(String addOnsBranch) {
+		this.addOnsBranch = normalize(addOnsBranch);
+	}
+
 	public String getWelcomeMessage() {
 		return welcomeMessage;
 	}
@@ -102,6 +120,10 @@ public class GridState implements DomainObject {
 	@Override
 	public String displayName() {
 		return "grid";
+	}
+
+	private static String normalize(String value) {
+		return value == null ? "" : value.trim();
 	}
 
 }

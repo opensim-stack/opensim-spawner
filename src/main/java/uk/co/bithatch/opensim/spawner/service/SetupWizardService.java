@@ -135,7 +135,7 @@ public class SetupWizardService {
 
         var userFirst = firstNonBlank(stringValue(user.get("first")), normalizeNameFromSimulator(primarySimulatorName));
         var userLast = firstNonBlank(stringValue(user.get("last")), "User");
-        var userEmail = requiredString(user, "email", "User email is required.");
+        var userEmail = stringValue(user.get("email"));
         var userPassword = requiredString(user, "password", "User password is required.");
 
         var ownerFirst = createBot ? botFirst : userFirst;
@@ -199,7 +199,7 @@ public class SetupWizardService {
                 if (!botGender.isBlank()) {
                     botFields.put("gender", botGender);
                 }
-                createdBot = botProvisioningService.createBot(botFirst, botLast, botLevel, botFields);
+                createdBot = botProvisioningService.createBot(ownerUuid, botFirst, botLast, botLevel, botFields, true);
             }
 
             var userUuid = createBot ? UUID.randomUUID().toString() : ownerUuid;

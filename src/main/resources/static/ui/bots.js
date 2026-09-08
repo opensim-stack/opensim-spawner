@@ -1,10 +1,7 @@
 import {
-  buildConsoleIconLink,
-  buildLogsIconLink,
   fetchWithTimeout,
   iconSpan,
   renderContainerStatusRows,
-  resolvePreferredConsole,
   showToast,
   withWorkingOverlay
 } from '/ui/ui-helpers.js';
@@ -335,13 +332,6 @@ const createCard = (status) => {
   const containers = Array.isArray(status.containerStatus) ? status.containerStatus : [];
   const normalizedLevel = String(level).toUpperCase();
   const canSpawnChild = normalizedLevel === 'GOVERNOR' || normalizedLevel === 'BUILDER';
-  const preferredConsole = resolvePreferredConsole(containers, 'opensim-metaverse2mcp-');
-  const preferredConsoleLink = preferredConsole
-    ? buildConsoleIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred console', 'text-neon-accent hover:text-neon-secondary')
-    : '';
-  const preferredLogsLink = preferredConsole
-    ? buildLogsIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred logs', 'text-sky-300 hover:text-sky-200')
-    : '';
   const containerRows = renderContainerStatusRows(containers);
 
   card.innerHTML = `
@@ -350,9 +340,7 @@ const createCard = (status) => {
         <h2 class="text-xl font-semibold text-white">${first} ${last}</h2>
         ${parent ? `<p class="text-sm text-gray-400">Parent: ${parent}</p>` : ''}
       </div>
-      <div class="flex items-start gap-2">
-        ${preferredConsoleLink}
-        ${preferredLogsLink}
+      <div class="flex items-start">
         <div class="w-14 h-14 rounded-xl bg-neon-primary/20 border border-neon-primary/40 flex items-center justify-center text-neon-primary font-bold">
           ${levelIcon(level)}
         </div>

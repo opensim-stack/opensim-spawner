@@ -5,6 +5,7 @@ const toastContainer = document.getElementById('toast-container');
 const activeUsersList = document.getElementById('active-users-list');
 const activeUsersEmpty = document.getElementById('active-users-empty');
 const refreshActiveUsersButton = document.getElementById('refresh-active-users');
+const showAllAgentsCheckbox = document.getElementById('show-all-agents');
 
 const findUserForm = document.getElementById('find-user-form');
 const findFirst = document.getElementById('find-first');
@@ -73,6 +74,7 @@ const setElementEnabled = (el, enabled) => {
 const applyGridServiceUiState = () => {
   const enabled = gridServiceAvailable;
   setElementEnabled(refreshActiveUsersButton, enabled);
+  setElementEnabled(showAllAgentsCheckbox, enabled);
   setFormEnabled(findUserForm, enabled);
   setFormEnabled(resetPasswordForm, enabled);
   if (usersGridServiceWarning) {
@@ -101,7 +103,8 @@ const findUser = async (first, last) => {
 };
 
 const listActiveUsers = async () => {
-  const response = await fetchWithTimeout('/api/user/active');
+  const showAllAgents = !!showAllAgentsCheckbox?.checked;
+  const response = await fetchWithTimeout(`/api/user/active?showAllAgents=${showAllAgents ? 'true' : 'false'}`);
   if (!response.ok) {
     const body = await response.text();
     throw new Error(body || `Active user query failed (${response.status}).`);
@@ -229,6 +232,7 @@ const renderActiveUsers = (users) => {
     }
     const isBot = botNameSet.has(normalizeDisplayName(first, last));
     const isHandler = !isBot && handlerNameSet.has(normalizeDisplayName(first, last));
+    const isRootAgent = String(user?.type || '').trim().toLowerCase() === 'root';
 
     const tr = document.createElement('tr');
 
@@ -259,76 +263,78 @@ const renderActiveUsers = (users) => {
     const actionsWrap = document.createElement('div');
     actionsWrap.className = 'inline-flex items-center gap-2';
 
-    const selectButton = document.createElement('button');
-    selectButton.type = 'button';
-    selectButton.className = 'inline-flex items-center gap-2 rounded-lg border border-neon-primary/40 px-3 py-1.5 text-xs text-neon-accent hover:bg-neon-primary/10';
-    selectButton.innerHTML = `${iconSpan('select', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Select</span>`;
-    selectButton.addEventListener('click', async () => {
-      if (!gridServiceAvailable) {
-        showToast(toastContainer, gridServiceUnavailableMessage, 'error');
-        return;
-      }
-      if (findFirst) {
-        findFirst.value = first;
-      }
-      if (findLast) {
-        findLast.value = last;
-      }
-
-      const next = new URL(window.location.href);
-      next.searchParams.set('first', first);
-      next.searchParams.set('last', last);
-      window.history.replaceState({}, '', next.toString());
-
-      try {
-        await findAndRenderUser(first, last);
-      } catch (err) {
-        showToast(toastContainer, err instanceof Error ? err.message : 'Find user failed.', 'error');
-      }
-    });
-
-    actionsWrap.appendChild(selectButton);
-
-    if (!isBot) {
-      const handlerButton = document.createElement('button');
-      handlerButton.type = 'button';
-      const syncHandlerButton = (enabled) => {
-        handlerButton.className = enabled
-          ? 'inline-flex items-center gap-2 rounded-lg border border-sky-400/40 px-3 py-1.5 text-xs text-sky-200 bg-sky-600/20 hover:bg-sky-600/30'
-          : 'inline-flex items-center gap-2 rounded-lg border border-gray-500/40 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-700';
-        handlerButton.innerHTML = `${iconSpan('handler', 'h-4 w-4 inline-block align-middle shrink-0')}<span>${enabled ? 'Handler On' : 'Handler Off'}</span>`;
-      };
-      syncHandlerButton(isHandler);
-
-      handlerButton.addEventListener('click', async () => {
+    if (isRootAgent) {
+      const selectButton = document.createElement('button');
+      selectButton.type = 'button';
+      selectButton.className = 'inline-flex items-center gap-2 rounded-lg border border-neon-primary/40 px-3 py-1.5 text-xs text-neon-accent hover:bg-neon-primary/10';
+      selectButton.innerHTML = `${iconSpan('select', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Select</span>`;
+      selectButton.addEventListener('click', async () => {
         if (!gridServiceAvailable) {
           showToast(toastContainer, gridServiceUnavailableMessage, 'error');
           return;
         }
-        const currentlyEnabled = handlerNameSet.has(normalizeDisplayName(first, last));
-        selectButton.disabled = true;
-        handlerButton.disabled = true;
+        if (findFirst) {
+          findFirst.value = first;
+        }
+        if (findLast) {
+          findLast.value = last;
+        }
+
+        const next = new URL(window.location.href);
+        next.searchParams.set('first', first);
+        next.searchParams.set('last', last);
+        window.history.replaceState({}, '', next.toString());
+
         try {
-          await withWorkingOverlay(
-            async () => setHandlerEnabled(first, last, !currentlyEnabled),
-            `${currentlyEnabled ? 'Removing' : 'Assigning'} bot handler ${first} ${last} ...`
-          );
-          if (currentlyEnabled) {
-            handlerNameSet.delete(normalizeDisplayName(first, last));
-          } else {
-            handlerNameSet.add(normalizeDisplayName(first, last));
-          }
-          renderActiveUsers(users);
-          showToast(toastContainer, `${first} ${last} ${currentlyEnabled ? 'is no longer' : 'is now'} a bot handler.`, 'success');
+          await findAndRenderUser(first, last);
         } catch (err) {
-          showToast(toastContainer, err instanceof Error ? err.message : 'Failed to update bot handler state.', 'error');
-        } finally {
-          selectButton.disabled = false;
-          handlerButton.disabled = false;
+          showToast(toastContainer, err instanceof Error ? err.message : 'Find user failed.', 'error');
         }
       });
 
-      actionsWrap.appendChild(handlerButton);
+      actionsWrap.appendChild(selectButton);
+
+      if (!isBot) {
+        const handlerButton = document.createElement('button');
+        handlerButton.type = 'button';
+        const syncHandlerButton = (enabled) => {
+          handlerButton.className = enabled
+            ? 'inline-flex items-center gap-2 rounded-lg border border-sky-400/40 px-3 py-1.5 text-xs text-sky-200 bg-sky-600/20 hover:bg-sky-600/30'
+            : 'inline-flex items-center gap-2 rounded-lg border border-gray-500/40 px-3 py-1.5 text-xs text-gray-200 hover:bg-dark-700';
+          handlerButton.innerHTML = `${iconSpan('handler', 'h-4 w-4 inline-block align-middle shrink-0')}<span>${enabled ? 'Handler On' : 'Handler Off'}</span>`;
+        };
+        syncHandlerButton(isHandler);
+
+        handlerButton.addEventListener('click', async () => {
+          if (!gridServiceAvailable) {
+            showToast(toastContainer, gridServiceUnavailableMessage, 'error');
+            return;
+          }
+          const currentlyEnabled = handlerNameSet.has(normalizeDisplayName(first, last));
+          selectButton.disabled = true;
+          handlerButton.disabled = true;
+          try {
+            await withWorkingOverlay(
+              async () => setHandlerEnabled(first, last, !currentlyEnabled),
+              `${currentlyEnabled ? 'Removing' : 'Assigning'} bot handler ${first} ${last} ...`
+            );
+            if (currentlyEnabled) {
+              handlerNameSet.delete(normalizeDisplayName(first, last));
+            } else {
+              handlerNameSet.add(normalizeDisplayName(first, last));
+            }
+            renderActiveUsers(users);
+            showToast(toastContainer, `${first} ${last} ${currentlyEnabled ? 'is no longer' : 'is now'} a bot handler.`, 'success');
+          } catch (err) {
+            showToast(toastContainer, err instanceof Error ? err.message : 'Failed to update bot handler state.', 'error');
+          } finally {
+            selectButton.disabled = false;
+            handlerButton.disabled = false;
+          }
+        });
+
+        actionsWrap.appendChild(handlerButton);
+      }
     }
 
     actionTd.appendChild(actionsWrap);
@@ -410,6 +416,17 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await loadActiveUsers();
       showToast(toastContainer, 'Active users refreshed.', 'success');
+    } catch (err) {
+      showToast(toastContainer, err instanceof Error ? err.message : 'Active users refresh failed.', 'error');
+    }
+  });
+
+  showAllAgentsCheckbox?.addEventListener('change', async () => {
+    if (!gridServiceAvailable) {
+      return;
+    }
+    try {
+      await loadActiveUsers();
     } catch (err) {
       showToast(toastContainer, err instanceof Error ? err.message : 'Active users refresh failed.', 'error');
     }

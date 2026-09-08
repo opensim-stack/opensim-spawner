@@ -5,7 +5,6 @@ import static uk.co.bithatch.opensim.spawner.state.ApprovalStateRepository.key;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 import org.springframework.http.HttpStatus;

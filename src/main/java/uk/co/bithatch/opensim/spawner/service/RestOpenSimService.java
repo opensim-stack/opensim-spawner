@@ -69,7 +69,7 @@ public class RestOpenSimService implements OpenSimService {
         try {
             LOG.info("Creating OpenSim user {} {} (email={}, uuid={}, model={}).", first, last, email, uuid, model);
             withConsole(console -> {
-                console.executeCommand("create", "user", first, last, password, email, uuid, model).toList();
+                console.executeCommand("create", "user", first, last, password, email == null || email.isBlank() ? (first + "." + last + "@" + properties.getOpensimHostname()) : email  , uuid, model).toList();
                 return null;
             });
             LOG.info("Created OpenSim user {} {}.", first, last);

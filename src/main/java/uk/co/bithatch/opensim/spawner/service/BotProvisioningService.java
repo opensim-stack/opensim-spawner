@@ -213,8 +213,8 @@ public class BotProvisioningService
 		}
 	}
 
-	public synchronized BotInstanceData createBot(String first, String last, String levelName,
-			Map<String, String> requestFields) {
+	public synchronized BotInstanceData createBot(String uuid, String first, String last, String levelName,
+			Map<String, String> requestFields, boolean useConsole) {
 		ensureGridLoginServiceAvailable("create bots");
 		if (stateRepository.exists(key(first, last))) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bot already exists.");
@@ -234,7 +234,6 @@ public class BotProvisioningService
 		var gender = resolveRequestedGender(level, createRequestFields);
 		var token = UUID.randomUUID().toString();
 		
-		// TODO Consider allowing x/y to be specified in requestFields for more control over spawn location.
 		var x = Integer.parseInt(defaultValue(createRequestFields.get("x"), "-1"));
 		var y = Integer.parseInt(defaultValue(createRequestFields.get("y"), "-1"));
 		var region = defaultValue(createRequestFields.get("region"), "");
@@ -243,12 +242,27 @@ public class BotProvisioningService
 				first, last, x, y, level.name(), parent, email, appearance,
 				gender == null ? null : gender.name().toLowerCase(Locale.ROOT));
 
-		String uuid;
-		try {
-			uuid = openSimService.createUser(first, last, password, x, y, region, email);
-		} catch (ExternalDependencyException e) {
-			throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-					"OpenSimulator user creation failed: " + e.getMessage());
+		if(useConsole) {
+			
+			if(uuid == null || uuid.isBlank()) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "UUID is required when creating bot via console.");
+			}
+			
+			try {
+				openSimService.createUser(first, last, password, email, uuid, "Ruth");
+			} catch (ExternalDependencyException e) {
+				throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+						"OpenSimulator user creation failed: " + e.getMessage());
+			}
+		}
+		else {
+			try {
+				uuid = openSimService.createUser(first, last, password, x, y, region, email);
+			} catch (ExternalDependencyException e) {
+				throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+						"OpenSimulator user creation failed: " + e.getMessage());
+			}
+			
 		}
 
 		var materializedFiles = new ArrayList<java.nio.file.Path>();
@@ -300,7 +314,8 @@ public class BotProvisioningService
 		var cntrs = plan.containers().stream().map(spec -> spec.getName()).toList();
 		for (var ref : cntrs) {
 			try {
-				stop(ref);
+				if(exists(ref))
+					stop(ref);
 			} catch (Exception e) {
 				LOG.warn("Failed to stop container {} during reprovisioning of bot {} {}.", ref, bot.getFirst(),
 						bot.getLast(), e);

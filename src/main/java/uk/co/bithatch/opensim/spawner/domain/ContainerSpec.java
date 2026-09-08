@@ -22,21 +22,27 @@ public class ContainerSpec {
     private List<ManagedFile> managedFiles = new ArrayList<>();
     private HealthCheck healthCheck;
     private  Map<String, ContainerSpec> init;
+    private List<String> entrypoint = new ArrayList<>();
     
     public HealthCheck getHealthCheck() {
 		return healthCheck;
 	}
 
+	public List<String> getEntrypoint() {
+		return entrypoint;
+	}
+
+	public void setEntrypoint(List<String> entrypoint) {
+		this.entrypoint = entrypoint;
+	}
 
 	public Map<String, ContainerSpec> getInit() {
 		return init;
 	}
 
-
 	public void setInit(Map<String, ContainerSpec> init) {
 		this.init = init;
 	}
-
 
 	public void setHealthCheck(HealthCheck healthCheck) {
 		this.healthCheck = healthCheck;

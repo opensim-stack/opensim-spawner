@@ -63,6 +63,15 @@ const adminPasswordConfirm = document.getElementById('wizard-admin-password-conf
 
 const summaryContainer = document.getElementById('wizard-summary');
 
+const STEP_FOCUS_ORDER = {
+  1: ['wizard-simulator-name', 'wizard-grid-name', 'wizard-grid-nick', 'wizard-grid-welcome-message'],
+  2: ['wizard-bot-first', 'wizard-bot-last', 'wizard-bot-email', 'wizard-create-bot'],
+  3: ['wizard-user-first', 'wizard-user-last', 'wizard-user-email', 'wizard-user-password'],
+  4: ['wizard-region-sim-name', 'wizard-region-port', 'wizard-region-x', 'wizard-region-y', 'wizard-region-oar'],
+  5: ['wizard-admin-user', 'wizard-admin-password', 'wizard-admin-password-confirm'],
+  6: []
+};
+
 let currentStep = 1;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -394,6 +403,56 @@ const renderStep = () => {
   if (currentStep === STEPS.length) {
     renderSummary();
   }
+
+  focusStepField(currentStep);
+};
+
+const isFocusableField = (field) => field instanceof HTMLElement
+  && !field.hasAttribute('disabled')
+  && field.tabIndex !== -1
+  && !field.closest('.hidden');
+
+const focusStepField = (stepNumber) => {
+  const preferredIds = STEP_FOCUS_ORDER[stepNumber] || [];
+  for (const id of preferredIds) {
+    const field = document.getElementById(id);
+    if (!isFocusableField(field)) {
+      continue;
+    }
+    field.focus();
+    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+      field.select?.();
+    }
+    return;
+  }
+
+  const step = document.getElementById(`wizard-step-${stepNumber}`);
+  const fallback = step?.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+  if (fallback instanceof HTMLElement && !fallback.closest('.hidden')) {
+    fallback.focus();
+  }
+};
+
+const installEnterToAdvance = () => {
+  document.querySelectorAll('.wizard-step input').forEach((field) => {
+    if (!(field instanceof HTMLInputElement)) {
+      return;
+    }
+    const excludedTypes = new Set(['button', 'submit', 'checkbox', 'radio', 'file', 'range', 'color', 'hidden']);
+    if (excludedTypes.has(String(field.type || '').toLowerCase())) {
+      return;
+    }
+    field.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+      }
+      if (!field.closest(`#wizard-step-${currentStep}`) || nextButton?.disabled) {
+        return;
+      }
+      event.preventDefault();
+      nextButton?.click();
+    });
+  });
 };
 
 const validateStep = () => {
@@ -426,15 +485,15 @@ const validateStep = () => {
   }
 
   if (currentStep === 3) {
-    if (!state.user.email || !state.user.password) {
-      return 'Email and password are required.';
+    if (!state.user.password) {
+      return 'Password is required.';
     }
     const enteredUserFirst = String(userFirst?.value || '').trim();
     const enteredUserLast = String(userLast?.value || '').trim();
     if ((enteredUserFirst && !PERSON_NAME_PATTERN.test(enteredUserFirst)) || (enteredUserLast && !PERSON_NAME_PATTERN.test(enteredUserLast))) {
       return 'User first and last name must be alphanumeric only.';
     }
-    if (!isValidEmail(state.user.email)) {
+    if (state.user.email && !isValidEmail(state.user.email)) {
       return 'User email must be a valid email address.';
     }
     if (state.user.password.length < MIN_PASSWORD_LENGTH) {
@@ -681,6 +740,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   syncBotFieldState();
   syncNamePlaceholders();
   renderStep();
+  installEnterToAdvance();
 
   gridModeGroup?.addEventListener('change', () => {
     applyModeDescription();

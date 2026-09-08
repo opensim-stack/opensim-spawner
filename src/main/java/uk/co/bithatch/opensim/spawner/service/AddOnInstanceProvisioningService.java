@@ -63,9 +63,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	private final SimulatorLevelProfileService simulatorLevelProfileService;
 	private final ThreadLocal<Path> currentManifestDir = new ThreadLocal<>();
 	private final GridStateRepository gridStateRepository;
-	private final SimulatorProvisioningService simulatorProvisioningService;
 	private final BotProvisioningService botProvisioningService;
-	private final StackContainerService stackContainerService;
 
 	public AddOnInstanceProvisioningService(AddOnRepository addOnRepository,
 			AddOnInstanceStateRepository addOnInstanceStateRepository, 		
@@ -77,14 +75,10 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			BotLevelProfileService botLevelProfileService,
 			SimulatorLevelProfileService simulatorLevelProfileService,
 			GridStateRepository gridStateRepository,
-			SimulatorProvisioningService simulatorProvisioningService,
 			BotProvisioningService botProvisioningService,
-			StackContainerService stackContainerService,
 			DockerService dockerService) {
 		super(addOnInstanceStateRepository, dockerService, templateResolver, properties		);
 		this.addOnRepository = addOnRepository;
-		this.stackContainerService = stackContainerService;
-		this.simulatorProvisioningService = simulatorProvisioningService;
 		this.botProvisioningService = botProvisioningService;
 		this.properties = properties;
 		this.profileService = profileService;
@@ -114,14 +108,15 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	}
 	
 	public synchronized void reload() {
-		var repository = properties.getAddOnsRepository();
+		var repository = resolveConfiguredAddOnsRepository();
+		var branch = resolveConfiguredAddOnsBranch();
 		if (repository == null || repository.isBlank()) {
 			return;
 		}
 
 		var addOnsDir = properties.getAddOnsDir().toAbsolutePath().normalize();
 		if (!Files.exists(addOnsDir)) {
-			cloneRepository(repository, addOnsDir);
+			cloneRepository(repository, branch, addOnsDir);
 			return;
 		}
 
@@ -129,7 +124,46 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			return;
 		}
 
-		git(addOnsDir.getParent(), "-C", addOnsDir.toString(), "pull", "--ff-only");
+		switchToBranch(addOnsDir, branch);
+		pullRepository(addOnsDir, branch);
+	}
+
+	private String resolveConfiguredAddOnsRepository() {
+		var gridState = gridStateRepository.get();
+		var configured = normalize(gridState.getAddOnsRepository());
+		if (!configured.isBlank()) {
+			return configured;
+		}
+		return normalize(properties.getAddOnsRepository());
+	}
+
+	private String resolveConfiguredAddOnsBranch() {
+		var gridState = gridStateRepository.get();
+		var configured = normalize(gridState.getAddOnsBranch());
+		if (!configured.isBlank()) {
+			return configured;
+		}
+		return normalize(properties.getAddOnsBranch());
+	}
+
+	private void switchToBranch(Path addOnsDir, String branch) {
+		if (branch == null || branch.isBlank()) {
+			return;
+		}
+		try {
+			git(addOnsDir.getParent(), "-C", addOnsDir.toString(), "checkout", branch);
+		} catch (IllegalStateException checkoutError) {
+			git(addOnsDir.getParent(), "-C", addOnsDir.toString(), "fetch", "origin", branch);
+			git(addOnsDir.getParent(), "-C", addOnsDir.toString(), "checkout", "-B", branch, "origin/" + branch);
+		}
+	}
+
+	private void pullRepository(Path addOnsDir, String branch) {
+		if (branch == null || branch.isBlank()) {
+			git(addOnsDir.getParent(), "-C", addOnsDir.toString(), "pull", "--ff-only");
+			return;
+		}
+		git(addOnsDir.getParent(), "-C", addOnsDir.toString(), "pull", "--ff-only", "origin", branch);
 	}
 	
 	public List<AddOn> getAddOns() {
@@ -423,7 +457,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             var plan = profileService.resolvePlan(addOnInstance, containerRequestFields);
             LOG.info("Resolved {} container spec(s) for add-on {}.", plan.containers().size(), name);
             materializeFiles(plan, addOnInstance, materializedFiles);
-			wireInitScripts(plan, addOnInstance);
 
             createdContainerIds.addAll(dockerService.createContainers(plan.containers()));
             LOG.info("Created {} container(s) for add-on {}.", createdContainerIds.size(), addOnInstance);
@@ -807,36 +840,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		withManifestContext(bot.getName(), () -> materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot,  new LinkedHashMap<>())));
     }
 
-	private void wireInitScripts(ResolvedAddOnPlan plan, AddOnInstanceData addOnInstance) {
-		var containersWithInit = plan.containers().stream()
-				.filter(container -> container.getInit() != null && !container.getInit().isEmpty())
-				.toList();
-		if (containersWithInit.isEmpty()) {
-			return;
-		}
-
-		var manifestDir = properties.getAddOnsDir().resolve(addOnInstance.getName()).toAbsolutePath().normalize();
-		var initScript = manifestDir.resolve("init.sh").normalize();
-		if (!initScript.startsWith(manifestDir) || !Files.isRegularFile(initScript)) {
-			throw new IllegalStateException("Add-on '" + addOnInstance.getName()
-					+ "' defines init containers, but manifest-local init.sh was not found at " + initScript + ".");
-		}
-
-		for (var parent : containersWithInit) {
-			for (var initSpec : parent.getInit().values()) {
-				if (initSpec.getInit() != null && !initSpec.getInit().isEmpty()) {
-					throw new IllegalArgumentException("Nested init containers are not supported.");
-				}
-				initSpec.getVolumes().putIfAbsent(initScript.toString(), "/init.sh");
-			}
-		}
-
-		LOG.info("Wired init.sh '{}' into {} init container specification(s) for add-on '{}'.",
-				initScript,
-				containersWithInit.stream().mapToInt(parent -> parent.getInit().size()).sum(),
-				addOnInstance.getName());
-	}
-
 	@Override
 	protected String loadManagedFileTemplate(String name, String targetName) {
 		if (targetName == null || targetName.isBlank()) {
@@ -861,7 +864,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		return super.loadManagedFileTemplate(name, targetName);
 	}
 
-	private void cloneRepository(String repository, Path addOnsDir) {
+	private void cloneRepository(String repository, String branch, Path addOnsDir) {
 		var parent = addOnsDir.getParent();
 		if (parent == null) {
 			throw new IllegalStateException("Invalid add-ons directory '" + addOnsDir + "'.");
@@ -871,7 +874,15 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		} catch (IOException e) {
 			throw new IllegalStateException("Failed to create add-ons directory parent '" + parent + "'.", e);
 		}
-		git(parent, "clone", repository, addOnsDir.toString());
+		if (branch == null || branch.isBlank()) {
+			git(parent, "clone", repository, addOnsDir.toString());
+			return;
+		}
+		git(parent, "clone", "--branch", branch, "--single-branch", repository, addOnsDir.toString());
+	}
+
+	private static String normalize(String value) {
+		return value == null ? "" : value.trim();
 	}
 
 	private static void git(Path workingDirectory, String... arguments) {

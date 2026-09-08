@@ -116,12 +116,15 @@ public class UiController {
     @ResponseBody
     public Map<String, Object> updatesConfig(HttpServletRequest request) {
         requireAdmin(request);
-        var updates = gridStateRepository.get().getUpdates();
+        var gridState = gridStateRepository.get();
+        var updates = gridState.getUpdates();
         var response = new LinkedHashMap<String, Object>();
         response.put("automaticUpdates", updates.isAutomaticUpdates());
         response.put("tag", firstNonBlank(updates.getTag(), "latest"));
         response.put("dockerHubUsername", normalize(updates.getDockerHubUsername()));
         response.put("dockerHubToken", normalize(updates.getDockerHubToken()));
+        response.put("addOnsRepository", normalize(gridState.getAddOnsRepository()));
+        response.put("addOnsBranch", normalize(gridState.getAddOnsBranch()));
         return response;
     }
 
@@ -134,13 +137,18 @@ public class UiController {
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String dockerHubUsername,
             @RequestParam(required = false) String dockerHubToken,
+            @RequestParam(required = false) String addOnsRepository,
+            @RequestParam(required = false) String addOnsBranch,
             HttpServletRequest request) {
         requireAdmin(request);
-        var updates = gridStateRepository.get().getUpdates();
+        var gridState = gridStateRepository.get();
+        var updates = gridState.getUpdates();
         updates.setAutomaticUpdates(parseBoolean(automaticUpdates, updates.isAutomaticUpdates()));
         updates.setTag(firstNonBlank(tag, "latest"));
         updates.setDockerHubUsername(normalize(dockerHubUsername));
         updates.setDockerHubToken(normalize(dockerHubToken));
+        gridState.setAddOnsRepository(normalize(addOnsRepository));
+        gridState.setAddOnsBranch(normalize(addOnsBranch));
         gridStateRepository.save();
         return updatesConfig(request);
     }

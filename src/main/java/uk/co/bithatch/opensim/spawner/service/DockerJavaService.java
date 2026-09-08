@@ -305,7 +305,11 @@ public class DockerJavaService implements DockerService {
             LOG.info("Running init container '{}' for parent '{}'.", initName, parentSpec.getName());
             removeExistingContainerByName(initName);
 
-            var response = createContainerCommand(configuredInit, "no", List.of("/bin/sh", "/init.sh")).exec();
+            List<String> entrypoint = configuredInit.getEntrypoint();
+            if(entrypoint == null || entrypoint.isEmpty()) {
+				throw new IllegalArgumentException("Init container '" + initName + "' must have a non-empty entrypoint.");
+			}
+			var response = createContainerCommand(configuredInit, "no", entrypoint).exec();
             var initContainerId = response.getId();
 
             try {
@@ -314,7 +318,7 @@ public class DockerJavaService implements DockerService {
                 if (statusCode == null || statusCode.intValue() != 0) {
                     throw new ExternalDependencyException(
                             "Init container '" + initName + "' failed for parent '" + parentSpec.getName() + "' with status "
-                                    + statusCode + ".");
+                                    + statusCode + ". Entry point `" + String.join(" ", entrypoint) + "` may have failed.");
                 }
                 LOG.info("Init container '{}' completed successfully (service_completed condition met).", initName);
             } finally {

@@ -94,6 +94,7 @@ public abstract class AbstractProfileService<T extends ContainerGroupInstanceDat
         }
 
         spec.setVolumes(resolveMap(containerNode.get("volumes"), variables));
+        spec.setEntrypoint(resolveList(containerNode.get("entrypoint"), variables));
         spec.setFiles(resolveMap(containerNode.get("files"), variables));
         spec.setPorts(resolveMap(containerNode.get("ports"), variables));
         spec.setHealthCheck(resolveHealthCheck(containerNode.get("healthcheck"), variables));

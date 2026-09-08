@@ -1,11 +1,10 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
-
-import java.util.List;
 
 public interface OpenSimService {
 

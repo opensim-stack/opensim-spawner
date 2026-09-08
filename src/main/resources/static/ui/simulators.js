@@ -1,10 +1,7 @@
 import {
-  buildConsoleIconLink,
-  buildLogsIconLink,
   fetchWithTimeout,
   iconSpan,
   renderContainerStatusRows,
-  resolvePreferredConsole,
   showToast,
   withWorkingOverlay
 } from '/ui/ui-helpers.js';
@@ -432,13 +429,6 @@ const createCard = (status) => {
       </div>`
     : `<div class="h-full w-full rounded-lg border border-neon-accent/20 bg-dark-900/40 text-sm text-gray-400 flex items-center justify-center text-center px-4">World map unavailable</div>`;
 
-  const preferredConsole = resolvePreferredConsole(containers, 'opensim-simulator-');
-  const preferredConsoleLink = preferredConsole
-    ? buildConsoleIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred console', 'text-neon-accent hover:text-neon-secondary')
-    : '';
-  const preferredLogsLink = preferredConsole
-    ? buildLogsIconLink(preferredConsole.name, preferredConsole.target, 'Open preferred logs', 'text-sky-300 hover:text-sky-200')
-    : '';
   const containerRows = renderContainerStatusRows(containers);
 
   card.innerHTML = `
@@ -449,9 +439,7 @@ const createCard = (status) => {
             <h2 class="text-xl font-semibold text-white">${name}</h2>
             ${ownerLine}
           </div>
-          <div class="flex items-start gap-2">
-            ${preferredConsoleLink}
-            ${preferredLogsLink}
+          <div class="flex items-start">
             <div class="w-14 h-14 rounded-xl bg-neon-primary/20 border border-neon-primary/40 flex items-center justify-center text-neon-primary font-bold">
               ${levelIcon(level)}
             </div>

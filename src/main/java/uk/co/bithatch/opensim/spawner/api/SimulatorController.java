@@ -129,7 +129,7 @@ public class SimulatorController {
 
 	        var createBot = "true".equalsIgnoreCase(fields.get("createBot"));
         	if(createBot) {
-        		botProvisioningService.createBot(sim.getOwnerFirst(), sim.getOwnerLast(), 
+        		botProvisioningService.createBot(null, sim.getOwnerFirst(), sim.getOwnerLast(), 
         				"GOVERNOR", 
 	            		Map.of(
 	        			  "email", sim.getOwnerEmail(),
@@ -137,7 +137,7 @@ public class SimulatorController {
 	                      "model", "",
 	                      "appearance", properties.getOpensimBotAppearance(),
 	                      "gender", properties.getOpensimBotGender()
-	        			));
+	        			), false);
         	}
             return provisioningService.toResponse(sim);
         } catch (IllegalArgumentException e) {

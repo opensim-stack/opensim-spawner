@@ -65,9 +65,15 @@ public class UserController {
     }
 
     @GetMapping(path = "/active", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<Map<String, String>> listActiveUsers() {
+    public List<Map<String, String>> listActiveUsers(@RequestParam(defaultValue = "false") boolean showAllAgents) {
         ensureGridLoginServiceAvailable();
-        return openSimService.showActiveUsers();
+        var users = openSimService.showActiveUsers();
+        if (showAllAgents) {
+            return users;
+        }
+        return users.stream()
+                .filter(user -> "root".equalsIgnoreCase(user.getOrDefault("type", "")))
+                .toList();
     }
 
     @GetMapping(path = "/handlers", produces = MediaType.APPLICATION_JSON_VALUE)

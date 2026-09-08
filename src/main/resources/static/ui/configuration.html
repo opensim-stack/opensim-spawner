@@ -58,25 +58,39 @@
               <span>Automatic updates</span>
             </label>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label class="block">
-                <span class="text-sm text-gray-300">Tag</span>
-                <input id="updates-tag" type="text" placeholder="latest"
-                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
-              </label>
+            <label class="block">
+              <span class="text-sm text-gray-300">Tag</span>
+              <input id="updates-tag" type="text" placeholder="latest"
+                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+            </label>
 
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label class="block">
                 <span class="text-sm text-gray-300">Docker Hub Username</span>
                 <input id="dockerhub-username" type="text"
                   class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
               </label>
+
+              <label class="block">
+                <span class="text-sm text-gray-300">Docker Hub Token</span>
+                <input id="dockerhub-token" type="password" autocomplete="off"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
             </div>
 
-            <label class="block">
-              <span class="text-sm text-gray-300">Docker Hub Token</span>
-              <input id="dockerhub-token" type="password" autocomplete="off"
-                class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
-            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label class="block">
+                <span class="text-sm text-gray-300">Add-Ons Repository (optional)</span>
+                <input id="addons-repository" type="text" placeholder="https://github.com/org/repo.git"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+
+              <label class="block">
+                <span class="text-sm text-gray-300">Add-Ons Branch (optional)</span>
+                <input id="addons-branch" type="text" placeholder="main"
+                  class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+              </label>
+            </div>
 
             <div class="flex justify-end">
               <button id="save-updates" type="submit"

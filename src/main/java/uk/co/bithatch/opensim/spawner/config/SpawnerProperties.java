@@ -42,6 +42,7 @@ public class SpawnerProperties {
 	private String opensimHostname;
 	private Path addOnsDir;
 	private String addOnsRepository;
+	private String addOnsBranch;
 	private boolean addOnsRefreshAtStartup;
 	private Path configDir;
 	private Path dataDir;
@@ -77,6 +78,14 @@ public class SpawnerProperties {
 
 	public void setAddOnsRepository(String addOnsRepository) {
 		this.addOnsRepository = addOnsRepository == null ? "" : addOnsRepository.trim();
+	}
+
+	public String getAddOnsBranch() {
+		return addOnsBranch;
+	}
+
+	public void setAddOnsBranch(String addOnsBranch) {
+		this.addOnsBranch = addOnsBranch == null ? "" : addOnsBranch.trim();
 	}
 
 	public boolean isAddOnsRefreshAtStartup() {
@@ -423,6 +432,7 @@ public class SpawnerProperties {
 		map.put("cfg.gridServices", opensimGridServices);
 		map.put("cfg.addOnsDir", normalizePath(addOnsDir));
 		map.put("cfg.addOnsRepository", addOnsRepository);
+		map.put("cfg.addOnsBranch", addOnsBranch);
 		map.put("cfg.addOnsRefreshAtStartup", String.valueOf(addOnsRefreshAtStartup));
 		map.put("cfg.configDir", normalizePath(configDir));
 		map.put("cfg.dataDir", normalizePath(dataDir));

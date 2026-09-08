@@ -26,16 +26,13 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PreDestroy;
-import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 
 @Service
@@ -44,7 +41,6 @@ public class UpdateService {
     private static final Logger LOG = LoggerFactory.getLogger(UpdateService.class);
     private static final Duration MANIFEST_CACHE_TTL = Duration.ofMinutes(15);
 
-    private final SpawnerProperties properties;
     private final GridStateRepository gridStateRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -54,11 +50,10 @@ public class UpdateService {
     private volatile Map<String, StackContainerUpdateStatus> cachedStatusByContainer = Map.of();
 
     @Autowired
-    public UpdateService(SpawnerProperties properties,
+    public UpdateService(
             GridStateRepository gridStateRepository,
             ObjectMapper objectMapper,
             DockerService dockerService) {
-        this.properties = properties;
         this.gridStateRepository = gridStateRepository;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -269,27 +264,6 @@ public class UpdateService {
 
     private String configuredTag() {
         return normalize(gridStateRepository.get().getUpdates().getTag(), "latest");
-    }
-
-    private boolean isTrackedContainer(String containerName) {
-        var name = normalize(containerName);
-        if (name.isBlank()) {
-            return false;
-        }
-        var prefix = configuredProjectPrefix();
-        if (!name.startsWith(prefix)) {
-            return false;
-        }
-        return !name.matches(".*-init-[0-9]+$");
-    }
-
-    private String configuredProjectPrefix() {
-        var prefix = properties.getComposeProjectName();
-        if (prefix == null || prefix.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "COMPOSE_PROJECT_NAME is not configured for stack container discovery.");
-        }
-        return prefix.trim();
     }
 
    

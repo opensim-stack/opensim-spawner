@@ -62,7 +62,7 @@ public class BotController {
             @RequestParam(required = false) String level,
             @RequestParam Map<String, String> fields) {
         try {
-            var bot = provisioningService.createBot(first, last, level, fields);
+            var bot = provisioningService.createBot(null, first, last, level, fields, false);
             return toResponse(bot);
         } catch (IllegalArgumentException e) {
             LOG.error("Failed to create OpenSim user {} {}.", first, last, e);

@@ -5,6 +5,8 @@ const automaticUpdates = document.getElementById('automatic-updates');
 const updatesTag = document.getElementById('updates-tag');
 const dockerHubUsername = document.getElementById('dockerhub-username');
 const dockerHubToken = document.getElementById('dockerhub-token');
+const addOnsRepository = document.getElementById('addons-repository');
+const addOnsBranch = document.getElementById('addons-branch');
 const toastContainer = document.getElementById('toast-container');
 
 const loadUpdatesConfig = async () => {
@@ -22,6 +24,8 @@ const saveUpdatesConfig = async () => {
   payload.set('tag', String(updatesTag?.value || '').trim() || 'latest');
   payload.set('dockerHubUsername', String(dockerHubUsername?.value || '').trim());
   payload.set('dockerHubToken', String(dockerHubToken?.value || ''));
+  payload.set('addOnsRepository', String(addOnsRepository?.value || '').trim());
+  payload.set('addOnsBranch', String(addOnsBranch?.value || '').trim());
 
   const response = await fetchWithTimeout('/ui/api/updates', {
     method: 'PATCH',
@@ -49,6 +53,12 @@ const applyState = (state) => {
   }
   if (dockerHubToken) {
     dockerHubToken.value = String(state?.dockerHubToken || '');
+  }
+  if (addOnsRepository) {
+    addOnsRepository.value = String(state?.addOnsRepository || '');
+  }
+  if (addOnsBranch) {
+    addOnsBranch.value = String(state?.addOnsBranch || '');
   }
 };
 

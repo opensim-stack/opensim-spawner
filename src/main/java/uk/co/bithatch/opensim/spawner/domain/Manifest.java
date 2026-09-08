@@ -5,10 +5,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Manifest implements DomainObject {
+public class Manifest extends Component {
 
 	private String version;
-	private String name;
 	private String description;
 	private String author;
 	private String icon;
@@ -34,20 +33,12 @@ public class Manifest implements DomainObject {
 		this.hooks = hooks;
 	}
 
-	public String getName() {
-		return name;
-	}
-
 	public List<String> getTokens() {
 		return tokens;
 	}
 
 	public void setTokens(List<String> tokens) {
 		this.tokens = tokens;
-	}
-
-	public void setName(String name) {
-		this.name = name;
 	}
 
 	public String getDescription() {
@@ -96,11 +87,6 @@ public class Manifest implements DomainObject {
 
 	public void setVersion(String version) {
 		this.version = version;
-	}
-
-	@Override
-	public String displayName() {
-		return name;
 	}
 
 }

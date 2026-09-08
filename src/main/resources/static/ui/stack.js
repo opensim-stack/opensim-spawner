@@ -98,7 +98,19 @@ const stateBadge = (status, running) => {
 
 const renderRow = (container) => {
   const row = document.createElement('div');
-  row.className = 'grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-3 items-center';
+  row.className = 'grid grid-cols-[auto_minmax(0,1fr)_auto] gap-4 px-5 py-3 items-center';
+
+  const updates = document.createElement('div');
+  updates.className = 'flex w-8 items-center justify-center';
+
+  if (container.updateAvailable) {
+    const updateMarker = document.createElement('span');
+    updateMarker.className = 'inline-flex items-center justify-center h-6 w-6 rounded-full border border-violet-400/40 bg-violet-500/10 text-violet-200';
+    updateMarker.title = 'Update available';
+    updateMarker.setAttribute('aria-label', 'Update available');
+    updateMarker.innerHTML = `<span class="h-3.5 w-3.5 shrink-0">${actionIconSvg('update')}</span>`;
+    updates.appendChild(updateMarker);
+  }
 
   const left = document.createElement('div');
   left.className = 'min-w-0 flex items-center gap-3';
@@ -107,15 +119,6 @@ const renderRow = (container) => {
   name.className = 'font-mono text-sm text-gray-100 truncate';
   name.textContent = container.containerName;
   name.title = container.containerName;
-
-  if (container.updateAvailable) {
-    const updateMarker = document.createElement('span');
-    updateMarker.className = 'inline-flex items-center justify-center h-6 w-6 rounded-full border border-violet-400/40 bg-violet-500/10 text-violet-200';
-    updateMarker.title = 'Update available';
-    updateMarker.setAttribute('aria-label', 'Update available');
-    updateMarker.innerHTML = `<span class="h-3.5 w-3.5 shrink-0">${actionIconSvg('update')}</span>`;
-    left.appendChild(updateMarker);
-  }
 
   left.appendChild(name);
   left.appendChild(stateBadge(container.status, container.running));
@@ -175,6 +178,7 @@ const renderRow = (container) => {
   actions.appendChild(consoleButton);
   actions.appendChild(logsButton);
 
+  row.appendChild(updates);
   row.appendChild(left);
   row.appendChild(actions);
   return row;

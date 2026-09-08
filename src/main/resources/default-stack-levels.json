@@ -1,0 +1,14 @@
+{
+  "%env.MARIADB_IMAGE%": {
+    "name": "%env.COMPOSE_PROJECT_NAME%-mariadb",
+    "environment": {
+        "MARIADB_ROOT_PASSWORD": "%env.MARIADB_ROOT_PASSWORD%",
+        "MARIADB_DATABASE": "%env.MARIADB_DATABASE%",
+        "MARIADB_USER": "%env.MARIADB_USER%",
+        "MARIADB_PASSWORD": "%env.MARIADB_PASSWORD%"
+    },
+    "volumes": {
+      "%env.COMPOSE_PROJECT_NAME%_opensim-mariadb": "/var/lib/mysql"
+    }
+  }
+}
