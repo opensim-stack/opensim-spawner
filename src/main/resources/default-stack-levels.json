@@ -26,6 +26,10 @@
                         "MARIADB_USER": "%env.MARIADB_USER%",
                         "MARIADB_PASSWORD": "%token.MARIADB_PASSWORD%"
                     },
+                    "aliases": [
+                        "%cfg.projectName%-mariadb",
+                        "%cfg.projectName%-database-services"
+                  ],
                     "command": [
                         "--character-set-server=utf8mb4",
                         "--collation-server=utf8mb4_unicode_ci"
