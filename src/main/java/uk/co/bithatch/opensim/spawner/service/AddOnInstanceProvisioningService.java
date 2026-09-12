@@ -512,7 +512,12 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 						var simType = SimulatorLevel.valueOf((String)scriptDef.getOrDefault("level", SimulatorLevel.STANDALONE.name()));
 						for(var sim : simulatorStateRepository.list().stream().filter(s -> s.getLevel() == simType).toList()) {
 							LOG.info("Executing {} hook script for add-on {} on simulator {}.", hookType, manifest.getName(), sim.getName());
-							runHooksForSimulator(sim, scriptDef, manifest, new LinkedHashMap<>(variables));
+							
+							var vars = simulatorLevelProfileService.buildBaseVariables(
+									sim, new LinkedHashMap<>(variables), 
+									resolveEnvironment(manifest.getConstants(), Map.of()));
+							
+							runHooksForSimulator(sim, scriptDef, manifest, vars);
 						}
 						break;
 					default:
