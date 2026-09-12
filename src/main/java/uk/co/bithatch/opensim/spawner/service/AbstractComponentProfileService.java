@@ -3,19 +3,20 @@ package uk.co.bithatch.opensim.spawner.service;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.domain.Component;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
-public abstract class AbstractComponentProfileService<T extends ContainerGroupInstanceData<LVL>, P, LVL extends Enum<LVL>> extends AbstractProfileService<T, P, LVL> {
+public abstract class AbstractComponentProfileService<COM extends Component<LVL>, T extends ContainerGroupInstanceData<LVL>, P, LVL extends Enum<LVL>> extends AbstractProfileService<COM, T, P, LVL> {
 
 
     private static final Logger LOG = LoggerFactory.getLogger(AbstractComponentProfileService.class);
@@ -29,23 +30,36 @@ public abstract class AbstractComponentProfileService<T extends ContainerGroupIn
     		TemplateResolver templateResolver,
     		String profileFileName,
     		String defaultProfileResourceName,
-    		GridStateRepository gridStateRepository) {
+    		StackStateRepository gridStateRepository) {
     	super(objectMapper, properties, templateResolver, gridStateRepository);
     	this.profileFileName = profileFileName;
     	this.defaultProfileResourceName = defaultProfileResourceName;
     }
 
-    public String resolveLevelField(LVL level, String fieldName) {
+    @Override
+	public final Map<String, String> buildTypeVariables(T bot, Map<String, String> variables) {
+    	var vars = onBuildTypeVariables(bot, variables);
+		return vars;
+	}
+
+	protected Map<String, String> onBuildTypeVariables(T bot, Map<String, String> variables) {
+		return variables;
+	}
+
+	public String resolveLevelField(LVL level,  String fieldName) {
         var levelNode = getLevelNode(level, null);
         var fieldNode = levelNode.get(fieldName);
-        if (fieldNode == null || fieldNode.isNull()) {
+        if (fieldNode == null ) {
             return null;
         }
-        var value = fieldNode.asText("").trim();
-        return value.isEmpty() ? null : value;
+        return String.valueOf(fieldNode).trim();
     }
-
-    private JsonNode loadProfilesRoot() {
+    
+    public COM component() {
+    	return loadComponent();
+    }
+    
+    private COM loadComponent() {
         LOG.info("Load  profiles from {}.", profileFileName);
         var configPath = properties.getConfigDir().resolve(profileFileName);
         String json;
@@ -59,18 +73,18 @@ public abstract class AbstractComponentProfileService<T extends ContainerGroupIn
                     json = new String(input.readAllBytes(), StandardCharsets.UTF_8);
                 }
             }
-            return objectMapper.readTree(json);
+            return objectMapper.readValue(json, getComponentClass());
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load level profiles.", e);
         }
     }
 
-    @Override
-    protected JsonNode getLevelNode(LVL level, String name) {
+	@Override
+    protected Map<String, Object> getLevelNode(LVL level, @Deprecated String name) {
         LOG.info("Loaded level {} profiles from {}.", level, name);
-        var root = loadProfilesRoot();
-        var levelNode = root.get(level.name());
-        if (levelNode == null || !levelNode.isObject()) {
+        var root = loadComponent();
+        var levelNode = root.getExtensions().get(level);
+        if (levelNode == null || !(levelNode instanceof Map)) {
             throw new IllegalArgumentException("No level profile found for " + level.name() + ".");
         }
         return levelNode;

@@ -27,8 +27,7 @@ ENV OPENSIM_SPAWNER_HTTP_HOST=0.0.0.0 \
     OPENSIM_SPAWNER_HTTP_PORT=8993 \
     OPENSIM_SPAWNER_FIRST_PORT=9000 \
     OPENSIM_SPAWNER_LAST_PORT=9015 \
-    OPENSIM_METAVERSE2MCP_IMAGE=bithatch/opensim-metaverse2mcp:latest \
-    OPENSIM_OPENCODE_IMAGE=bithatch/opensim-opencode:latest
+    SPRING_PROFILES_ACTIVE=docker
 
 VOLUME ["/config", "/data", "/workspace"]
 ENTRYPOINT ["/usr/local/bin/opensim-spawner-entrypoint.sh"]

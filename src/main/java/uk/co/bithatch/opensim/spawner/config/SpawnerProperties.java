@@ -13,9 +13,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SpawnerProperties {
 
 	private boolean opensimCreateBotUser;
-	private String token = "";
-	private String metaverse2mcpImage;
-	private String opencodeImage;
 	private String opensimHandlerConfig;
 	private String opensimGridName;
 	private String opensimGridNick;
@@ -32,17 +29,18 @@ public class SpawnerProperties {
 	private String opensimPullPolicy;
 	private String opensimRestartPolicy;
 	private String opensimNetwork;
-	private String composeProjectName;
+	private String opensimProjectName;
 	private String opensimUserEmail;
 	private String opensimUserPassword;
 	private String opensimUserFirst;
 	private String opensimUserLast;
 	private String opensimProvisionMode;
-	private String opensimGridServices;
 	private String opensimHostname;
 	private Path addOnsDir;
 	private String addOnsRepository;
 	private String addOnsBranch;
+	private String opensimTag = "latest";
+	private String opensimGroup= "bithatch/";
 	private boolean addOnsRefreshAtStartup;
 	private Path configDir;
 	private Path dataDir;
@@ -55,6 +53,22 @@ public class SpawnerProperties {
 	private int opensimMaxSimulators;
 	private int opensimRobustPublicPort;
 	private int opensimRobustPrivatePort;
+
+	public String getOpensimGroup() {
+		return opensimGroup;
+	}
+
+	public void setOpensimGroup(String opensimGroup) {
+		this.opensimGroup = opensimGroup;
+	}
+
+	public String getOpensimTag() {
+		return opensimTag;
+	}
+
+	public void setOpensimTag(String opensimTag) {
+		this.opensimTag = opensimTag;
+	}
 
 	public String getOpensimHostname() {
 		return opensimHostname;
@@ -94,14 +108,6 @@ public class SpawnerProperties {
 
 	public void setAddOnsRefreshAtStartup(boolean addOnsRefreshAtStartup) {
 		this.addOnsRefreshAtStartup = addOnsRefreshAtStartup;
-	}
-
-	public String getOpensimGridServices() {
-		return opensimGridServices;
-	}
-
-	public void setOpensimGridServices(String opensimGridServices) {
-		this.opensimGridServices = opensimGridServices;
 	}
 
 	public int getOpensimRegionX() {
@@ -256,12 +262,12 @@ public class SpawnerProperties {
 		this.opensimNetwork = opensimNetwork;
 	}
 
-	public String getComposeProjectName() {
-		return composeProjectName;
+	public String getOpensimProjectName() {
+		return opensimProjectName;
 	}
 
-	public void setComposeProjectName(String composeProjectName) {
-		this.composeProjectName = composeProjectName == null ? "" : composeProjectName.trim();
+	public void setOpensimProjectName(String projectName) {
+		this.opensimProjectName = projectName == null ? "" : projectName.trim();
 	}
 
 	public int getOpensimMaxBots() {
@@ -312,14 +318,6 @@ public class SpawnerProperties {
 		this.opensimBotEmail = opensimLoginEmail;
 	}
 
-	public String getToken() {
-		return token;
-	}
-
-	public void setToken(String token) {
-		this.token = token == null ? "" : token;
-	}
-
 	public int getLastPort() {
 		return lastPort;
 	}
@@ -334,22 +332,6 @@ public class SpawnerProperties {
 
 	public void setFirstPort(int firstPort) {
 		this.firstPort = firstPort;
-	}
-
-	public String getMetaverse2mcpImage() {
-		return metaverse2mcpImage;
-	}
-
-	public void setMetaverse2mcpImage(String metaverse2mcpImage) {
-		this.metaverse2mcpImage = metaverse2mcpImage;
-	}
-
-	public String getOpencodeImage() {
-		return opencodeImage;
-	}
-
-	public void setOpencodeImage(String opencodeImage) {
-		this.opencodeImage = opencodeImage;
 	}
 
 	public String getOpensimHandlerConfig() {
@@ -403,10 +385,7 @@ public class SpawnerProperties {
 	public Map<String, String> buildVariables() {
 		var map = new HashMap<String, String>();
 		map.put("cfg.createBotUser", String.valueOf(opensimCreateBotUser));
-		map.put("cfg.token", token);
 		map.put("cfg.hostname", opensimHostname);
-		map.put("cfg.metaverse2mcpImage", metaverse2mcpImage);
-		map.put("cfg.opencodeImage", opencodeImage);
 		map.put("cfg.handlerConfig", opensimHandlerConfig);
 		map.put("cfg.gridName", opensimGridName);
 		map.put("cfg.gridNick", opensimGridNick);
@@ -423,13 +402,12 @@ public class SpawnerProperties {
 		map.put("cfg.pullPolicy", opensimPullPolicy);
 		map.put("cfg.restartPolicy", opensimRestartPolicy);
 		map.put("cfg.network", opensimNetwork);
-		map.put("cfg.composeProjectName", composeProjectName);
+		map.put("cfg.projectName", opensimProjectName);
 		map.put("cfg.userEmail", opensimUserEmail);
 		map.put("cfg.userPassword", opensimUserPassword);
 		map.put("cfg.userFirst", opensimUserFirst);
 		map.put("cfg.userLast", opensimUserLast);
 		map.put("cfg.provisionMode", opensimProvisionMode);
-		map.put("cfg.gridServices", opensimGridServices);
 		map.put("cfg.addOnsDir", normalizePath(addOnsDir));
 		map.put("cfg.addOnsRepository", addOnsRepository);
 		map.put("cfg.addOnsBranch", addOnsBranch);
@@ -444,7 +422,11 @@ public class SpawnerProperties {
 		map.put("cfg.maxBots", String.valueOf(opensimMaxBots));
 		map.put("cfg.maxSimulators", String.valueOf(opensimMaxSimulators));
 		map.put("cfg.robustPublicPort", String.valueOf(opensimRobustPublicPort));	
-		map.put("cfg.robustPrivatePort", String.valueOf(opensimRobustPrivatePort));
+		map.put("cfg.robustPrivatePort", String.valueOf(opensimRobustPrivatePort));	
+		map.put("cfg.tag", opensimTag);	
+		map.put("cfg.group", opensimGroup == null || opensimGroup.equals("") || opensimGroup.equals("_") 
+				? "" : 
+			  ( opensimGroup.endsWith("/") ? opensimGroup : opensimGroup + "/"));
 		return map;
 	}
 

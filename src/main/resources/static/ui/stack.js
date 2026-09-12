@@ -113,14 +113,24 @@ const renderRow = (container) => {
   }
 
   const left = document.createElement('div');
-  left.className = 'min-w-0 flex items-center gap-3';
+  left.className = 'min-w-0 flex items-start gap-3';
+
+  const identity = document.createElement('div');
+  identity.className = 'min-w-0';
 
   const name = document.createElement('div');
   name.className = 'font-mono text-sm text-gray-100 truncate';
   name.textContent = container.containerName;
   name.title = container.containerName;
 
-  left.appendChild(name);
+  const image = document.createElement('div');
+  image.className = 'font-mono text-xs text-gray-400 truncate';
+  image.textContent = container.image || 'unknown image';
+  image.title = container.image || 'unknown image';
+
+  identity.appendChild(name);
+  identity.appendChild(image);
+  left.appendChild(identity);
   left.appendChild(stateBadge(container.status, container.running));
 
   const actions = document.createElement('div');

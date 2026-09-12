@@ -44,7 +44,7 @@
   "mcp": {
     "metaverse2mcp": {
       "type": "remote",
-      "url": "http://%env.COMPOSE_PROJECT_NAME%-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
+      "url": "http://%cfg.projectName%-metaverse2mcp-%bot.first%-%bot.last%:%env.METAVERSE_MCP_PORT%%env.METAVERSE_MCP_HTTP_ENDPOINT%",
       "enabled": true,
       "headers": {
         "Authorization": "Bearer %bot.token%"

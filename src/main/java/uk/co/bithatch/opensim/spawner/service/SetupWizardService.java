@@ -1,5 +1,8 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import static uk.co.bithatch.opensim.jlib.Strings.firstNonBlank;
+import static uk.co.bithatch.opensim.jlib.Strings.normalize;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -13,7 +16,7 @@ import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
 public class SetupWizardService {
@@ -24,19 +27,23 @@ public class SetupWizardService {
     private final BotProvisioningService botProvisioningService;
     private final OpenSimService openSimService;
     private final RandomPasswordService passwordService;
-    private final GridStateRepository gridStateRepository;
+    private final StackStateRepository gridStateRepository;
+    private final StackProvisioningService stackProvisioningService;
 
-    public SetupWizardService(SimulatorProvisioningService simulatorProvisioningService,
+    public SetupWizardService(
+    		StackProvisioningService stackProvisioningService,
+    		SimulatorProvisioningService simulatorProvisioningService,
             BotProvisioningService botProvisioningService,
             OpenSimService openSimService,
             RandomPasswordService passwordService,
-            GridStateRepository gridStateRepository,
+            StackStateRepository gridStateRepository,
             SpawnerProperties properties) {
         this.simulatorProvisioningService = simulatorProvisioningService;
         this.botProvisioningService = botProvisioningService;
         this.openSimService = openSimService;
         this.passwordService = passwordService;
         this.gridStateRepository = gridStateRepository;
+        this.stackProvisioningService = stackProvisioningService;
         
         if(!properties.getOpensimProvisionMode().equalsIgnoreCase("guided")) {
         	runSetup(Map.of(
@@ -75,6 +82,9 @@ public class SetupWizardService {
     }
 
     public Map<String, Object> runSetup(Map<String, Object> payload) {
+    	
+    	stackProvisioningService.provisionStack();
+    	
         var request = payload == null ? Map.<String, Object>of() : payload;
 
         var grid = mapValue(request.get("grid"));
@@ -299,10 +309,6 @@ public class SetupWizardService {
         return normalized;
     }
 
-    private static String normalize(String value) {
-        return value == null ? "" : value.trim();
-    }
-
     private static String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
     }
@@ -312,16 +318,6 @@ public class SetupWizardService {
             return bool;
         }
         return "true".equalsIgnoreCase(stringValue(value));
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (var value : values) {
-            var normalized = normalize(value);
-            if (!normalized.isBlank()) {
-                return normalized;
-            }
-        }
-        return "";
     }
 
     private static String normalizeNameFromSimulator(String simulatorName) {

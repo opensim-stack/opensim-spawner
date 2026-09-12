@@ -24,7 +24,8 @@ import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.RegionInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.domain.StackState;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
 
 @Service
@@ -38,7 +39,7 @@ public class RestOpenSimService implements OpenSimService {
 
     private final SpawnerProperties properties;
     private final SimulatorStateRepository simStateRepository;
-    private final GridStateRepository gridStateRepository;
+    private final StackStateRepository gridStateRepository;
     private final Object consoleOperationLock = new Object();
     private final PortService portService;
     private final OARs oars;
@@ -51,7 +52,7 @@ public class RestOpenSimService implements OpenSimService {
     public RestOpenSimService(
     		SpawnerProperties properties,
 			SimulatorStateRepository stateRepository,
-			GridStateRepository gridStateRepository,
+			StackStateRepository gridStateRepository,
 			PortService portService,
 			OARs oars
     	) {
@@ -760,7 +761,7 @@ public class RestOpenSimService implements OpenSimService {
 
     private OpensimRemoteAdminClient openRemoteAdmin(SimulatorInstanceData simulator) {
         return new OpensimRemoteAdminClient(simulatorBaseUrl(simulator.getPort()),
-                gridStateRepository.get().getAdminToken());
+                gridStateRepository.get().getTokens().get(StackState.ADMIN_TOKEN));
     }
 
     private OpensimRESTConsole openConsole() {
@@ -801,7 +802,7 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     private String simulatorBaseUrl(int port) {
-        var host = normalizeServiceHost(properties.getOpensimGridServices());
+        var host = normalizeServiceHost(properties.getOpensimProjectName() + "-grid-services");
         return "http://" + host + ":" + port;
     }
 

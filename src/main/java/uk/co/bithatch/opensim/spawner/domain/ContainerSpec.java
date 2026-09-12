@@ -23,8 +23,17 @@ public class ContainerSpec {
     private HealthCheck healthCheck;
     private  Map<String, ContainerSpec> init;
     private List<String> entrypoint = new ArrayList<>();
+    private List<String> command = new ArrayList<>();
     
-    public HealthCheck getHealthCheck() {
+    public List<String> getCommand() {
+		return command;
+	}
+
+	public void setCommand(List<String> command) {
+		this.command = command;
+	}
+
+	public HealthCheck getHealthCheck() {
 		return healthCheck;
 	}
 
@@ -140,6 +149,9 @@ public class ContainerSpec {
 	public String toString() {
 		return "ContainerSpec [image=" + image + ", name=" + name + ", environment=" + environment + ", volumes="
 				+ volumes + ", files=" + files + ", ports=" + ports + ", extraHosts=" + extraHosts + ", hostname="
-				+ hostname + ", aliases=" + aliases + "]";
+				+ hostname + ", aliases=" + aliases + ", directories=" + directories + ", managedFiles=" + managedFiles
+				+ ", healthCheck=" + healthCheck + ", init=" + init + ", entrypoint=" + entrypoint + ", command="
+				+ command + "]";
 	}
+
 }

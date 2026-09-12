@@ -68,6 +68,7 @@ public class StackContainerService {
             response.add(new StackContainerView(
                     containerName,
                     state,
+                    container.getImage(),
                     "running".equalsIgnoreCase(container == null ? null : container.getState()),
                     updateAvailable));
         }
@@ -115,7 +116,7 @@ public class StackContainerService {
             return inspectView(normalizedName);
         } catch (RuntimeException e) {
             // The action has already been issued, so return best-effort status.
-            return new StackContainerView(normalizedName, "unknown", false, false);
+            return new StackContainerView(normalizedName, "unknown",  "unknown", false, false);
         }
     }
 
@@ -141,6 +142,7 @@ public class StackContainerService {
         return new StackContainerView(
                 containerName,
                 normalizeState(state == null ? null : state.getStatus(), null),
+                inspect.getConfig().getImage(),
                 running,
                 updates.containsKey(containerName) && updates.get(containerName).updateAvailable());
     }
@@ -199,7 +201,7 @@ public class StackContainerService {
     }
 
     private String configuredProjectPrefix() {
-        var prefix = properties.getComposeProjectName();
+        var prefix = properties.getOpensimProjectName();
         if (prefix == null || prefix.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "COMPOSE_PROJECT_NAME is not configured for stack container discovery.");

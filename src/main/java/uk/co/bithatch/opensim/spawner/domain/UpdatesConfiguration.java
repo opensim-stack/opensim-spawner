@@ -5,7 +5,7 @@ public class UpdatesConfiguration {
     private String dockerHubUsername = "";
     private String dockerHubToken = "";
     private boolean automaticUpdates = true;
-    private String tag = "latest";
+    private String tag;
 
     public String getDockerHubUsername() {
         return dockerHubUsername;
@@ -32,11 +32,11 @@ public class UpdatesConfiguration {
     }
 
     public String getTag() {
-        return normalize(tag, "latest");
+        return tag;
     }
 
     public void setTag(String tag) {
-        this.tag = normalize(tag, "latest");
+        this.tag = tag;
     }
 
     private static String normalize(String value) {

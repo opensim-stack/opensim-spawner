@@ -13,8 +13,10 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.state.AddOnInstanceStateRepository;
+import uk.co.bithatch.opensim.spawner.state.AddOnRepository;
 import uk.co.bithatch.opensim.spawner.state.BotStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
 public class ContainerReferenceMigrationService {
@@ -27,13 +29,20 @@ public class ContainerReferenceMigrationService {
     private final BotLevelProfileService botLevelProfileService;
     private final SimulatorLevelProfileService simulatorLevelProfileService;
     private final AddOnProfileService addOnProfileService;
+	private final StackStateRepository stackStateRepository;
+	private final AddOnRepository addOnRepository;
 
-    public ContainerReferenceMigrationService(BotStateRepository botStateRepository,
+    public ContainerReferenceMigrationService(
+    		StackStateRepository stackStateRepository,
+    		BotStateRepository botStateRepository,
             SimulatorStateRepository simulatorStateRepository,
             AddOnInstanceStateRepository addOnInstanceStateRepository,
             BotLevelProfileService botLevelProfileService,
             SimulatorLevelProfileService simulatorLevelProfileService,
+            AddOnRepository	 addOnRepository,
             AddOnProfileService addOnProfileService) {
+    	this.addOnRepository = addOnRepository;
+    	this.stackStateRepository = stackStateRepository;
         this.botStateRepository = botStateRepository;
         this.simulatorStateRepository = simulatorStateRepository;
         this.addOnInstanceStateRepository = addOnInstanceStateRepository;
@@ -51,7 +60,7 @@ public class ContainerReferenceMigrationService {
     private void migrateBots() {
         for (var bot : botStateRepository.list()) {
             try {
-                var expectedRefs = botLevelProfileService.resolvePlan(bot, Map.of()).containers().stream()
+                var expectedRefs = botLevelProfileService.resolvePlan(bot, stackStateRepository.resolveEnvironment(botLevelProfileService.component().getConstants(), Map.of())).containers().stream()
                         .map(spec -> spec.getName() == null ? "" : spec.getName().trim())
                         .filter(name -> !name.isEmpty())
                         .toList();
@@ -70,23 +79,26 @@ public class ContainerReferenceMigrationService {
 
         for (var addOn : addOnInstanceStateRepository.list()) {
             try {
-                var expectedRefs = addOnProfileService.resolvePlan(addOn, Map.of()).containers().stream()
-                        .map(spec -> spec.getName() == null ? "" : spec.getName().trim())
-                        .filter(name -> !name.isEmpty())
-                        .toList();
+            	addOnRepository.load(addOn.getName()).ifPresent(mf-> {
 
-                saveIfChanged("add-on " + addOn.displayName(),
-                        addOn.getContainerIds(),
-                        expectedRefs,
-                        () -> addOnInstanceStateRepository.save(addOn),
-                        addOn::setContainerIds);
+                    var expectedRefs = addOnProfileService.resolvePlan(addOn, stackStateRepository.resolveEnvironment(mf.getConstants(), Map.of())).containers().stream()
+                            .map(spec -> spec.getName() == null ? "" : spec.getName().trim())
+                            .filter(name -> !name.isEmpty())
+                            .toList();
 
-                if (addOn.getLevel() == ContainerLevel.SIMULATOR
-                        && addOn.getGridServiceSimulatorName() != null
-                        && !addOn.getGridServiceSimulatorName().isBlank()) {
-                    addOnNamesBySimulator.computeIfAbsent(addOn.getGridServiceSimulatorName(), _ignored -> new ArrayList<>())
-                            .addAll(expectedRefs);
-                }
+                    saveIfChanged("add-on " + addOn.displayName(),
+                            addOn.getContainerIds(),
+                            expectedRefs,
+                            () -> addOnInstanceStateRepository.save(addOn),
+                            addOn::setContainerIds);
+
+                    if (addOn.getLevel() == ContainerLevel.SIMULATOR
+                            && addOn.getGridServiceSimulatorName() != null
+                            && !addOn.getGridServiceSimulatorName().isBlank()) {
+                        addOnNamesBySimulator.computeIfAbsent(addOn.getGridServiceSimulatorName(), _ignored -> new ArrayList<>())
+                                .addAll(expectedRefs);
+                    }	
+            	});
             } catch (RuntimeException e) {
                 LOG.warn("Skipping container-reference migration for add-on {} because plan resolution failed.",
                         addOn.displayName(),
@@ -97,7 +109,7 @@ public class ContainerReferenceMigrationService {
         for (var sim : simulatorStateRepository.list()) {
             try {
                 var mergedRefs = new LinkedHashSet<String>();
-                mergedRefs.addAll(simulatorLevelProfileService.resolvePlan(sim, Map.of()).containers().stream()
+                mergedRefs.addAll(simulatorLevelProfileService.resolvePlan(sim, stackStateRepository.resolveEnvironment(simulatorLevelProfileService.component().getConstants(), Map.of())).containers().stream()
                         .map(spec -> spec.getName() == null ? "" : spec.getName().trim())
                         .filter(name -> !name.isEmpty())
                         .toList());

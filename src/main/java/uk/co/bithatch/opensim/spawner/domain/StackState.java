@@ -3,8 +3,10 @@ package uk.co.bithatch.opensim.spawner.domain;
 import java.util.HashMap;
 import java.util.Map;
 
-public class GridState implements DomainObject {
+public class StackState extends ContainerGroupInstanceData<StackLevel> {
 
+	public static final String ADMIN_TOKEN = "ADMIN_TOKEN";
+	@Deprecated
 	private String adminToken;
 	private String name;
 	private String nick;
@@ -97,6 +99,7 @@ public class GridState implements DomainObject {
 		return adminToken;
 	}
 
+	@Deprecated
 	public void setAdminToken(String adminToken) {
 		this.adminToken = adminToken;
 	}

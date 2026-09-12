@@ -3,7 +3,6 @@ package uk.co.bithatch.opensim.spawner.service;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -16,13 +15,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.RegionInstanceData;
-import uk.co.bithatch.opensim.spawner.domain.ResolvedSimulatorPlan;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
+import uk.co.bithatch.opensim.spawner.domain.SimulatorsComponent;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
-public class SimulatorProvisioningService extends AbstractContainerGroupProvisioningService<SimulatorStateRepository, SimulatorInstanceData> {
+public class SimulatorProvisioningService extends AbstractContainerGroupProvisioningService<SimulatorsComponent, SimulatorLevel,SimulatorStateRepository, SimulatorInstanceData> {
 
     private static final int MAX_IMPORT_RETRIES = 100;
     private static final Duration IMPORT_RETRY_DELAY = Duration.ofSeconds(10);
@@ -36,6 +36,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 	private final PortService portService;
     
 	public SimulatorProvisioningService(
+			StackStateRepository stackStateRepository,
 			SimulatorStateRepository stateRepository,
 			DockerService dockerService,
             OpenSimService openSimService,
@@ -44,9 +45,10 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
             TemplateResolver templateResolver,
 			SpawnerProperties properties,
             OARs oars,
-            PortService portService
+            PortService portService,
+			RandomPasswordService randomPasswordService
 			) {
-		super(stateRepository, dockerService, templateResolver, properties);
+		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService);
 		this.portService = portService;
 		this.oars = oars;
 		this.openSimService = openSimService;
@@ -159,9 +161,10 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 
             stateRepository.save(sim);
             
-            var plan = profileService.resolvePlan(sim, containerRequestFields);
+            var plan = profileService.resolvePlan(sim, resolveEnvironment(profileService.component().getConstants(), containerRequestFields));
             LOG.info("Resolved {} container spec(s) for sim {}.", plan.containers().size(), name);
-            materializeFiles(plan, sim, materializedFiles);
+
+            materializeFiles(plan, materializedFiles);
 
             createdContainerIds.addAll(dockerService.createContainers(plan.containers()));
             LOG.info("Created {} container(s) for sim {}.", createdContainerIds.size(), sim);
@@ -261,10 +264,6 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
                 "Cannot create simulator for current topology. Create a ROBUST root simulator first.");
     }
 
-    private void materializeFiles(ResolvedSimulatorPlan plan, SimulatorInstanceData bot, List<java.nio.file.Path> writtenFiles) {
-        materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot,  new LinkedHashMap<String, String>()));
-    }
-    
     private String resolveRequestedOAR(SimulatorLevel level, Map<String, String> requestFields) {
         var value = requestFields.get("oar");
         if("".equals(value) || "none".equalsIgnoreCase(value)) {

@@ -6,8 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -22,11 +24,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.domain.Component;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.Plan;
+import uk.co.bithatch.opensim.spawner.domain.StackState;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 import uk.co.bithatch.opensim.spawner.state.StateRepository;
 
 public abstract class AbstractContainerGroupProvisioningService<
+ 	COM extends Component<LVL>,
+ 	LVL extends Enum<LVL>,
 	R extends StateRepository<T>,
 	T extends ContainerGroupInstanceData<?>> {
 	
@@ -37,16 +44,26 @@ public abstract class AbstractContainerGroupProvisioningService<
     protected final DockerService dockerService;
     protected final SpawnerProperties properties;
     protected final TemplateResolver templateResolver;
+    protected final RandomPasswordService randomPasswordService;
+	protected final StackStateRepository stackStateRepository;
 
 	public AbstractContainerGroupProvisioningService(
+			StackStateRepository stackStateRepository,
 			R stateRepository, 
 			DockerService dockerService,
 			TemplateResolver templateResolver,
-			SpawnerProperties properties) {
+			SpawnerProperties properties,
+			RandomPasswordService randomPasswordService) {
 		this.stateRepository = stateRepository;
 		this.dockerService = dockerService;
 		this.properties = properties;
 		this.templateResolver = templateResolver;
+		this.randomPasswordService = randomPasswordService;
+		this.stackStateRepository = stackStateRepository;
+	}
+	
+	public Map<String, String> resolveEnvironment(Map<String, String> defaultVariables, Map<String, String> requestVariables) {
+		return stackStateRepository.resolveEnvironment(defaultVariables, requestVariables);
 	}
 
     public boolean exists(String name) {
@@ -60,7 +77,7 @@ public abstract class AbstractContainerGroupProvisioningService<
     public Map<String, Object> getContainerGroupStatus(String name) {
         LOG.info("Fetching status for {} {}.", name);
         var cntr = stateRepository.load(name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Container " + name + " not found."));
 
         var status = toResponse(cntr);
         try {
@@ -75,21 +92,21 @@ public abstract class AbstractContainerGroupProvisioningService<
     
     public final synchronized void deleteContainerGroup(String name) {
         LOG.info("Deleting container group {}.", name);
-        var bot = stateRepository.load(name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Container group not found."));
+        var grp = stateRepository.load(name)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Container group " + name + " not found."));
 
         try {
-            dockerService.removeContainers(bot.getContainerIds());
+            dockerService.removeContainers(grp.getContainerIds());
             var botVolumeSuffix = "-" + name;
             dockerService.removeVolumesBySuffix(botVolumeSuffix);
             LOG.info("Removed {} container(s) and named volumes with suffix '{}' for container group {}.",
-                    bot.getContainerIds().size(),
+                    grp.getContainerIds().size(),
                     botVolumeSuffix,
                     name);
         } catch (RuntimeException e) {
             LOG.error("Failed deleting containers for container group {}.", name, e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Failed to remove bot containers: " + e.getMessage(), e);
+                    "Failed to remove containers: " + e.getMessage(), e);
         }
 
         try {
@@ -103,32 +120,77 @@ public abstract class AbstractContainerGroupProvisioningService<
 
         onDeleteContainerGroup(name);
     }
-    
-
 
     public synchronized void restart(String name) {
-        LOG.info("Restarting bot {}.", name);
-        var bot = stateRepository.load(name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+        LOG.info("Restarting container group {}.", name);
+        var cntr = stateRepository.load(name)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Container group " + name + " not found."));
 
-        applyContainerAction(bot, name, dockerService::restartContainers, "restart", "Restarted");
+        applyContainerAction(cntr, name, dockerService::restartContainers, "restart", "Restarted");
     }
 
     public synchronized void start(String name) {
         LOG.info("Starting container group {}.", name);
-        var bot = stateRepository.load(name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+        var cntr = stateRepository.load(name)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Container group " + name + " not found."));
 
-        applyContainerAction(bot, name, dockerService::startContainers, "start", "Started");
+        applyContainerAction(cntr, name, dockerService::startContainers, "start", "Started");
     }
 
     public synchronized void stop(String name) {
         LOG.info("Stopping container group {}.", name);
-        var bot = stateRepository.load(name)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+        var cntr = stateRepository.load(name)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Container group " + name + " not found."));
 
-        applyContainerAction(bot, name, dockerService::stopContainers, "stop", "Stopped");
+        applyContainerAction(cntr, name, dockerService::stopContainers, "stop", "Stopped");
     }
+    
+	protected Set<String> installTokens(String name, COM component) {
+		var changes = new HashSet<String>();
+		if(!component.getTokens().isEmpty()) {
+			LOG.info("Component {} has {} token(s) defined in manifest.", name, component.getTokens().size());
+			StackState stackState = stackStateRepository.get();
+	    	component.getTokens().forEach(key -> {
+	    		if(!stackState.getTokens().containsKey(key)) {
+	    			var tokenValue = randomPasswordService.nextPassword();
+	    			stackState.getTokens().put(key, tokenValue);
+	    			LOG.info("Component {} token '{}' generated and added to grid state.", name, key);
+	    			changes.add(key);
+	    		}
+	    	});
+			stackStateRepository.save();
+		}
+		return changes;
+	}
+    
+	protected void removeExports(COM mf, StackStateRepository gridStateRepository) {
+		if(!mf.getExports().isEmpty()) {
+			var gridState = gridStateRepository.get();
+			for(var varName : mf.getExports()) {
+				gridState.getGlobal().remove(varName);
+			}
+			gridStateRepository.save();
+		}
+	}
+
+	protected boolean installExports(String name, COM component) {
+		if(!component.getExports().isEmpty()) {
+			StackState stackState = stackStateRepository.get();
+			for(var varName : component.getExports()) {
+				var value = component.getConstants().get(varName);
+				if(value == null || value.isBlank()) {
+					throw new IllegalStateException("Component " + name + " export '" + varName + "' is not defined in manifest constants.");
+				}
+				else {
+					stackState.getGlobal().put(varName, value);
+					LOG.info("Component {} export '{}' generated and added to grid state.", name, name);
+				}
+			}
+			stackStateRepository.save();
+			return true;
+		}
+		return false;
+	}
 
     private void applyContainerAction(T containerGroup,
             String name,
@@ -144,7 +206,7 @@ public abstract class AbstractContainerGroupProvisioningService<
         } catch (RuntimeException e) {
             LOG.error("Failed {}ing containers for group {}.", actionVerb, name, e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Failed to " + actionVerb + " bot containers: " + e.getMessage(), e);
+                    "Failed to " + actionVerb + " containers: " + e.getMessage(), e);
         }
     }
 
@@ -264,8 +326,9 @@ public abstract class AbstractContainerGroupProvisioningService<
 	protected void onRollbackFailedProvision(String name, List<String> containerIds, List<Path> files) {
 	}
 
-	protected void materializeFiles(Plan plan, List<Path> writtenFiles, Map<String, String> variables) {
+	protected void materializeFiles(Plan plan, List<Path> writtenFiles) {
 		LOG.info("Materializing files for {} container(s).", plan.containers().size());
+		var variables = plan.variables();
 		for (var container : plan.containers()) {
 			LOG.info("Container materialization step: {} directories, {} files, {} managed files.",
 					container.getDirectories().size(), container.getFiles().size(), container.getManagedFiles().size());
@@ -302,7 +365,7 @@ public abstract class AbstractContainerGroupProvisioningService<
 			}
 
 			/*
-			 * Managed files allow other parts of the stack to contribute configuratiln
+			 * Managed files allow other parts of the stack to contribute configuration
 			 * files. The child add-on (e.g. blender, a stack add-on) will add configuration
 			 * files to the drop-in directory, and the parent stack container (e.g. stack,
 			 * sim or bot container) will add its own files (highest priority, loaded first)
@@ -317,8 +380,8 @@ public abstract class AbstractContainerGroupProvisioningService<
 				}
 				var dropInDir = Path.of(managedFile.dropIns());
 				var targetName = templateResolver.resolve( managedFile.target(), variables);
-        var content = loadManagedFileTemplate(templateName, targetName);
-        var resolved = templateResolver.resolve(content, variables);
+		        var content = loadManagedFileTemplate(templateName, targetName);
+		        var resolved = templateResolver.resolve(content, variables);
 				LOG.info("Processing managed file template '{}' with drop-ins directory '{}' and target '{}'.",
 						templateName, dropInDir, targetName);
 

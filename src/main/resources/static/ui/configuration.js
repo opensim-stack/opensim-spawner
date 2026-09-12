@@ -21,7 +21,7 @@ const loadUpdatesConfig = async () => {
 const saveUpdatesConfig = async () => {
   const payload = new URLSearchParams();
   payload.set('automaticUpdates', automaticUpdates?.checked ? 'true' : 'false');
-  payload.set('tag', String(updatesTag?.value || '').trim() || 'latest');
+  payload.set('tag', String(updatesTag?.value || '').trim() || '');
   payload.set('dockerHubUsername', String(dockerHubUsername?.value || '').trim());
   payload.set('dockerHubToken', String(dockerHubToken?.value || ''));
   payload.set('addOnsRepository', String(addOnsRepository?.value || '').trim());
@@ -46,7 +46,7 @@ const applyState = (state) => {
     automaticUpdates.checked = !!state?.automaticUpdates;
   }
   if (updatesTag) {
-    updatesTag.value = String(state?.tag || 'latest');
+    updatesTag.value = String(state?.tag);
   }
   if (dockerHubUsername) {
     dockerHubUsername.value = String(state?.dockerHubUsername || '');

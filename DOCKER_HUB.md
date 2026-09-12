@@ -20,7 +20,6 @@ Run the container with mounted stack directories and OpenSim console credentials
 docker run --rm \
   -e OPENSIM_SPAWNER_HTTP_HOST=0.0.0.0 \
   -e OPENSIM_SPAWNER_HTTP_PORT=8993 \
-  -e OPENSIM_SPAWNER_TOKEN= \
   -e OPENSIM_SPAWNER_FIRST_PORT=9000 \
   -e OPENSIM_SPAWNER_LAST_PORT=9015 \
   -e OPENSIM_CONSOLE_USER=ConsoleUser \

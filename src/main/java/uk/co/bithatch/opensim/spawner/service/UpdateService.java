@@ -33,7 +33,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.annotation.PreDestroy;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.jlib.Strings;
+import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
 public class UpdateService {
@@ -41,19 +43,23 @@ public class UpdateService {
     private static final Logger LOG = LoggerFactory.getLogger(UpdateService.class);
     private static final Duration MANIFEST_CACHE_TTL = Duration.ofMinutes(15);
 
-    private final GridStateRepository gridStateRepository;
+    private final StackStateRepository gridStateRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 	private final DockerService dockerService;
+	private final SpawnerProperties spawnerProperties;
 
     private volatile Instant lastRefresh = Instant.EPOCH;
     private volatile Map<String, StackContainerUpdateStatus> cachedStatusByContainer = Map.of();
 
     @Autowired
     public UpdateService(
-            GridStateRepository gridStateRepository,
+            StackStateRepository gridStateRepository,
             ObjectMapper objectMapper,
-            DockerService dockerService) {
+            DockerService dockerService,
+            SpawnerProperties spawnerProperties
+            ) {
+    	this.spawnerProperties = spawnerProperties;
         this.gridStateRepository = gridStateRepository;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
@@ -263,7 +269,7 @@ public class UpdateService {
     }
 
     private String configuredTag() {
-        return normalize(gridStateRepository.get().getUpdates().getTag(), "latest");
+        return normalize(Strings.firstNonBlank(gridStateRepository.get().getUpdates().getTag(), spawnerProperties.getOpensimTag(), "latest"));
     }
 
    

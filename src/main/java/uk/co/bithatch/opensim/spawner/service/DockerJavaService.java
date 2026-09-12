@@ -45,7 +45,7 @@ import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.jlib.Strings;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
 public class DockerJavaService implements DockerService {
@@ -54,14 +54,14 @@ public class DockerJavaService implements DockerService {
 
     private final DockerClient dockerClient;
     private final SpawnerProperties properties;
-	private final GridStateRepository gridStateRepository;
+	private final StackStateRepository gridStateRepository;
 
     @Autowired
-    public DockerJavaService(SpawnerProperties properties, GridStateRepository gridStateRepository) {
+    public DockerJavaService(SpawnerProperties properties, StackStateRepository gridStateRepository) {
         this(properties, buildDockerClient(), gridStateRepository);
     }
 
-    DockerJavaService(SpawnerProperties properties, DockerClient dockerClient, GridStateRepository gridStateRepository) {
+    DockerJavaService(SpawnerProperties properties, DockerClient dockerClient, StackStateRepository gridStateRepository) {
         this.dockerClient = dockerClient;
         this.properties = properties;
         this.gridStateRepository = gridStateRepository;
@@ -262,7 +262,7 @@ public class DockerJavaService implements DockerService {
     }
 
 	private String configuredProjectPrefix() {
-	    var prefix = properties.getComposeProjectName();
+	    var prefix = properties.getOpensimProjectName();
 	    if (prefix == null || prefix.isBlank()) {
 	        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 	                "COMPOSE_PROJECT_NAME is not configured for stack container discovery.");
@@ -365,6 +365,11 @@ public class DockerJavaService implements DockerService {
 
         if (entrypoint != null && !entrypoint.isEmpty()) {
             createCommand.withEntrypoint(entrypoint);
+        }
+
+        var command = spec.getCommand();
+        if (command != null && !command.isEmpty()) {
+            createCommand.withCmd(command);
         }
 
         if (spec.getHostname() != null && !spec.getHostname().isBlank()) {

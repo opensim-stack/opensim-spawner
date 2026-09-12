@@ -8,6 +8,7 @@ const toastContainer = document.getElementById('toast-container');
 const REQUEST_RECOVERY_WINDOW_MS = 180000;
 const REQUEST_RECOVERY_POLL_MS = 3000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const CONTAINER_LEVELS = ['STACK', 'BOT', 'SIMULATOR', 'GRID'];
 
 const normalizedText = (value, fallback = '') => {
   const text = String(value || '').trim();
@@ -15,6 +16,18 @@ const normalizedText = (value, fallback = '') => {
 };
 
 const normalizedAddOnName = (value) => normalizedText(value).toLowerCase();
+
+const extensionLevels = (manifest) => {
+  const extensions = manifest?.extensions;
+  if (!extensions || typeof extensions !== 'object') {
+    return [];
+  }
+
+  const keys = Object.keys(extensions)
+    .map((key) => normalizedText(key).toUpperCase())
+    .filter((key) => CONTAINER_LEVELS.includes(key));
+  return [...new Set(keys)];
+};
 
 const callList = async () => {
   const response = await fetchWithTimeout('/api/add-ons');
@@ -152,6 +165,7 @@ const renderRow = (addOn) => {
   const manifest = addOn?.manifest || {};
   const addOnName = normalizedText(manifest.name, '');
   const name = normalizedText(manifest.name, 'Unnamed add-on');
+  const levels = extensionLevels(manifest);
 
   const row = document.createElement('div');
   row.className = 'grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-3 items-center';
@@ -179,6 +193,20 @@ const renderRow = (addOn) => {
     details.appendChild(subtitle);
   } else {
     details.appendChild(title);
+  }
+
+  if (levels.length) {
+    const badges = document.createElement('div');
+    badges.className = 'mt-2 flex flex-wrap gap-1.5';
+
+    levels.forEach((level) => {
+      const badge = document.createElement('span');
+      badge.className = 'inline-flex items-center rounded-md border border-neon-accent/40 bg-neon-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neon-accent';
+      badge.textContent = level;
+      badges.appendChild(badge);
+    });
+
+    details.appendChild(badges);
   }
 
   left.appendChild(details);

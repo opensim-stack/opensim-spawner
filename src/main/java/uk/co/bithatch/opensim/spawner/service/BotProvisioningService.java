@@ -25,14 +25,16 @@ import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.BotHandlerAssignment;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
+import uk.co.bithatch.opensim.spawner.domain.BotsComponent;
 import uk.co.bithatch.opensim.spawner.domain.Gender;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
 import uk.co.bithatch.opensim.spawner.state.BotStateRepository;
 import uk.co.bithatch.opensim.spawner.state.HandlerStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
 public class BotProvisioningService
-		extends AbstractContainerGroupProvisioningService<BotStateRepository, BotInstanceData> {
+		extends AbstractContainerGroupProvisioningService<BotsComponent, BotLevel, BotStateRepository, BotInstanceData> {
 
 	private static final Logger LOG = LoggerFactory.getLogger(BotProvisioningService.class);
 
@@ -44,11 +46,20 @@ public class BotProvisioningService
 	private final HandlerStateRepository handlerStateRepository;
 
 	@Autowired
-	public BotProvisioningService(BotStateRepository stateRepository, BotLevelProfileService profileService,
-			OpenSimService openSimService, DockerService dockerService, RandomPasswordService passwordService,
-			TemplateResolver templateResolver, SpawnerProperties properties, Appearances appearances,
-			SimulatorProvisioningService simulatorProvisioningService, HandlerStateRepository handlerStateRepository) {
-		super(stateRepository, dockerService, templateResolver, properties);
+	public BotProvisioningService(
+			StackStateRepository stackStateRepository,
+			BotStateRepository stateRepository, 
+			BotLevelProfileService profileService,
+			OpenSimService openSimService, 
+			DockerService dockerService, 
+			RandomPasswordService passwordService,
+			TemplateResolver templateResolver, 
+			SpawnerProperties properties, 
+			Appearances appearances,
+			SimulatorProvisioningService simulatorProvisioningService, 
+			HandlerStateRepository handlerStateRepository,
+			RandomPasswordService randomPasswordService) {
+		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService);
 		this.profileService = profileService;
 		this.openSimService = openSimService;
 		this.passwordService = passwordService;
@@ -60,11 +71,14 @@ public class BotProvisioningService
 
 	}
 
-	BotProvisioningService(BotStateRepository stateRepository, BotLevelProfileService profileService,
+	BotProvisioningService(
+			StackStateRepository stackStateRepository,
+			BotStateRepository stateRepository, BotLevelProfileService profileService,
 			OpenSimService openSimService, DockerService dockerService, RandomPasswordService passwordService,
-			TemplateResolver templateResolver, SpawnerProperties properties, Appearances appearances) {
-		this(stateRepository, profileService, openSimService, dockerService, passwordService, templateResolver,
-				properties, appearances, null, null);
+			TemplateResolver templateResolver, SpawnerProperties properties, Appearances appearances,
+			RandomPasswordService randomPasswordService) {
+		this(stackStateRepository, stateRepository, profileService, openSimService, dockerService, passwordService, templateResolver,
+				properties, appearances, null, null, randomPasswordService);
 	}
 
 	public synchronized void addHandler(String botFirst, String botLast, String handlerFirst, String handlerLast) {
@@ -300,7 +314,7 @@ public class BotProvisioningService
 			bot.setRequestFields(containerRequestFields);
 			stateRepository.save(bot);
 			provisionBot(bot, materializedFiles, createdContainerIds,
-					profileService.resolvePlan(bot, bot.getRequestFields()));
+					profileService.resolvePlan(bot, resolveEnvironment(profileService.component().getConstants(),  bot.getRequestFields())));
 			return bot;
 		} catch (RuntimeException e) {
 			LOG.error("Provisioning failed for bot {} {}. Starting rollback.", first, last, e);
@@ -310,7 +324,7 @@ public class BotProvisioningService
 	}
 
 	public synchronized void reprovisionBot(BotInstanceData bot) {
-		var plan = profileService.resolvePlan(bot, bot.getRequestFields());
+		var plan = profileService.resolvePlan(bot, resolveEnvironment(profileService.component().getConstants(),  bot.getRequestFields()));
 		var cntrs = plan.containers().stream().map(spec -> spec.getName()).toList();
 		for (var ref : cntrs) {
 			try {
@@ -334,7 +348,7 @@ public class BotProvisioningService
 	private void provisionBot(BotInstanceData bot, List<Path> materializedFiles, List<String> createdContainerIds,
 			ResolvedBotPlan plan) {
 		LOG.info("Resolved {} container spec(s) for bot {}.", plan.containers().size(), bot.displayName());
-		materializeFiles(plan, bot, materializedFiles);
+		materializeFiles(plan, materializedFiles);
 
 		createdContainerIds.addAll(dockerService.createContainers(plan.containers()));
 		LOG.info("Created {} container(s) for bot {}.", createdContainerIds.size(), bot.displayName());
@@ -359,10 +373,6 @@ public class BotProvisioningService
 					"Appearance archive path '" + archivePath + "' does not have a .iar extension.");
 		}
 		return name.substring(0, name.length() - 4).replaceAll("-", " ");
-	}
-
-	private void materializeFiles(ResolvedBotPlan plan, BotInstanceData bot, List<java.nio.file.Path> writtenFiles) {
-		materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot, new LinkedHashMap<>()));
 	}
 
 	private String resolveRequestedAppearance(BotLevel level, Map<String, String> requestFields) {

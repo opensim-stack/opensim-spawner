@@ -7,7 +7,9 @@ import uk.co.bithatch.opensim.spawner.domain.DomainObject;
 
 public interface StateRepository<T extends DomainObject> {
 
-	boolean exists(String name);
+	default boolean exists(String name) {
+		return list().stream().anyMatch(o -> o.getName().equals(name));
+	}
 
 	Optional<T> load(String name);
 

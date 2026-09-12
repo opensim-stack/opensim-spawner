@@ -9,15 +9,15 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Component
 public class BearerTokenFilter extends OncePerRequestFilter {
 
-    private final SpawnerProperties properties;
+    private final StackStateRepository stackStateRepository;
 
-    public BearerTokenFilter(SpawnerProperties properties) {
-        this.properties = properties;
+    public BearerTokenFilter(StackStateRepository stackStateRepository) {
+        this.stackStateRepository = stackStateRepository;
     }
 
     @Override
@@ -29,8 +29,8 @@ public class BearerTokenFilter extends OncePerRequestFilter {
             return;
         }
 
-        var configuredToken = properties.getToken();
-        if (configuredToken == null || configuredToken.isBlank()) {
+        var configuredToken = stackStateRepository.get().getTokens().get(StackStateRepository.SPAWNER_TOKEN);
+        if (!stackStateRepository.get().isInitialized() || configuredToken == null || configuredToken.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }

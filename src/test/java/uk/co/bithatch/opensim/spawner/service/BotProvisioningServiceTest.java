@@ -119,6 +119,7 @@ class BotProvisioningServiceTest {
 
     @Test
     void restartBotRestartsAllKnownContainers() {
+    	var pw = new RandomPasswordService();
         var props = new SpawnerProperties();
         props.setDataDir(tempDir);
         props.setOpensimCreateBotUser(false);
@@ -132,6 +133,7 @@ class BotProvisioningServiceTest {
 
         var dockerService = new RecordingDockerService();
         var service = new BotProvisioningService(
+        		null,
                 repo,
                 null,
                 null,
@@ -139,7 +141,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                pw);
 
         service.restart(key("Ada", "Actor"));
 
@@ -161,6 +164,7 @@ class BotProvisioningServiceTest {
 
         var dockerService = new RecordingDockerService();
         var service = new BotProvisioningService(
+        		null,
                 repo,
                 null,
                 null,
@@ -168,7 +172,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                new RandomPasswordService());
 
         service.start(key("Ada", "Actor"));
 
@@ -193,6 +198,7 @@ class BotProvisioningServiceTest {
         dockerService.setStatus(new ContainerStatus("container-2", "created", false, "actor-2"));
 
         new BotProvisioningService(
+        		null,
                 repo,
                 null,
                 null,
@@ -200,7 +206,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                new RandomPasswordService());
 
         assertEquals(List.of("container-1", "container-2"), dockerService.started);
         assertEquals(List.of(), dockerService.attachedLogs);
@@ -224,6 +231,7 @@ class BotProvisioningServiceTest {
         dockerService.setStatus(new ContainerStatus("container-2", "running", true, "actor-2"));
 
         new BotProvisioningService(
+        		null,
                 repo,
                 null,
                 null,
@@ -231,7 +239,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                new RandomPasswordService());
 
         assertEquals(List.of(), dockerService.started);
         assertEquals(List.of("container-1", "container-2"), dockerService.attachedLogs);
@@ -252,6 +261,7 @@ class BotProvisioningServiceTest {
 
         var dockerService = new RecordingDockerService();
         var service = new BotProvisioningService(
+        		null,
                 repo,
                 null,
                 null,
@@ -259,7 +269,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                new RandomPasswordService());
 
         service.stop(key("Ada", "Actor"));
 
@@ -273,6 +284,7 @@ class BotProvisioningServiceTest {
         props.setOpensimCreateBotUser(false);
 
         var service = new BotProvisioningService(
+        		null,
                 new BotStateRepository(new ObjectMapper(), props),
                 null,
                 null,
@@ -280,7 +292,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                new RandomPasswordService());
 
         var ex = assertThrows(ResponseStatusException.class, () -> service.restart(key("No", "Bot")));
         assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
@@ -301,6 +314,7 @@ class BotProvisioningServiceTest {
 
         var dockerService = new RecordingDockerService();
         var service = new BotProvisioningService(
+        		null,
                 repo,
                 null,
                 null,
@@ -308,7 +322,8 @@ class BotProvisioningServiceTest {
                 null,
                 null,
                 props,
-                new Appearances());
+                new Appearances(),
+                new RandomPasswordService());
 
         service.deleteContainerGroup(key("Ada", "Actor"));
 

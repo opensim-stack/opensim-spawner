@@ -34,12 +34,21 @@ public class ApiExceptionTraceResolver implements HandlerExceptionResolver {
 
         var status = resolveStatus(ex);
         var handlerName = resolveHandlerName(handler);
-        LOG.error("API exception: {} {} -> {} at {}",
-                request.getMethod(),
-                requestUriWithQuery(request),
-                status,
-                handlerName,
-                ex);
+        if(status >= 500) {
+			LOG.error("API exception: {} {} -> {} at {}",
+					request.getMethod(),
+					requestUriWithQuery(request),
+					status,
+					handlerName,
+					ex);
+		} else {
+			LOG.debug("API exception: {} {} -> {} at {}",
+					request.getMethod(),
+					requestUriWithQuery(request),
+					status,
+					handlerName,
+					ex);
+		}
 
         // Return null so Spring continues with its default exception handling.
         return null;

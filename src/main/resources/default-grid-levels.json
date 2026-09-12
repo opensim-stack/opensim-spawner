@@ -1,89 +1,116 @@
 {
-  "ROBUST": {
-    "containers": {
-      "%env.OPENSIM_SIMULATOR_IMAGE%": {
-        "name": "%env.COMPOSE_PROJECT_NAME%-robust-%sim.normalisedName%",
-        "environment": {
-            "CONFIG_DIR": "/config/sims/%sim.name%",
-            "OPENSIM_SERVER_DLL": "Robust.dll",
-            "LOGS_DIR": "/logs/sims/%sim.name%"
-        },
-        "aliases": ["%env.COMPOSE_PROJECT_NAME%-grid-services"],
-        "ports" : {
-          "%sim.port%/tcp" : "%sim.port%",
-          "%cfg.firstPort%-%cfg.lastPort%/udp" : "%cfg.firstPort%-%cfg.lastPort%"
-        },
-        "volumes": {
-          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-logs": "/logs",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
-        },
-        "files": {
-          "/config/sims/%sim.name%/Robust.ini": "configuration/robust/Robust.ini"
-        }
-      }
-    }
-  },
-  "STANDALONE": {
-    "containers": {
-      "%env.OPENSIM_SIMULATOR_IMAGE%": {
-        "name": "%env.COMPOSE_PROJECT_NAME%-standalone-%sim.normalisedName%",
-        "environment": {
-            "CONFIG_DIR": "/config/sims/%sim.name%",
-            "LOGS_DIR": "/logs/sims/%sim.name%"
-        },
-        "aliases": ["%env.COMPOSE_PROJECT_NAME%-grid-services"],
-        "ports" : {
-          "%sim.port%/tcp" : "%sim.port%",
-          "%cfg.firstPort%-%cfg.lastPort%/udp" : "%cfg.firstPort%-%cfg.lastPort%"
-        },
-        "volumes": {
-          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-logs": "/logs",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
-        },
-        "files": {
-          "/config/sims/%sim.name%/OpenSim.ini": "configuration/standalone/OpenSim.ini",
-          "/config/sims/%sim.name%/config-include/Standalone.ini": "configuration/standalone/config-include/Standalone.ini",
-          "/config/sims/%sim.name%/config-include/StandaloneCommon.ini": "configuration/standalone/config-include/StandaloneCommon.ini",
-          "/config/sims/%sim.name%/config-include/osslDefaultEnable.ini": "configuration/standalone/config-include/osslDefaultEnable.ini",
-          "/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
-          "/config/sims/%sim.name%/config-include/FlotsamCache.ini": "configuration/standalone/config-include/FlotsamCache.ini",
-          "/config/sims/%sim.name%/Regions/Region.ini": "configuration/standalone/Regions/Region.ini"
-        }
-      }
-    }
-  },
-  "GRID": {
-    "containers": {
-      "%env.OPENSIM_SIMULATOR_IMAGE%": {
-        "name": "%env.COMPOSE_PROJECT_NAME%-grid-%sim.normalisedName%",
-        "environment": {
-            "CONFIG_DIR": "/config/sims/%sim.name%"
-        },
-        "volumes": {
-          "%env.COMPOSE_PROJECT_NAME%_opensim-workspace": "/workspace",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-config": "/config",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-assetcache": "/opt/opensim/bin/assetcache",
-          "%env.COMPOSE_PROJECT_NAME%_opensim-maptiles": "/opt/opensim/bin/naptiles"
-        },
-        "ports" : {
-          "%sim.port%/udp" : "%sim.port%"
-        },
-        "files": {
-          "/config/sims/%sim.name%/OpenSim.ini": "configuration/grid/OpenSim.ini",
-          "/config/sims/%sim.name%/config-include/Grid.ini": "configuration/grid/config-include/Grid.ini",
-          "/config/sims/%sim.name%/config-include/GridCommon.ini": "configuration/grid/config-include/GridCommon.ini",
-          "/config/sims/%sim.name%/config-include/osslDefaultEnable.ini": "configuration/grid/config-include/osslDefaultEnable.ini",
-          "/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
-          "/config/sims/%sim.name%/config-include/FlotsamCache.ini": "configuration/grid/config-include/FlotsamCache.ini",
-          "/config/sims/%sim.name%/Regions/Region.ini": "configuration/grid/Regions/Region.ini"
-        }
-      }
-    }
-  }
+	"name": "grid",
+	"constants": {
+		"OPENSIM_SIMULATOR_IMAGE": "%cfg.group%opensim-simulator:%grid.updates.tag%"
+	},
+	"tokens": [],
+	"exports": [],
+	"extensions": {
+		"ROBUST": {
+			"containers": {
+				"%env.OPENSIM_SIMULATOR_IMAGE%": {
+					"name": "%cfg.projectName%-robust-%sim.normalisedName%",
+					"environment": {
+						"CONFIG_DIR": "/config/sims/%sim.name%",
+						"OPENSIM_SERVER_DLL": "Robust.dll",
+						"LOGS_DIR": "/logs/sims/%sim.name%",
+						"MARIADB_HOST": "%env.MARIADB_HOST%",
+						"MARIADB_DATABASE": "%env.MARIADB_DATABASE%",
+						"MARIADB_USER": "%env.MARIADB_USER%",
+						"MARIADB_PASSWORD": "%token.MARIADB_PASSWORD%",
+                        "OPENSIM_HOSTNAME": "%cfg.hostname%"
+					},
+					"aliases": [
+						"%cfg.projectName%-grid-services"
+					],
+					"ports": {
+						"%sim.port%/tcp": "%sim.port%",
+						"%cfg.firstPort%-%cfg.lastPort%/udp": "%cfg.firstPort%-%cfg.lastPort%"
+					},
+					"volumes": {
+						"%cfg.projectName%_opensim-workspace": "/workspace",
+						"%cfg.projectName%_opensim-config": "/config",
+						"%cfg.projectName%_opensim-logs": "/logs",
+						"%cfg.projectName%_opensim-assetcache": "/opt/opensim/bin/assetcache",
+						"%cfg.projectName%_opensim-maptiles": "/opt/opensim/bin/naptiles"
+					},
+					"files": {
+						"/config/sims/%sim.name%/Robust.ini": "configuration/robust/Robust.ini"
+					}
+				}
+			}
+		},
+		"STANDALONE": {
+			"containers": {
+				"%env.OPENSIM_SIMULATOR_IMAGE%": {
+					"name": "%cfg.projectName%-standalone-%sim.normalisedName%",
+					"environment": {
+						"CONFIG_DIR": "/config/sims/%sim.name%",
+						"LOGS_DIR": "/logs/sims/%sim.name%",
+                        "MARIADB_HOST": "%env.MARIADB_HOST%",
+                        "MARIADB_DATABASE": "%env.MARIADB_DATABASE%",
+                        "MARIADB_USER": "%env.MARIADB_USER%",
+                        "MARIADB_PASSWORD": "%token.MARIADB_PASSWORD%",
+                        "OPENSIM_HOSTNAME": "%cfg.hostname%"
+					},
+					"aliases": [
+						"%cfg.projectName%-grid-services"
+					],
+					"ports": {
+						"%sim.port%/tcp": "%sim.port%",
+						"%cfg.firstPort%-%cfg.lastPort%/udp": "%cfg.firstPort%-%cfg.lastPort%"
+					},
+					"volumes": {
+						"%cfg.projectName%_opensim-workspace": "/workspace",
+						"%cfg.projectName%_opensim-config": "/config",
+						"%cfg.projectName%_opensim-logs": "/logs",
+						"%cfg.projectName%_opensim-assetcache": "/opt/opensim/bin/assetcache",
+						"%cfg.projectName%_opensim-maptiles": "/opt/opensim/bin/naptiles"
+					},
+					"files": {
+						"/config/sims/%sim.name%/OpenSim.ini": "configuration/standalone/OpenSim.ini",
+						"/config/sims/%sim.name%/config-include/Standalone.ini": "configuration/standalone/config-include/Standalone.ini",
+						"/config/sims/%sim.name%/config-include/StandaloneCommon.ini": "configuration/standalone/config-include/StandaloneCommon.ini",
+						"/config/sims/%sim.name%/config-include/osslDefaultEnable.ini": "configuration/standalone/config-include/osslDefaultEnable.ini",
+						"/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
+						"/config/sims/%sim.name%/config-include/FlotsamCache.ini": "configuration/standalone/config-include/FlotsamCache.ini",
+						"/config/sims/%sim.name%/Regions/Region.ini": "configuration/standalone/Regions/Region.ini"
+					}
+				}
+			}
+		},
+		"GRID": {
+			"containers": {
+				"%env.OPENSIM_SIMULATOR_IMAGE%": {
+					"name": "%cfg.projectName%-grid-%sim.normalisedName%",
+					"environment": {
+						"CONFIG_DIR": "/config/sims/%sim.name%",
+                        "MARIADB_HOST": "%env.MARIADB_HOST%",
+                        "MARIADB_DATABASE": "%env.MARIADB_DATABASE%",
+                        "MARIADB_USER": "%env.MARIADB_USER%",
+                        "MARIADB_PASSWORD": "%token.MARIADB_PASSWORD%",
+                        "OPENSIM_HOSTNAME": "%cfg.hostname%"
+					},
+					"volumes": {
+						"%cfg.projectName%_opensim-workspace": "/workspace",
+						"%cfg.projectName%_opensim-config": "/config",
+						"%cfg.projectName%_opensim-assetcache": "/opt/opensim/bin/assetcache",
+						"%cfg.projectName%_opensim-maptiles": "/opt/opensim/bin/naptiles"
+					},
+					"ports": {
+						"%sim.port%/udp": "%sim.port%"
+					},
+					"files": {
+						"/config/sims/%sim.name%/OpenSim.ini": "configuration/grid/OpenSim.ini",
+						"/config/sims/%sim.name%/config-include/Grid.ini": "configuration/grid/config-include/Grid.ini",
+						"/config/sims/%sim.name%/config-include/GridCommon.ini": "configuration/grid/config-include/GridCommon.ini",
+						"/config/sims/%sim.name%/config-include/osslDefaultEnable.ini": "configuration/grid/config-include/osslDefaultEnable.ini",
+						"/config/sims/%sim.name%/config-include/osslEnable.ini": "configuration/standalone/config-include/osslEnable.ini",
+						"/config/sims/%sim.name%/config-include/FlotsamCache.ini": "configuration/grid/config-include/FlotsamCache.ini",
+						"/config/sims/%sim.name%/Regions/Region.ini": "configuration/grid/Regions/Region.ini"
+					}
+				}
+			}
+		}
+	}
 }

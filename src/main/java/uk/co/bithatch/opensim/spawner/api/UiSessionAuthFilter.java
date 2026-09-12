@@ -13,17 +13,17 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Component
 @Order(10)
 public class UiSessionAuthFilter extends OncePerRequestFilter {
 
     private final SpawnerProperties properties;
-    private final GridStateRepository gridStateRepository;
+    private final StackStateRepository gridStateRepository;
 
     public UiSessionAuthFilter(SpawnerProperties properties,
-            GridStateRepository gridStateRepository) {
+            StackStateRepository gridStateRepository) {
         this.properties = properties;
         this.gridStateRepository = gridStateRepository;
     }

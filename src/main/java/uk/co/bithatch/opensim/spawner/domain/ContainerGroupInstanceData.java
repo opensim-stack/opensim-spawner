@@ -16,19 +16,19 @@ public abstract class ContainerGroupInstanceData<LVL extends Enum<LVL>> implemen
         this.containerIds = containerIds == null ? List.of() : List.copyOf(containerIds);
     }
 
-	public LVL getLevel() {
+	public final LVL getLevel() {
 		return level;
 	}
 
-	public void setLevel(LVL level) {
+	public final void setLevel(LVL level) {
 		this.level = level;
 	}
 
-    public Map<String, String> getRequestFields() {
+    public final Map<String, String> getRequestFields() {
 		return requestFields;
 	}
 
-	public void setRequestFields(Map<String, String> requestFields) {
+	public final void setRequestFields(Map<String, String> requestFields) {
 		this.requestFields = requestFields;
 	}
 }

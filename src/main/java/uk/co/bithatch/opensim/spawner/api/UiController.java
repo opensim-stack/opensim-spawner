@@ -21,7 +21,7 @@ import uk.co.bithatch.opensim.spawner.service.ApprovalService;
 import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.SetupWizardService;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Controller
 public class UiController {
@@ -31,14 +31,14 @@ public class UiController {
     private final SetupWizardService setupWizardService;
     private final OpenSimService openSimService;
     private final SimulatorProvisioningService simulatorProvisioningService;
-    private final GridStateRepository gridStateRepository;
+    private final StackStateRepository gridStateRepository;
 
     public UiController(SpawnerProperties properties,
             ApprovalService approvalService,
             SetupWizardService setupWizardService,
             OpenSimService openSimService,
             SimulatorProvisioningService simulatorProvisioningService,
-            GridStateRepository gridStateRepository) {
+            StackStateRepository gridStateRepository) {
         this.properties = properties;
         this.approvalService = approvalService;
         this.setupWizardService = setupWizardService;
@@ -116,15 +116,21 @@ public class UiController {
     @ResponseBody
     public Map<String, Object> updatesConfig(HttpServletRequest request) {
         requireAdmin(request);
+        
         var gridState = gridStateRepository.get();
         var updates = gridState.getUpdates();
         var response = new LinkedHashMap<String, Object>();
+        
         response.put("automaticUpdates", updates.isAutomaticUpdates());
-        response.put("tag", firstNonBlank(updates.getTag(), "latest"));
+        response.put("tag", updates.getTag() == null ? "" : updates.getTag());
         response.put("dockerHubUsername", normalize(updates.getDockerHubUsername()));
         response.put("dockerHubToken", normalize(updates.getDockerHubToken()));
         response.put("addOnsRepository", normalize(gridState.getAddOnsRepository()));
         response.put("addOnsBranch", normalize(gridState.getAddOnsBranch()));
+        
+        response.put("defaultTag", properties.getOpensimTag());
+        response.put("defaultAddOnsRepository", normalize(properties.getAddOnsRepository()));
+        
         return response;
     }
 
@@ -144,7 +150,7 @@ public class UiController {
         var gridState = gridStateRepository.get();
         var updates = gridState.getUpdates();
         updates.setAutomaticUpdates(parseBoolean(automaticUpdates, updates.isAutomaticUpdates()));
-        updates.setTag(firstNonBlank(tag, "latest"));
+        updates.setTag(tag == null || tag.equals("") ? null : tag.trim());
         updates.setDockerHubUsername(normalize(dockerHubUsername));
         updates.setDockerHubToken(normalize(dockerHubToken));
         gridState.setAddOnsRepository(normalize(addOnsRepository));

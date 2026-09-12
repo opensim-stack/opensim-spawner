@@ -15,17 +15,23 @@ public class TemplateResolver {
         if (template == null || template.isEmpty()) {
             return template;
         }
-        var matcher = TOKEN_PATTERN.matcher(template);
-        var buffer = new StringBuffer();
-        while (matcher.find()) {
-            var key = matcher.group(1);
-            var replacement = values == null ? "" : values.get(key);
-            if (replacement == null) {
-                replacement = "";
-            }
-            matcher.appendReplacement(buffer, Matcher.quoteReplacement(replacement));
+        
+        String lastRes = null;
+        while(!template.equals(lastRes)) {
+        	lastRes = template;
+	        var matcher = TOKEN_PATTERN.matcher(template);
+	        var buffer = new StringBuffer();
+	        while (matcher.find()) {
+	            var key = matcher.group(1);
+	            var replacement = values == null ? "" : values.get(key);
+	            if (replacement == null) {
+	                replacement = "";
+	            }
+	            matcher.appendReplacement(buffer, Matcher.quoteReplacement(replacement));
+	        }
+	        matcher.appendTail(buffer);
+	        template = buffer.toString();
         }
-        matcher.appendTail(buffer);
-        return buffer.toString();
+        return template;
     }
 }

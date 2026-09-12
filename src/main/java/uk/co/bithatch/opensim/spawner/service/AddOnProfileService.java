@@ -1,35 +1,32 @@
 package uk.co.bithatch.opensim.spawner.service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.AddOnInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
+import uk.co.bithatch.opensim.spawner.domain.Manifest;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedAddOnPlan;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
 import uk.co.bithatch.opensim.spawner.state.AddOnRepository;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
-public class AddOnProfileService extends AbstractProfileService<AddOnInstanceData, ResolvedAddOnPlan, ContainerLevel> {
+public class AddOnProfileService extends AbstractProfileService<Manifest, AddOnInstanceData, ResolvedAddOnPlan, ContainerLevel> {
 
 	private final AddOnRepository addOnRepository;
 	private final SimulatorStateRepository simulatorStateRepository;
 
-	public AddOnProfileService(ObjectMapper objectMapper, GridStateRepository gridStateRepository,
+	public AddOnProfileService(ObjectMapper objectMapper, StackStateRepository gridStateRepository,
 			SpawnerProperties properties, TemplateResolver templateResolver, AddOnRepository addOnRepository,
 			SimulatorStateRepository simulatorStateRepository) {
 		super(objectMapper, properties, templateResolver, gridStateRepository);
@@ -67,33 +64,6 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 			});
 		}
 
-		var addOn = addOnRepository.load(addOnInstance.getName())
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Simulator already exists."));
-
-		// Resolve add-on constants against cfg/grid/env values and previously-resolved
-		// constants.
-		var unresolvedConstants = new LinkedHashMap<String, String>();
-		addOn.getConstants().forEach((key, value) -> {
-			if (System.getenv(key) == null) {
-				unresolvedConstants.put("env." + key, value == null ? "" : value);
-			}
-		});
-
-		var maxPasses = Math.max(1, unresolvedConstants.size());
-		for (int pass = 0; pass < maxPasses; pass++) {
-			var changed = false;
-			for (var entry : unresolvedConstants.entrySet()) {
-				var resolved = resolve(entry.getValue(), variables);
-				var previous = variables.put(entry.getKey(), resolved);
-				if (!resolved.equals(previous)) {
-					changed = true;
-				}
-			}
-			if (!changed) {
-				break;
-			}
-		}
-
 		return variables;
 	}
 
@@ -104,15 +74,20 @@ public class AddOnProfileService extends AbstractProfileService<AddOnInstanceDat
 	}
 
 	@Override
-	protected ResolvedAddOnPlan createPlan(AddOnInstanceData addOn, List<ContainerSpec> containers) {
-		return new ResolvedAddOnPlan(addOn.getLevel(), containers);
+	protected ResolvedAddOnPlan createPlan(AddOnInstanceData addOn, List<ContainerSpec> containers, Map<String, String> variables) {
+		return new ResolvedAddOnPlan(addOn.getLevel(), containers, variables);
 	}
 
 	@Override
-	protected JsonNode getLevelNode(ContainerLevel level, String name) {
-		return addOnRepository.loadRaw(name)
+	protected Map<String, Object> getLevelNode(ContainerLevel level, String name) {
+		return addOnRepository.load(name)
 				.orElseThrow(
 						() -> new IllegalStateException("Add-on level " + level.name() + " not found in " + name + "."))
-				.get("extensions").get(level.name());
+				.getExtensions().get(level);
+	}
+
+	@Override
+	protected Class<Manifest> getComponentClass() {
+		return Manifest.class;
 	}
 }

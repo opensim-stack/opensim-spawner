@@ -1,14 +1,52 @@
 {
-  "%env.MARIADB_IMAGE%": {
-    "name": "%env.COMPOSE_PROJECT_NAME%-mariadb",
-    "environment": {
-        "MARIADB_ROOT_PASSWORD": "%env.MARIADB_ROOT_PASSWORD%",
-        "MARIADB_DATABASE": "%env.MARIADB_DATABASE%",
-        "MARIADB_USER": "%env.MARIADB_USER%",
-        "MARIADB_PASSWORD": "%env.MARIADB_PASSWORD%"
+    "name": "stack",
+    "constants": {
+        "MARIADB_HOST": "%cfg.projectName%-mariadb",
+        "MARIADB_DATABASE": "opensim",
+        "MARIADB_USER": "opensim",
+        "MARIADB_IMAGE" : "mariadb:11"
     },
-    "volumes": {
-      "%env.COMPOSE_PROJECT_NAME%_opensim-mariadb": "/var/lib/mysql"
+    "tokens": [
+        "MARIADB_ROOT_PASSWORD",
+        "MARIADB_PASSWORD"
+    ],
+    "exports": [
+        "MARIADB_HOST",
+        "MARIADB_DATABASE",
+        "MARIADB_USER"
+    ],
+    "extensions": {
+        "STACK": {
+            "containers": {
+                "%env.MARIADB_IMAGE%": {
+                    "name": "%cfg.projectName%-mariadb",
+                    "environment": {
+                        "MARIADB_ROOT_PASSWORD": "%token.MARIADB_ROOT_PASSWORD%",
+                        "MARIADB_DATABASE": "%env.MARIADB_DATABASE%",
+                        "MARIADB_USER": "%env.MARIADB_USER%",
+                        "MARIADB_PASSWORD": "%token.MARIADB_PASSWORD%"
+                    },
+                    "command": [
+                        "--character-set-server=utf8mb4",
+                        "--collation-server=utf8mb4_unicode_ci"
+                    ],
+                    "volumes": {
+                        "%cfg.projectName%_opensim-mariadb": "/var/lib/mysql"
+                    },
+                    "healthCheck": {
+                        "test": [
+                            "CMD-SHELL",
+                            "mariadb-admin ping -h localhost -u root --password=\"%token.MARIADB_ROOT_PASSWORD%\" --silent"
+                        ],
+                        "interval": "10",
+                        "timeout": "5",
+                        "retries": "5"
+                    }
+                }
+            }
+        }
     }
-  }
 }
+
+
+

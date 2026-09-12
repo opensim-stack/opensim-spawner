@@ -12,21 +12,27 @@ import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedSimulatorPlan;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.domain.SimulatorsComponent;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
-public class SimulatorLevelProfileService extends AbstractComponentProfileService<SimulatorInstanceData, ResolvedSimulatorPlan, SimulatorLevel> {
+public class SimulatorLevelProfileService extends AbstractComponentProfileService<SimulatorsComponent, SimulatorInstanceData, ResolvedSimulatorPlan, SimulatorLevel> {
 
     public SimulatorLevelProfileService(
     		ObjectMapper objectMapper, 
     		SpawnerProperties properties, 
     		TemplateResolver templateResolver,
-    		GridStateRepository gridStateRepository) {
+    		StackStateRepository gridStateRepository) {
     	super(objectMapper, properties, templateResolver, "grid-levels.json", "default-grid-levels.json", gridStateRepository);
     }
 
 	@Override
-	public Map<String, String> buildTypeVariables(SimulatorInstanceData sim, Map<String, String> variables) {
+	protected Class<SimulatorsComponent> getComponentClass() {
+		return SimulatorsComponent.class;
+	}
+
+	@Override
+	public Map<String, String> onBuildTypeVariables(SimulatorInstanceData sim, Map<String, String> variables) {
         
         variables.put("sim.name", sim.getName());
         variables.put("sim.normalisedName", sim.getName().replace(" ", "-"));
@@ -52,7 +58,7 @@ public class SimulatorLevelProfileService extends AbstractComponentProfileServic
     }
 
 	@Override
-	protected ResolvedSimulatorPlan createPlan(SimulatorInstanceData bot, List<ContainerSpec> containers) {
-        return new ResolvedSimulatorPlan(bot.getLevel(), containers);
+	protected ResolvedSimulatorPlan createPlan(SimulatorInstanceData bot, List<ContainerSpec> containers, Map<String, String> variables) {
+        return new ResolvedSimulatorPlan(bot.getLevel(), containers, variables);
 	}
 }

@@ -10,24 +10,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotLevel;
+import uk.co.bithatch.opensim.spawner.domain.BotsComponent;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
-public class BotLevelProfileService extends AbstractComponentProfileService<BotInstanceData, ResolvedBotPlan, BotLevel> {
+public class BotLevelProfileService extends AbstractComponentProfileService<BotsComponent, BotInstanceData, ResolvedBotPlan, BotLevel> {
 
 
     public BotLevelProfileService(
     		ObjectMapper objectMapper, 
     		SpawnerProperties properties, 
     		TemplateResolver templateResolver,
-    		GridStateRepository gridStateRepository) {
+    		StackStateRepository gridStateRepository) {
     	super(objectMapper, properties, templateResolver, "bot-levels.json", "default-bot-levels.json", gridStateRepository);
     }
 
 	@Override
-	public Map<String, String> buildTypeVariables(BotInstanceData bot, Map<String, String> variables) {
+	protected Class<BotsComponent> getComponentClass() {
+		return BotsComponent.class;
+	}
+
+	@Override
+	public Map<String, String> onBuildTypeVariables(BotInstanceData bot, Map<String, String> variables) {
         variables.put("bot.first", bot.getFirst());
         variables.put("bot.last", bot.getLast());
         variables.put("bot.password", bot.getPassword());
@@ -40,7 +46,7 @@ public class BotLevelProfileService extends AbstractComponentProfileService<BotI
     }
 
 	@Override
-	protected ResolvedBotPlan createPlan(BotInstanceData bot, List<ContainerSpec> containers) {
-        return new ResolvedBotPlan(bot.getLevel(), containers);
+	protected ResolvedBotPlan createPlan(BotInstanceData bot, List<ContainerSpec> containers, Map<String, String> variables) {
+        return new ResolvedBotPlan(bot.getLevel(), containers, variables);
 	}
 }

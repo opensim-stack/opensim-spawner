@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,22 +35,20 @@ import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
 import uk.co.bithatch.opensim.spawner.domain.DomainObject;
-import uk.co.bithatch.opensim.spawner.domain.GridState;
 import uk.co.bithatch.opensim.spawner.domain.HookType;
 import uk.co.bithatch.opensim.spawner.domain.Manifest;
+import uk.co.bithatch.opensim.spawner.domain.Plan;
 import uk.co.bithatch.opensim.spawner.domain.ResolvedAddOnPlan;
-import uk.co.bithatch.opensim.spawner.domain.ResolvedBotPlan;
-import uk.co.bithatch.opensim.spawner.domain.ResolvedSimulatorPlan;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorLevel;
 import uk.co.bithatch.opensim.spawner.state.AddOnInstanceStateRepository;
 import uk.co.bithatch.opensim.spawner.state.AddOnRepository;
 import uk.co.bithatch.opensim.spawner.state.BotStateRepository;
-import uk.co.bithatch.opensim.spawner.state.GridStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
-public class AddOnInstanceProvisioningService extends AbstractContainerGroupProvisioningService<AddOnInstanceStateRepository, AddOnInstanceData> {
+public class AddOnInstanceProvisioningService extends AbstractContainerGroupProvisioningService<Manifest, ContainerLevel, AddOnInstanceStateRepository, AddOnInstanceData> {
 	private static final Logger LOG = LoggerFactory.getLogger(AddOnInstanceProvisioningService.class);
 
 	private final AddOnRepository addOnRepository;
@@ -62,7 +59,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	private final BotLevelProfileService botLevelProfileService;
 	private final SimulatorLevelProfileService simulatorLevelProfileService;
 	private final ThreadLocal<Path> currentManifestDir = new ThreadLocal<>();
-	private final GridStateRepository gridStateRepository;
 	private final BotProvisioningService botProvisioningService;
 
 	public AddOnInstanceProvisioningService(AddOnRepository addOnRepository,
@@ -74,10 +70,11 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			SimulatorStateRepository simulatorStateRepository,
 			BotLevelProfileService botLevelProfileService,
 			SimulatorLevelProfileService simulatorLevelProfileService,
-			GridStateRepository gridStateRepository,
+			StackStateRepository stackStateRepository,
 			BotProvisioningService botProvisioningService,
-			DockerService dockerService) {
-		super(addOnInstanceStateRepository, dockerService, templateResolver, properties		);
+			DockerService dockerService,
+			RandomPasswordService randomPasswordService) {
+		super(stackStateRepository, addOnInstanceStateRepository, dockerService, templateResolver, properties, randomPasswordService);
 		this.addOnRepository = addOnRepository;
 		this.botProvisioningService = botProvisioningService;
 		this.properties = properties;
@@ -86,7 +83,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		this.simulatorStateRepository = simulatorStateRepository;
 		this.botLevelProfileService = botLevelProfileService;
 		this.simulatorLevelProfileService = simulatorLevelProfileService;
-		this.gridStateRepository = gridStateRepository;
 
 		if (properties.isAddOnsRefreshAtStartup()) {
 			try {
@@ -129,7 +125,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	}
 
 	private String resolveConfiguredAddOnsRepository() {
-		var gridState = gridStateRepository.get();
+		var gridState = stackStateRepository.get();
 		var configured = normalize(gridState.getAddOnsRepository());
 		if (!configured.isBlank()) {
 			return configured;
@@ -138,7 +134,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	}
 
 	private String resolveConfiguredAddOnsBranch() {
-		var gridState = gridStateRepository.get();
+		var gridState = stackStateRepository.get();
 		var configured = normalize(gridState.getAddOnsBranch());
 		if (!configured.isBlank()) {
 			return configured;
@@ -187,12 +183,13 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			var addOn = stateRepository.load(addOnName)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on not found."));
 			var contributions = resolveAddOnManagedContributions(addOn);
-
-			var variables = profileService.buildBaseVariables(addOn,  new LinkedHashMap<>());
 			var mfOpt = addOnRepository.load(addOnName);
+			var saveVars =  new LinkedHashMap<String, String>();
 			mfOpt.ifPresent(mf -> {
+				var variables = profileService.buildBaseVariables(addOn,  new LinkedHashMap<>(), resolveEnvironment(mfOpt.get().getConstants(), mf.getConstants()));
 	            runHooks(HookType.PRE_UNINSTALL, mf, addOn, variables);	
-	        	removeExports(mf);
+	        	removeExports(mf, stackStateRepository);
+	        	saveVars.putAll(variables);
 			});
 			
 			if (addOn.getLevel() == ContainerLevel.SIMULATOR && !addOn.getContainerIds().isEmpty()) {
@@ -204,7 +201,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			reconcileParentConfigurations(contributions, "disabled", addOnName);
 			mfOpt.ifPresent(mf -> {
 	            reprovisionContainersWithVariables(mf, addOn.getContainerIds());
-	            runHooks(HookType.POST_UNINSTALL, mf, addOn, variables);	
+	            runHooks(HookType.POST_UNINSTALL, mf, addOn, saveVars);	
 			});
 		}
 	}
@@ -225,16 +222,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
     	}
     	else {
 			return botInstance;
-		}
-	}
-    
-	private void removeExports(Manifest mf) {
-		if(!mf.getExports().isEmpty()) {
-			var gridState = gridStateRepository.get();
-			for(var varName : mf.getExports()) {
-				gridState.getGlobal().remove(varName);
-			}
-			gridStateRepository.save();
 		}
 	}
 
@@ -260,14 +247,14 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	private int refreshBotsForManagedResources(Set<String> changedResources) {
 		var refreshed = 0;
 		for (var bot : botStateRepository.list()) {
-			var variables = botLevelProfileService.buildBaseVariables(bot,  new LinkedHashMap<>());
-			var plan = botLevelProfileService.resolvePlan(bot, Map.of());
-			if (!hasManagedTargetResourceOverlap(plan.containers(), variables, changedResources)) {
+			var plan = botLevelProfileService.resolvePlan(bot, 
+					resolveEnvironment(botLevelProfileService.component().getConstants(),  bot.getRequestFields()));
+			if (!hasManagedTargetResourceOverlap(plan.containers(), plan.variables(), changedResources)) {
 				continue;
 			}
 
 			LOG.info("Re-materializing bot '{}' due to managed resource overlap with {}.", bot.displayName(), changedResources);
-			materializeFiles(plan, variables);
+			materializeFiles(plan);
 			restartContainerIds("bot " + bot.displayName(), bot.getContainerIds());
 			refreshed++;
 		}
@@ -277,14 +264,15 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	private int refreshSimulatorsForManagedResources(Set<String> changedResources) {
 		var refreshed = 0;
 		for (var sim : simulatorStateRepository.list()) {
-			var variables = simulatorLevelProfileService.buildBaseVariables(sim,  new LinkedHashMap<>());
-			var plan = simulatorLevelProfileService.resolvePlan(sim, Map.of());
-			if (!hasManagedTargetResourceOverlap(plan.containers(), variables, changedResources)) {
+			LOG.info("Resolving simulator '{}' plan for managed resource overlap check.", sim.displayName());
+			var plan = simulatorLevelProfileService.resolvePlan(sim, 
+					resolveEnvironment(simulatorLevelProfileService.component().getConstants(),  sim.getRequestFields()));
+			if (!hasManagedTargetResourceOverlap(plan.containers(), plan.variables(), changedResources)) {
 				continue;
 			}
 
 			LOG.info("Re-materializing simulator '{}' due to managed resource overlap with {}.", sim.displayName(), changedResources);
-			materializeFiles(plan, variables);
+			materializeFiles(plan);
 			restartContainerIds("simulator " + sim.displayName(), sim.getContainerIds());
 			refreshed++;
 		}
@@ -294,9 +282,11 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	private int refreshStackAddOnsForManagedResources(Set<String> changedResources) {
 		var refreshed = 0;
 		for (var addOnInstance : stateRepository.list()) {
-			var variables = profileService.buildBaseVariables(addOnInstance,  new LinkedHashMap<>());
-			var plan = profileService.resolvePlan(addOnInstance, Map.of());
-			if (!hasManagedTargetResourceOverlap(plan.containers(), variables, changedResources)) {
+			LOG.info("Resolving stack add-on '{}' plan for managed resource overlap check.", addOnInstance.getName());
+			var mfOpt = addOnRepository.load(addOnInstance.getName()).get();
+			var plan = profileService.resolvePlan(addOnInstance, 
+					resolveEnvironment(mfOpt.getConstants(),  Map.of()));
+			if (!hasManagedTargetResourceOverlap(plan.containers(), plan.variables(), changedResources)) {
 				continue;
 			}
 
@@ -334,30 +324,26 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		return false;
 	}
 
-	private void materializeFiles(ResolvedBotPlan plan, Map<String, String> variables) {
-		materializeFiles(plan, new ArrayList<>(), variables);
-	}
-
-	private void materializeFiles(ResolvedSimulatorPlan plan, Map<String, String> variables) {
-		materializeFiles(plan, new ArrayList<>(), variables);
+	private void materializeFiles(Plan plan) {
+		materializeFiles(plan, new ArrayList<>());
 	}
 
 	private List<ManagedContribution> resolveAddOnManagedContributions(AddOnInstanceData addOn) {
-		var variables = profileService.buildBaseVariables(addOn,  new LinkedHashMap<>());
-		var plan = profileService.resolvePlan(addOn, Map.of());
+		var mfOpt = addOnRepository.load(addOn.getName());
+		var plan = profileService.resolvePlan(addOn, resolveEnvironment(mfOpt.get().getConstants(), Map.of()));
 		var contributions = new ArrayList<ManagedContribution>();
 
 		withManifestContext(addOn.getName(), () -> {
 			for (var container : plan.containers()) {
 				for (var managedFile : container.getManagedFiles()) {
-					var targetName = templateResolver.resolve(managedFile.target(), variables);
+					var targetName = templateResolver.resolve(managedFile.target(), plan.variables());
 					if (targetName != null && !targetName.isBlank()) {
 						continue;
 					}
 					var templateName = managedFile.resource();
 					var dropInDir = Path.of(managedFile.dropIns());
 					var template = loadManagedFileTemplate(templateName, targetName);
-					var resolved = templateResolver.resolve(template, variables);
+					var resolved = templateResolver.resolve(template, plan.variables());
 					contributions.add(new ManagedContribution(templateName, dropInDir, resolved));
 				}
 			}
@@ -408,9 +394,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
         if (stateRepository.exists(name)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Simulator already exists.");
         }
-        
-        var createRequestFields = requestFields == null ? Map.<String, String>of() : requestFields;
-
         var addOnInstance = new AddOnInstanceData();
         addOnInstance.setName(name);
 		var manifest = addOnRepository.load(name)
@@ -427,34 +410,19 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
         
         var materializedFiles = new ArrayList<java.nio.file.Path>();
         var createdContainerIds = new ArrayList<String>();
-        var containerRequestFields = new LinkedHashMap<>(createRequestFields);
-		var variables = profileService.buildBaseVariables(addOnInstance,  new LinkedHashMap<>());
-        
+        Map<String, String> variables = profileService.buildBaseVariables(addOnInstance, resolveEnvironment(manifest.getConstants(), requestFields), requestFields);
+		
         try {
-    		var gridState = gridStateRepository.get();
-			var changes = new AtomicBoolean(false);
-        	if(!manifest.getTokens().isEmpty()) {
-				LOG.info("Add-on {} has {} token(s) defined in manifest.", name, manifest.getTokens().size());
-	        	manifest.getTokens().forEach(key -> {
-	        		if(!gridState.getTokens().containsKey(key)) {
-	        			var tokenValue = java.util.UUID.randomUUID().toString();
-	        			gridState.getTokens().put(key, tokenValue);
-	        			LOG.info("Add-on {} token '{}' generated and added to grid state.", name, key);
-	        			changes.set(true);
-	        		}
-	        	});
-			}
+    		installTokens(name, manifest);
+			installExports(name, manifest); 
 
-        	if(installExports(name, manifest, variables, gridState) || changes.get()) {
-        		gridStateRepository.save();
-        		LOG.info("Grid state updated with new token(s) for add-on {}.", name);
-        	}
-        	
             stateRepository.save(addOnInstance);
+            
+            var plan = profileService.resolvePlan(addOnInstance, resolveEnvironment(manifest.getConstants(), requestFields));
+            variables = plan.variables();
             
             runHooks(HookType.PRE_INSTALL, manifest, addOnInstance, variables);
             
-            var plan = profileService.resolvePlan(addOnInstance, containerRequestFields);
             LOG.info("Resolved {} container spec(s) for add-on {}.", plan.containers().size(), name);
             materializeFiles(plan, addOnInstance, materializedFiles);
 
@@ -478,7 +446,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 
             return addOnInstance;
         } catch (RuntimeException e) {
-        	removeExports(manifest);
+        	removeExports(manifest, stackStateRepository);
             LOG.error("Provisioning failed for add-on {}. Starting rollback.", name, e);
             runHooks(HookType.PRE_UNINSTALL, manifest, addOnInstance, variables);
             if (addOnInstance.getLevel() == ContainerLevel.SIMULATOR && !createdContainerIds.isEmpty()) {
@@ -489,6 +457,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             throw e;
         }
     }
+	
 
 	private void reprovisionContainersWithVariables(Manifest manifest, Collection<String> ignoredIds) {
 		var restartableContainers = new ArrayList<String>();
@@ -527,24 +496,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		}
 		return false;
 	}
-
-	private boolean installExports(String name, Manifest manifest, Map<String, String> variables, GridState gridState) {
-		var changes = false;
-		if(!manifest.getExports().isEmpty()) {
-			for(var varName : manifest.getExports()) {
-				var value = manifest.getConstants().get(varName);
-				if(value == null || value.isBlank()) {
-					throw new IllegalStateException("Add-on " + name + " export '" + varName + "' is not defined in manifest constants.");
-				}
-				else {
-					gridState.getGlobal().put(varName, templateResolver.resolve(value, variables));
-					LOG.info("Add-on {} export '{}' generated and added to grid state.", name, name);
-					changes = true;
-				}
-			}
-		}
-		return changes;
-	}
 	
 	private void runHooks(HookType hookType, Manifest manifest, AddOnInstanceData addOnInstance, Map<String, String> variables) {
 		var hookScript = manifest.getHooks().get(hookType);
@@ -579,8 +530,6 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		var addOnDir = addOnRepository.resolve(manifest.getName())
 				.orElseThrow(() -> new IllegalStateException("Add-on manifest directory not found for " + manifest.getName() + ".")).toAbsolutePath().getParent();
 
-		variables = simulatorLevelProfileService.buildBaseVariables(sim, variables);
-		
 		switch((String)def.getOrDefault("type", "throw")) {
 		case "copy":
 		{
@@ -770,7 +719,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 				.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on does not specify `" + key + "`."));
 	}
 
-	private ContainerLevel resolveAddOnLevel(Map<ContainerLevel, Map<String, ContainerSpec>> extensions) {
+	private ContainerLevel resolveAddOnLevel(Map<ContainerLevel, Map<String, Object>> extensions) {
 		if (extensions == null || extensions.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add-on has no extensions.");
 		}
@@ -837,7 +786,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
     private void materializeFiles(ResolvedAddOnPlan plan, AddOnInstanceData bot, List<java.nio.file.Path> writtenFiles) {
 		var manifestDir = properties.getAddOnsDir().resolve(bot.getName()).toAbsolutePath().normalize();
 		LOG.info("Materializing add-on '{}' using manifest directory '{}'.", bot.getName(), manifestDir);
-		withManifestContext(bot.getName(), () -> materializeFiles(plan, writtenFiles, profileService.buildBaseVariables(bot,  new LinkedHashMap<>())));
+		withManifestContext(bot.getName(), () -> materializeFiles(plan, writtenFiles));
     }
 
 	@Override
