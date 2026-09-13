@@ -68,7 +68,16 @@ public class UpdateService {
 
     public synchronized Map<String, StackContainerUpdateStatus> containerUpdateStatus(boolean forceRefresh) {
         var stale = Duration.between(lastRefresh, Instant.now()).compareTo(MANIFEST_CACHE_TTL) > 0;
+        LOG.info("Stack update snapshot requested: forceRefresh={}, stale={}, cachedCount={}, cacheAgeSeconds={}.",
+                forceRefresh,
+                stale,
+                cachedStatusByContainer.size(),
+                Duration.between(lastRefresh, Instant.now()).toSeconds());
         if (forceRefresh || stale || cachedStatusByContainer.isEmpty()) {
+            LOG.info("Refreshing stack update snapshot (forceRefresh={}, stale={}, cachedCount={}).",
+                    forceRefresh,
+                    stale,
+                    cachedStatusByContainer.size());
             cachedStatusByContainer = refreshStatusSnapshot();
             lastRefresh = Instant.now();
         }
@@ -79,12 +88,29 @@ public class UpdateService {
         var normalizedName = normalizeContainerName(containerName);
         var state = inspectContainerForUpdate(normalizedName);
         if (!state.updateAvailable()) {
+            LOG.info("Update check for container {} found no change. targetImage={}, localDigest={}, remoteDigest={}.",
+                    normalizedName,
+                    state.targetImage(),
+                    state.localDigest(),
+                    state.remoteDigest());
             return state;
         }
 
-        dockerService.pullImage(state.targetImage());
+        LOG.info("Updating container {} using targetImage={} (localDigest={}, remoteDigest={}).",
+                normalizedName,
+                state.targetImage(),
+                state.localDigest(),
+                state.remoteDigest());
+        if (!isLocalImage(state.targetImage())) {
+            dockerService.pullImage(state.targetImage());
+        }
         dockerService.recreateContainer(state.containerName(), state.targetImage());
         var refreshed = inspectContainerForUpdate(normalizedName);
+        LOG.info("Updated container {}. newLocalDigest={}, newRemoteDigest={}, updateAvailable={}.",
+                normalizedName,
+                refreshed.localDigest(),
+                refreshed.remoteDigest(),
+                refreshed.updateAvailable());
         cachedStatusByContainer = refreshStatusSnapshot();
         lastRefresh = Instant.now();
         return refreshed;
@@ -140,7 +166,9 @@ public class UpdateService {
 
     private Map<String, StackContainerUpdateStatus> refreshStatusSnapshot() {
         var byContainer = new LinkedHashMap<String, StackContainerUpdateStatus>();
-        for (var containerName : dockerService.listStackContainers()) {
+        var containerNames = dockerService.listStackContainers();
+        LOG.info("Refreshing stack update snapshot for {} container(s).", containerNames.size());
+        for (var containerName : containerNames) {
             try {
                 var status = inspectContainerForUpdate(containerName);
                 byContainer.put(containerName, status);
@@ -155,12 +183,65 @@ public class UpdateService {
 
     private StackContainerUpdateStatus inspectContainerForUpdate(String containerName) {
         var inspect = dockerService.inspect(containerName);
-        var imageFromConfig = inspect.image();
-        var targetImage = DockerService.toTaggedImage(imageFromConfig, configuredTag());
-        var localDigest = dockerService.resolveLocalDigest(targetImage); 
-        var remoteDigest = resolveRemoteDigest(targetImage);
-        var updateAvailable = shouldUpdate(localDigest, remoteDigest);
+        var imageFromConfig = normalize(inspect.image());
+        var targetImage = resolveTargetImage(imageFromConfig, inspect.labels());
+        var localDigest = dockerService.resolveLocalDigest(targetImage);
+        var remoteDigest = isLocalImage(targetImage) ? normalize(inspect.imageId()) : resolveRemoteDigest(targetImage);
+        var updateAvailable = isLocalImage(targetImage)
+                ? shouldUpdateLocal(localDigest, remoteDigest)
+                : shouldUpdate(localDigest, remoteDigest);
+        if (isLocalImage(targetImage)) {
+            LOG.info("Local image update check for {}: imageRef={}, labelRef={}, runtimeImageId={}, builtImageId={}, updateAvailable={}.",
+                    containerName,
+                    imageFromConfig,
+                    normalize(inspect.labels() == null ? null : inspect.labels().get(DockerJavaService.LABEL_IMAGE_REF)),
+                    remoteDigest,
+                    localDigest,
+                    updateAvailable);
+        } else {
+            LOG.info("Remote image update check for {}: imageRef={}, targetImage={}, localDigest={}, remoteDigest={}, updateAvailable={}.",
+                    containerName,
+                    imageFromConfig,
+                    targetImage,
+                    localDigest,
+                    remoteDigest,
+                    updateAvailable);
+        }
         return new StackContainerUpdateStatus(containerName, targetImage, updateAvailable, localDigest, remoteDigest);
+    }
+
+    private String resolveTargetImage(String imageFromConfig, Map<String, String> labels) {
+        var fromLabel = labels == null ? "" : normalize(labels.get(DockerJavaService.LABEL_IMAGE_REF));
+        if (!fromLabel.isBlank()) {
+            return fromLabel;
+        }
+
+        var image = normalize(imageFromConfig);
+        if (image.isBlank()) {
+            return "";
+        }
+
+        return DockerService.toTaggedImage(image, configuredTag());
+    }
+
+    private static boolean isLocalImage(String imageRef) {
+        if (imageRef == null || imageRef.isBlank()) {
+            return false;
+        }
+        return "local".equalsIgnoreCase(imageTag(imageRef));
+    }
+
+    private static boolean shouldUpdateLocal(String localDigest, String currentImageId) {
+        if (currentImageId == null || currentImageId.isBlank()) {
+            LOG.info("Local image update check skipped: runtime image ID is blank (builtImageId={}).", localDigest);
+            return false;
+        }
+        if (localDigest == null || localDigest.isBlank() || DIGEST_UNKNOWN.equals(localDigest)) {
+            LOG.info("Local image update check skipped: built image ID is unavailable (currentImageId={}).", currentImageId);
+            return false;
+        }
+        LOG.info("Comparing local image IDs: builtImageId={} vs currentImageId={}.", localDigest, currentImageId);
+        return !localDigest.equals(currentImageId);
     }
 
     private static boolean shouldUpdate(String localDigest, String remoteDigest) {

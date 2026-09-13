@@ -97,6 +97,7 @@ public class UiController {
         var response = new LinkedHashMap<String, Object>();
         response.put("guided", isGuidedProvisioningMode());
         response.put("required", requiresGuidedSetup());
+        response.put("initialized", gridStateRepository.get().isInitialized());
         return response;
     }
 

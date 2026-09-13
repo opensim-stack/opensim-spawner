@@ -29,6 +29,8 @@ public class SetupWizardService {
     private final RandomPasswordService passwordService;
     private final StackStateRepository gridStateRepository;
     private final StackProvisioningService stackProvisioningService;
+    
+    private volatile boolean setupInProgress = false;
 
     public SetupWizardService(
     		StackProvisioningService stackProvisioningService,
@@ -82,104 +84,118 @@ public class SetupWizardService {
     }
 
     public Map<String, Object> runSetup(Map<String, Object> payload) {
+    	if(setupInProgress) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "Setup is already in progress.");
+		}
+    	setupInProgress = true;
     	
     	stackProvisioningService.provisionStack();
-    	
-        var request = payload == null ? Map.<String, Object>of() : payload;
 
-        var grid = mapValue(request.get("grid"));
-        var admin = mapValue(request.get("admin"));
-        var existingGridState = gridStateRepository.get();
-        var configuredGridName = firstNonBlank(
-                stringValue(grid.get("name")),
-                stringValue(grid.get("gridName")),
-                existingGridState.getName());
-        var configuredGridNick = firstNonBlank(
-                stringValue(grid.get("nick")),
-                stringValue(grid.get("gridNick")),
-                existingGridState.getNick());
-        var configuredWelcomeMessage = grid.containsKey("welcomeMessage") || grid.containsKey("welcome")
-                ? firstNonBlank(stringValue(grid.get("welcomeMessage")), stringValue(grid.get("welcome")))
-                : normalize(existingGridState.getWelcomeMessage());
-        var configuredConsoleUser = firstNonBlank(
-                stringValue(admin.get("username")),
-                stringValue(admin.get("user")),
-                stringValue(grid.get("consoleUser")),
-                existingGridState.getConsoleUser());
-        var configuredConsolePassword = firstNonBlank(
-                stringValue(admin.get("password")),
-                stringValue(grid.get("consolePass")),
-                existingGridState.getConsolePass());
+    	new Thread(() -> {
+    		doRunSetup(payload);
+    	}).start();
 
-        applyGridState(configuredGridName,
-                configuredGridNick,
-                configuredWelcomeMessage,
-                configuredConsoleUser,
-                configuredConsolePassword);
+        var response = new LinkedHashMap<String, Object>();
+        response.put("ok", true);
+        return response;
+    }
 
-        var mode = normalize(requiredString(request, "mode", "Setup mode is required."));
-        var simulator = mapValue(request.get("simulator"));
-        var bot = mapValue(request.get("bot"));
-        var user = mapValue(request.get("user"));
-
-        var primarySimulatorName = firstNonBlank(
-                stringValue(simulator.get("primaryName")),
-                stringValue(simulator.get("name")),
-                stringValue(simulator.get("regionName")));
-        if (primarySimulatorName.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Primary simulator name is required.");
-        }
-
-        var regionSimulatorName = firstNonBlank(
-                stringValue(simulator.get("regionName")),
-                stringValue(simulator.get("name")),
-                primarySimulatorName);
-
-        var createBot = boolValue(bot.get("create"));
-        var botFirst = firstNonBlank(stringValue(bot.get("first")), normalizeNameFromSimulator(primarySimulatorName));
-        var botLast = firstNonBlank(stringValue(bot.get("last")), "Bot");
-        var botEmail = stringValue(bot.get("email"));
-        var botAppearance = stringValue(bot.get("appearance"));
-        var botGender = stringValue(bot.get("gender"));
-        var botLevel = BotLevel.GOVERNOR.name();
-
-        var userFirst = firstNonBlank(stringValue(user.get("first")), normalizeNameFromSimulator(primarySimulatorName));
-        var userLast = firstNonBlank(stringValue(user.get("last")), "User");
-        var userEmail = stringValue(user.get("email"));
-        var userPassword = requiredString(user, "password", "User password is required.");
-
-        var ownerFirst = createBot ? botFirst : userFirst;
-        var ownerLast = createBot ? botLast : userLast;
-        var ownerEmail = createBot ? botEmail : userEmail;
-        var ownerPassword = createBot ? passwordService.nextPassword() : userPassword;
-        var ownerUuid = UUID.randomUUID().toString();
-
-        var regionUuid = UUID.randomUUID().toString();
-        var regionX = firstNonBlank(stringValue(simulator.get("regionX")), "1000");
-        var regionY = firstNonBlank(stringValue(simulator.get("regionY")), "1000");
-        var regionOar = stringValue(simulator.get("oar"));
-        var regionPort = stringValue(simulator.get("port"));
-
-        var primaryLevel = parsePrimaryLevel(mode);
-        var regionFields = buildRegionOwnerFields(
-                regionPort,
-                ownerPassword,
-                ownerFirst,
-                ownerLast,
-                ownerEmail,
-                ownerUuid,
-                regionSimulatorName,
-                regionUuid,
-                regionX,
-                regionY,
-                regionOar);
-
-        var created = new LinkedHashMap<String, Object>();
-        SimulatorInstanceData primarySimulator;
-        SimulatorInstanceData secondaryGridSimulator = null;
-        BotInstanceData createdBot = null;
+	public void doRunSetup(Map<String, Object> payload) {
 
         try {
+			var request = payload == null ? Map.<String, Object>of() : payload;
+	
+	        var grid = mapValue(request.get("grid"));
+	        var admin = mapValue(request.get("admin"));
+	        var existingGridState = gridStateRepository.get();
+	        var configuredGridName = firstNonBlank(
+	                stringValue(grid.get("name")),
+	                stringValue(grid.get("gridName")),
+	                existingGridState.getName());
+	        var configuredGridNick = firstNonBlank(
+	                stringValue(grid.get("nick")),
+	                stringValue(grid.get("gridNick")),
+	                existingGridState.getNick());
+	        var configuredWelcomeMessage = grid.containsKey("welcomeMessage") || grid.containsKey("welcome")
+	                ? firstNonBlank(stringValue(grid.get("welcomeMessage")), stringValue(grid.get("welcome")))
+	                : normalize(existingGridState.getWelcomeMessage());
+	        var configuredConsoleUser = firstNonBlank(
+	                stringValue(admin.get("username")),
+	                stringValue(admin.get("user")),
+	                stringValue(grid.get("consoleUser")),
+	                existingGridState.getConsoleUser());
+	        var configuredConsolePassword = firstNonBlank(
+	                stringValue(admin.get("password")),
+	                stringValue(grid.get("consolePass")),
+	                existingGridState.getConsolePass());
+	
+	        applyGridState(configuredGridName,
+	                configuredGridNick,
+	                configuredWelcomeMessage,
+	                configuredConsoleUser,
+	                configuredConsolePassword);
+	
+	        var mode = normalize(requiredString(request, "mode", "Setup mode is required."));
+	        var simulator = mapValue(request.get("simulator"));
+	        var bot = mapValue(request.get("bot"));
+	        var user = mapValue(request.get("user"));
+	
+	        var primarySimulatorName = firstNonBlank(
+	                stringValue(simulator.get("primaryName")),
+	                stringValue(simulator.get("name")),
+	                stringValue(simulator.get("regionName")));
+	        if (primarySimulatorName.isBlank()) {
+	            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Primary simulator name is required.");
+	        }
+	
+	        var regionSimulatorName = firstNonBlank(
+	                stringValue(simulator.get("regionName")),
+	                stringValue(simulator.get("name")),
+	                primarySimulatorName);
+	
+	        var createBot = boolValue(bot.get("create"));
+	        var botFirst = firstNonBlank(stringValue(bot.get("first")), normalizeNameFromSimulator(primarySimulatorName));
+	        var botLast = firstNonBlank(stringValue(bot.get("last")), "Bot");
+	        var botEmail = stringValue(bot.get("email"));
+	        var botAppearance = stringValue(bot.get("appearance"));
+	        var botGender = stringValue(bot.get("gender"));
+	        var botLevel = BotLevel.GOVERNOR.name();
+	
+	        var userFirst = firstNonBlank(stringValue(user.get("first")), normalizeNameFromSimulator(primarySimulatorName));
+	        var userLast = firstNonBlank(stringValue(user.get("last")), "User");
+	        var userEmail = stringValue(user.get("email"));
+	        var userPassword = requiredString(user, "password", "User password is required.");
+	
+	        var ownerFirst = createBot ? botFirst : userFirst;
+	        var ownerLast = createBot ? botLast : userLast;
+	        var ownerEmail = createBot ? botEmail : userEmail;
+	        var ownerPassword = createBot ? passwordService.nextPassword() : userPassword;
+	        var ownerUuid = UUID.randomUUID().toString();
+	
+	        var regionUuid = UUID.randomUUID().toString();
+	        var regionX = firstNonBlank(stringValue(simulator.get("regionX")), "1000");
+	        var regionY = firstNonBlank(stringValue(simulator.get("regionY")), "1000");
+	        var regionOar = stringValue(simulator.get("oar"));
+	        var regionPort = stringValue(simulator.get("port"));
+	
+	        var primaryLevel = parsePrimaryLevel(mode);
+	        var regionFields = buildRegionOwnerFields(
+	                regionPort,
+	                ownerPassword,
+	                ownerFirst,
+	                ownerLast,
+	                ownerEmail,
+	                ownerUuid,
+	                regionSimulatorName,
+	                regionUuid,
+	                regionX,
+	                regionY,
+	                regionOar);
+	
+	        var created = new LinkedHashMap<String, Object>();
+	        SimulatorInstanceData primarySimulator;
+	        SimulatorInstanceData secondaryGridSimulator = null;
+	        BotInstanceData createdBot = null;
             if (primaryLevel == SimulatorLevel.STANDALONE) {
                 primarySimulator = simulatorProvisioningService.createSim(primarySimulatorName, SimulatorLevel.STANDALONE.name(),
                         regionFields);
@@ -229,22 +245,10 @@ public class SetupWizardService {
             var state = gridStateRepository.get();
             state.setInitialized(true);
             gridStateRepository.save();
-
-            var response = new LinkedHashMap<String, Object>();
-            response.put("ok", true);
-            response.put("mode", primaryLevel.name());
-            response.put("ownerFirst", ownerFirst);
-            response.put("ownerLast", ownerLast);
-            response.put("ownerUuid", ownerUuid);
-            response.put("regionUuid", regionUuid);
-            response.put("userFirst", userFirst);
-            response.put("userLast", userLast);
-            response.put("created", created);
-            return response;
-        } catch (RuntimeException e) {
-            throw e;
-        }
-    }
+        }  finally {
+			setupInProgress = false;
+		}
+	}
 
     private static SimulatorLevel parsePrimaryLevel(String mode) {
         var normalized = normalize(mode).toUpperCase();

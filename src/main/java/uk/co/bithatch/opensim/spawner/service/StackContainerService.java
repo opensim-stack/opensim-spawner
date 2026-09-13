@@ -13,6 +13,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,8 @@ import uk.co.bithatch.opensim.spawner.domain.StackContainerView;
 
 @Service
 public class StackContainerService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StackContainerService.class);
 
     private final SpawnerProperties properties;
     private final DockerClient dockerClient;
@@ -53,7 +57,12 @@ public class StackContainerService {
         var response = new ArrayList<StackContainerView>();
         var updateStatus = updateService == null
                 ? java.util.Map.<String, UpdateService.StackContainerUpdateStatus>of()
-                : updateService.containerUpdateStatus(false);
+                : updateService.containerUpdateStatus(true);
+
+        LOG.info("Stack list refresh requested: projectPrefix={}, dockerContainers={}, updateSnapshotEntries={}.",
+                projectPrefix,
+                containers.size(),
+                updateStatus.size());
 
         for (var container : containers) {
             var containerName = primaryName(container == null ? null : container.getNames());
@@ -65,6 +74,14 @@ public class StackContainerService {
                     container == null ? null : container.getStatus());
             var updateAvailable = updateStatus.get(containerName) != null
                     && updateStatus.get(containerName).updateAvailable();
+
+            LOG.info("Stack list entry: container={}, dockerImage={}, state={}, running={}, updateAvailable={}.",
+                    containerName,
+                    container == null ? null : container.getImage(),
+                    state,
+                    "running".equalsIgnoreCase(container == null ? null : container.getState()),
+                    updateAvailable);
+
             response.add(new StackContainerView(
                     containerName,
                     state,
@@ -139,6 +156,12 @@ public class StackContainerService {
         var running = state != null && Boolean.TRUE.equals(state.getRunning());
         var updates = updateService == null ? java.util.Map.<String, UpdateService.StackContainerUpdateStatus>of()
                 : updateService.containerUpdateStatus(true);
+        LOG.info("Stack inspect view: container={}, dockerImage={}, imageId={}, running={}, updateAvailable={}.",
+                containerName,
+                inspect.getConfig().getImage(),
+                inspect.getImageId(),
+                running,
+                updates.containsKey(containerName) && updates.get(containerName).updateAvailable());
         return new StackContainerView(
                 containerName,
                 normalizeState(state == null ? null : state.getStatus(), null),

@@ -638,7 +638,7 @@ const shouldLaunchWizard = async () => {
     throw new Error('Failed to check setup status.');
   }
   const payload = await response.json();
-  return !!payload?.guided && !!payload?.required;
+  return !payload?.initialized && !!payload?.guided && !!payload?.required;
 };
 
 const runSetupWizardStub = async (details) => {
@@ -656,44 +656,21 @@ const runSetupWizardStub = async (details) => {
   return response.json();
 };
 
-const simulatorExists = async (name) => {
-  const response = await fetchWithTimeout(`/api/simulator/${encodeURIComponent(name)}`);
-  return response.ok;
-};
-
-const botExists = async (first, last) => {
-  const response = await fetchWithTimeout(`/api/bot/${encodeURIComponent(first)}/${encodeURIComponent(last)}`);
-  return response.ok;
-};
-
-const waitForSetupOutcome = async (state, maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
+const waitForSetupOutcome = async (maxWaitMs = REQUEST_RECOVERY_WINDOW_MS) => {
   const deadline = Date.now() + maxWaitMs;
-  const requiredSimulatorNames = new Set([state.simulator.primaryName]);
-  if (state.mode === 'ROBUST') {
-    requiredSimulatorNames.add(state.simulator.regionName);
-  }
 
   while (Date.now() < deadline) {
     try {
-      const simulatorChecks = await Promise.all(
-        Array.from(requiredSimulatorNames).map((name) => simulatorExists(name))
-      );
-      const simulatorsReady = simulatorChecks.every((exists) => exists);
-      if (!simulatorsReady) {
-        await sleep(REQUEST_RECOVERY_POLL_MS);
-        continue;
+      const response = await fetchWithTimeout('/ui/api/setup/status');
+      if (!response.ok) {
+        throw new Error('Failed to check setup status.');
       }
-
-      if (!state.bot.create) {
-        return true;
-      }
-
-      const botReady = await botExists(state.bot.first, state.bot.last);
-      if (botReady) {
+      const payload = await response.json();
+      if (payload?.initialized) {
         return true;
       }
     } catch (_ignored) {
-      // Ignore transient polling failures while checking eventual setup outcome.
+      // Ignore transient polling failures while waiting for setup completion.
     }
 
     await sleep(REQUEST_RECOVERY_POLL_MS);
@@ -708,23 +685,18 @@ const finishWizard = async () => {
 
   setBusy(true);
   try {
-    await withWorkingOverlay(async () => runSetupWizardStub(state), 'Running setup wizard ...');
+    await withWorkingOverlay(async () => {
+      await runSetupWizardStub(state);
+      const recovered = await waitForSetupOutcome();
+      if (!recovered) {
+        throw new Error('Timed out waiting for setup to complete.');
+      }
+    }, 'Waiting for setup to complete ...');
     showToast(toastContainer, 'Setup completed.', 'success');
     window.setTimeout(() => {
       window.location.assign('/ui/index.html');
     }, 800);
   } catch (err) {
-    const recovered = await withWorkingOverlay(
-      async () => waitForSetupOutcome(state),
-      'Verifying setup result ...'
-    );
-    if (recovered) {
-      showToast(toastContainer, 'Setup completed.', 'success');
-      window.setTimeout(() => {
-        window.location.assign('/ui/index.html');
-      }, 800);
-      return;
-    }
     showError(err instanceof Error ? err.message : 'Setup failed.');
   } finally {
     setBusy(false);

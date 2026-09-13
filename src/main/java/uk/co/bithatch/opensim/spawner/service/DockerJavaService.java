@@ -51,6 +51,7 @@ import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 public class DockerJavaService implements DockerService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DockerJavaService.class);
+    static final String LABEL_IMAGE_REF = "com.bithatch.opensim.image.ref";
 
     private final DockerClient dockerClient;
     private final SpawnerProperties properties;
@@ -73,7 +74,8 @@ public class DockerJavaService implements DockerService {
             var inspect = dockerClient.inspectImageCmd(targetImage).exec();
             var repoDigests = inspect == null ? null : inspect.getRepoDigests();
             if (repoDigests == null || repoDigests.isEmpty()) {
-                return DIGEST_UNKNOWN;
+                var imageId = inspect == null ? null : inspect.getId();
+                return imageId == null || imageId.isBlank() ? DIGEST_UNKNOWN : imageId.trim();
             }
 
             var repository = DockerService.dockerHubRepository(targetImage);
@@ -99,7 +101,8 @@ public class DockerJavaService implements DockerService {
             if (first != null && first.contains("@")) {
                 return first.split("@", 2)[1].trim();
             }
-            return DIGEST_UNKNOWN;
+            var imageId = inspect == null ? null : inspect.getId();
+            return imageId == null || imageId.isBlank() ? DIGEST_UNKNOWN : imageId.trim();
         } catch (NotFoundException e) {
             return DIGEST_UNKNOWN;
         } catch (RuntimeException e) {
@@ -140,6 +143,7 @@ public class DockerJavaService implements DockerService {
         var preservedHostConfig = inspect.getHostConfig();
         var preservedEnv = inspect.getConfig().getEnv();
         var preservedAliases = collectNetworkAliases(inspect);
+        var preservedLabels = preserveLabels(inspect, targetImage);
 
         dockerClient.stopContainerCmd(oldContainerId).exec();
         dockerClient.removeContainerCmd(oldContainerId).withForce(true).exec();
@@ -149,7 +153,8 @@ public class DockerJavaService implements DockerService {
             var create = dockerClient.createContainerCmd(targetImage)
                     .withName(oldContainerName)
                     .withEnv(preservedEnv)
-                    .withHostConfig(preservedHostConfig);
+                    .withHostConfig(preservedHostConfig)
+                    .withLabels(preservedLabels);
             if (!preservedAliases.isEmpty()) {
                 create.withAliases(preservedAliases.toArray(String[]::new));
             }
@@ -356,7 +361,8 @@ public class DockerJavaService implements DockerService {
         var createCommand = dockerClient.createContainerCmd(spec.getImage())
                 .withName(spec.getName())
                 .withHostConfig(hostConfig)
-                .withEnv(envList);
+                .withEnv(envList)
+                .withLabels(imageLabels(spec.getImage(), null));
 
         var exposedPorts = toExposedPorts(portBindings);
         if (!exposedPorts.isEmpty()) {
@@ -540,10 +546,13 @@ public class DockerJavaService implements DockerService {
 		return new ContainerDetails(
 				ir.getId(),
 				ir.getName(),
+        ir.getName(),
 				ir.getState().getStatus(),
 				ir.getState() == null ? false : Boolean.TRUE.equals(ir.getState().getRunning()),
 				ir.getConfig().getEnv(),
-				ir.getConfig().getImage());
+        ir.getConfig().getImage(),
+        ir.getImageId(),
+        ir.getConfig().getLabels() == null ? Map.of() : ir.getConfig().getLabels());
 	}
     
     @Override
@@ -961,5 +970,27 @@ public class DockerJavaService implements DockerService {
             }
         }
         return aliases;
+    }
+
+    private static Map<String, String> preserveLabels(InspectContainerResponse inspect, String targetImage) {
+        var labels = new LinkedHashMap<String, String>();
+        var existing = inspect == null || inspect.getConfig() == null ? null : inspect.getConfig().getLabels();
+        if (existing != null && !existing.isEmpty()) {
+            labels.putAll(existing);
+        }
+        labels.putAll(imageLabels(targetImage, labels.get(LABEL_IMAGE_REF)));
+        return labels;
+    }
+
+    private static Map<String, String> imageLabels(String imageRef, String fallbackRef) {
+        var labels = new LinkedHashMap<String, String>();
+        var resolved = normalize(imageRef);
+        if (resolved.isBlank()) {
+            resolved = normalize(fallbackRef);
+        }
+        if (!resolved.isBlank()) {
+            labels.put(LABEL_IMAGE_REF, resolved);
+        }
+        return labels;
     }
 }
