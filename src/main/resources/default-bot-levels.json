@@ -113,6 +113,9 @@
 						"OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
 						"OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%"
 					},
+                    "ports": {
+                        "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
+                    },
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
 					}

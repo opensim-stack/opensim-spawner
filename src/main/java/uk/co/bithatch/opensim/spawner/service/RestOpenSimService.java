@@ -21,12 +21,13 @@ import org.springframework.web.server.ResponseStatusException;
 import uk.co.bithatch.opensim.jlib.OpensimRESTConsole;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
+import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.Region;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.RegionInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.SimulatorInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.StackState;
-import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
+import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 
 @Service
 public class RestOpenSimService implements OpenSimService {
@@ -167,11 +168,13 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     @Override
-    public List<Map<String, String>> showActiveUsers() {
+    public List<Region> showActiveUsers() {
         try {
             LOG.info("Listing active OpenSim users.");
-            var output = withConsole(console -> console.executeCommand("show", "users", "full").toList());
-            return parseActiveUsers(output);
+			var admin= openRemoteAdmin();
+			return showRegions(null).stream().flatMap(r ->	
+				admin.getAgents(r.name(), r.id()).stream()
+			).toList();
         } catch (RuntimeException e) {
             throw new ExternalDependencyException("Failed to list active OpenSimulator users via REST console. " + e.getMessage(), e);
         }
@@ -194,13 +197,20 @@ public class RestOpenSimService implements OpenSimService {
     @Override
     public Optional<AgentLocation> findAgentByName(String first, String last) {
 		try {
-			LOG.info("Find up OpenSim agent {} {}.", first, last);
+			LOG.info("Find agent {} {}.", first, last);
 			var admin= openRemoteAdmin();
-			return admin.findAgent(
+			var res = admin.findAgent(
 					first + " " + last, 
 					null, 
 					simStateRepository.list().stream().flatMap(s -> Arrays.asList(s.getRegions()).stream()).
 						collect(Collectors.toMap(r -> r.getName(), r -> r.getUuid())));
+			if(res.isPresent()) {
+				LOG.info("Found OpenSim agent {} {} at {}.", first, last, res.get());
+			}
+			else {
+				LOG.info("OpenSim agent {} {} not found.", first, last);
+			}
+			return res;
 		} catch (RuntimeException e) {
 			throw new ExternalDependencyException("Failed to query OpenSimulator agent via REST console. " + e.getMessage(), e);
 		}
@@ -224,7 +234,7 @@ public class RestOpenSimService implements OpenSimService {
     @Override
     public boolean authenticate(String first, String last, char[] password) {
         try {
-        	var admin= openRemoteAdmin();
+        	var admin = openRemoteAdmin();
             LOG.info("Authenticating for {} {}.", first, last);
             admin.authenticateUser(first, last, password, 10);
             LOG.info("Authenticated OpenSim user {} {}.", first, last);
@@ -237,12 +247,23 @@ public class RestOpenSimService implements OpenSimService {
 
     @Override
     public List<RegionData> showRegions(String simulatorName) {
+    	
+    	if(simulatorName == null || simulatorName.isBlank()) {
+    		return simStateRepository.list().stream()
+					.flatMap(s -> showRegions(s.getName()).stream())
+					.toList();
+    	}
+    	
         var simulator = resolveSimulator(simulatorName);
         validateRegionCapableSimulator(simulator);
         try {
             LOG.info("Listing regions for simulator {}.", simulator.getName());
             var output = withConsole(simulator, console -> console.executeCommand("show", "regions").toList());
-            return parseRegions(output);
+            List<RegionData> regions = parseRegions(output);
+            regions.forEach(region -> {
+				LOG.info("Found region {} [{}] at {},{} (port={}, estate={}).", region.name(), region.id(), region.x(), region.y(), region.port(), region.estate());
+			});
+			return regions;
         } catch (RuntimeException e) {
             throw new ExternalDependencyException(
                     "Failed to list OpenSimulator regions via REST console. " + e.getMessage(),
@@ -568,37 +589,6 @@ public class RestOpenSimService implements OpenSimService {
             }
         }
         return details;
-    }
-
-    private static List<Map<String, String>> parseActiveUsers(List<String> lines) {
-        var users = new ArrayList<Map<String, String>>();
-        for (var rawLine : lines) {
-            if (rawLine == null || rawLine.isBlank()) {
-                continue;
-            }
-            for (var line : rawLine.split("\\R")) {
-                var trimmed = line.trim();
-                if (trimmed.isEmpty()
-                        || trimmed.startsWith("Total agents in region")
-                        || trimmed.startsWith("Firstname")) {
-                    continue;
-                }
-
-                var columns = trimmed.split("\\s{2,}");
-                if (columns.length < 5) {
-                    continue;
-                }
-
-                var user = new LinkedHashMap<String, String>();
-                user.put("first", columns[0].trim());
-                user.put("last", columns[1].trim());
-                user.put("agentId", columns[2].trim());
-                user.put("type", columns[3].trim());
-                user.put("position", columns[4].trim());
-                users.add(user);
-            }
-        }
-        return users;
     }
 
     private static List<RegionData> parseRegions(List<String> lines) {

@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.AgentLocation;
+import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.Region;
 
 public interface OpenSimService {
 
@@ -46,7 +47,7 @@ public interface OpenSimService {
 
     Map<String, String> showAccount(String first, String last);
 
-    List<Map<String, String>> showActiveUsers();
+    List<Region> showActiveUsers();
 
     void resetUserPassword(String first, String last, String password);
 

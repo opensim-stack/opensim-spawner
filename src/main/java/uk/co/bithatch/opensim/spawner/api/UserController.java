@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.Region;
 import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 import uk.co.bithatch.opensim.spawner.service.OpenSimService;
 import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
@@ -65,14 +66,18 @@ public class UserController {
     }
 
     @GetMapping(path = "/active", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<Map<String, String>> listActiveUsers(@RequestParam(defaultValue = "false") boolean showAllAgents) {
+    public List<Region> listActiveUsers(@RequestParam(defaultValue = "false") boolean showAllAgents) {
         ensureGridLoginServiceAvailable();
         var users = openSimService.showActiveUsers();
         if (showAllAgents) {
             return users;
         }
         return users.stream()
-                .filter(user -> "root".equalsIgnoreCase(user.getOrDefault("type", "")))
+                .map((region) -> 
+					new Region(region.name(), region.uuid(), region.agents().stream()
+							.filter((agent) -> agent.type().equalsIgnoreCase("user"))
+							.toList())
+				)
                 .toList();
     }
 
@@ -137,6 +142,10 @@ public class UserController {
             @PathVariable String last,
             @RequestParam String password) {
         ensureGridLoginServiceAvailable();
+        if (isBotUser(first, last)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Password reset is unavailable for bot users.");
+        }
         openSimService.resetUserPassword(first, last, password);
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -152,5 +161,14 @@ public class UserController {
         }
         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                 "User management is unavailable because no active ROBUST/STANDALONE simulator is providing grid login services.");
+    }
+
+    private boolean isBotUser(String first, String last) {
+        var target = (String.valueOf(first).trim() + " " + String.valueOf(last).trim()).trim();
+        if (target.isBlank()) {
+            return false;
+        }
+        return botProvisioningService.listNames().stream()
+                .anyMatch((name) -> target.equalsIgnoreCase(String.valueOf(name).trim()));
     }
 }

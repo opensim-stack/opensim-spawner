@@ -89,7 +89,6 @@ public class SetupWizardService {
 		}
     	setupInProgress = true;
     	
-    	stackProvisioningService.provisionStack();
 
     	new Thread(() -> {
     		doRunSetup(payload);
@@ -103,6 +102,8 @@ public class SetupWizardService {
 	public void doRunSetup(Map<String, Object> payload) {
 
         try {
+        	stackProvisioningService.provisionStack();
+        	
 			var request = payload == null ? Map.<String, Object>of() : payload;
 	
 	        var grid = mapValue(request.get("grid"));
