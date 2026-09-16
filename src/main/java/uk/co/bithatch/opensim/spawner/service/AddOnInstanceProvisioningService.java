@@ -177,6 +177,19 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			reconcileParentConfigurations(contributions, "enabled", addOnName);
 		}
 	}
+
+	public synchronized void reconfigureAddOn(String addOnName, Map<String, String> requestFields) {
+		var addOn = stateRepository.load(addOnName)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on not found."));
+		var manifest = addOnRepository.load(addOnName)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on manifest not found."));
+
+		addOn.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
+		stateRepository.save(addOn);
+		reprovisionAddOn(addOn, manifest);
+		var contributions = resolveAddOnManagedContributions(addOn);
+		reconcileParentConfigurations(contributions, "reconfigured", addOnName);
+	}
 	
 	public void disableAddOn(String addOnName) {
 		if(exists(addOnName)) {
@@ -400,6 +413,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on not found."));
 		var addOnLevel = resolveAddOnLevel(manifest.getExtensions());
 		addOnInstance.setLevel(addOnLevel);
+		addOnInstance.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
 
 		SimulatorInstanceData attachedGridSimulator = null;
 		if (addOnLevel == ContainerLevel.SIMULATOR) {
@@ -414,7 +428,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		
         try {
     		installTokens(name, manifest);
-			installExports(name, manifest); 
+			installExports(name, manifest, resolveEnvironment(manifest.getConstants(), addOnInstance.getRequestFields())); 
 
             stateRepository.save(addOnInstance);
             
@@ -457,6 +471,41 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             throw e;
         }
     }
+
+	private void reprovisionAddOn(AddOnInstanceData addOn, Manifest manifest) {
+		var oldContainerIds = addOn.getContainerIds() == null ? List.<String>of() : new ArrayList<>(addOn.getContainerIds());
+		var requestFields = addOn.getRequestFields() == null ? Map.<String, String>of() : addOn.getRequestFields();
+		installExports(addOn.getName(), manifest, resolveEnvironment(manifest.getConstants(), requestFields));
+		var plan = profileService.resolvePlan(addOn, resolveEnvironment(manifest.getConstants(), requestFields));
+		var attachedGridSimulatorName = addOn.getGridServiceSimulatorName();
+		var simulatorScoped = addOn.getLevel() == ContainerLevel.SIMULATOR;
+
+		if (!oldContainerIds.isEmpty()) {
+			try {
+				dockerService.stopContainers(oldContainerIds);
+			} catch (RuntimeException e) {
+				LOG.warn("Failed to stop existing containers for add-on {} before reprovisioning.", addOn.getName(), e);
+			}
+			if (simulatorScoped) {
+				detachAddOnContainersFromGridSimulator(attachedGridSimulatorName, oldContainerIds);
+			}
+			dockerService.removeContainers(oldContainerIds);
+		}
+
+		var materializedFiles = new ArrayList<Path>();
+		materializeFiles(plan, addOn, materializedFiles);
+
+		var createdContainerIds = dockerService.createContainers(plan.containers());
+		if (simulatorScoped && !createdContainerIds.isEmpty()) {
+			attachAddOnContainersToGridSimulator(attachedGridSimulatorName, createdContainerIds);
+		}
+		addOn.setContainerIds(createdContainerIds);
+		stateRepository.save(addOn);
+
+		dockerService.startContainers(createdContainerIds);
+		waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
+		reprovisionContainersWithVariables(manifest, createdContainerIds);
+	}
 	
 
 	private void reprovisionContainersWithVariables(Manifest manifest, Collection<String> ignoredIds) {

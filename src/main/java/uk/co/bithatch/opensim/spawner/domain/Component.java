@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import uk.co.bithatch.opensim.spawner.config.ConfigItem;
+
 public class Component<LVL extends Enum<LVL>> implements DomainObject {
 	private String name;
 
@@ -15,7 +17,15 @@ public class Component<LVL extends Enum<LVL>> implements DomainObject {
 	private List<String> tokens = new ArrayList<>();
 	private Map<HookType, List<Map<String, Object>>> hooks = new HashMap<>();
 	private List<String> exports = new ArrayList<>();
+	private List<ConfigItem> configuration = new ArrayList<>();
 
+	public List<ConfigItem> getConfiguration() {
+		return configuration;
+	}
+
+	public void setConfiguration(List<ConfigItem> configuration) {
+		this.configuration = configuration;
+	}
 
 	public final String getName() {
 		return name;

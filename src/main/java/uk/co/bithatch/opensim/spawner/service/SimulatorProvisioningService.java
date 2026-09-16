@@ -156,6 +156,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
         containerRequestFields.remove("regionUuid");
         containerRequestFields.remove("regionX");
         containerRequestFields.remove("regionY");
+        sim.setRequestFields(containerRequestFields);
         
         try {
 
@@ -209,6 +210,34 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
             throw e;
         }
     }
+
+  public synchronized void reconfigureSimulator(String name, Map<String, String> requestFields) {
+    var sim = stateRepository.load(name)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Simulator not found."));
+    sim.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
+    stateRepository.save(sim);
+
+    var oldContainerIds = sim.getContainerIds() == null ? java.util.List.<String>of() : new ArrayList<>(sim.getContainerIds());
+    if (!oldContainerIds.isEmpty()) {
+      try {
+        dockerService.stopContainers(oldContainerIds);
+      } catch (RuntimeException e) {
+        LOG.warn("Failed to stop simulator {} before reprovisioning.", name, e);
+      }
+      dockerService.removeContainers(oldContainerIds);
+    }
+
+    var plan = profileService.resolvePlan(sim,
+        resolveEnvironment(profileService.component().getConstants(), sim.getRequestFields()));
+    var materializedFiles = new ArrayList<java.nio.file.Path>();
+    materializeFiles(plan, materializedFiles);
+
+    var createdContainerIds = dockerService.createContainers(plan.containers());
+    sim.setContainerIds(createdContainerIds);
+    stateRepository.save(sim);
+    dockerService.startContainers(createdContainerIds);
+    waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
+  }
 
 	@Override
 	public Map<String, Object> toResponse(SimulatorInstanceData sim) {

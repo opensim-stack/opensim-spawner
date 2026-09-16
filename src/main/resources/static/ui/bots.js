@@ -359,6 +359,7 @@ const createCard = (status) => {
       <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30 inline-flex items-center justify-center gap-2">${iconSpan('restart', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Restart</span></button>
       <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('delete', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Delete</span></button>
     </div>
+    <a href="/ui/variables.html?type=BOT&name=${encodeURIComponent(`${first}-${last}`)}" class="mt-2 inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Configuration</span></a>
     ${canSpawnChild ? `<button data-spawn-child class="mt-2 text-sm text-neon-accent hover:text-neon-secondary text-left inline-flex items-center gap-1">${iconSpan('plus', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Spawn child bot</span></button>` : ''}
   `;
 

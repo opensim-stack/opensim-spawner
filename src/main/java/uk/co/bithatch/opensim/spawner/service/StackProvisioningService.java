@@ -48,9 +48,9 @@ public class StackProvisioningService extends AbstractContainerGroupProvisioning
 		try { 
 			
 			installTokens(name, stack);
-			installExports(name, stack);
 			
-            var env = resolveEnvironment(stack.getConstants(), Collections.emptyMap());
+              var env = resolveEnvironment(stack.getConstants(), state.getRequestFields());
+      installExports(name, stack, env);
             env.forEach((k, v) -> LOG.info("Environment variable {}={}", k, v));
             
 			var plan = profileService.resolvePlan(state, env);
@@ -79,6 +79,24 @@ public class StackProvisioningService extends AbstractContainerGroupProvisioning
             throw e;
         }
 	}
+
+  public synchronized void reconfigureStack(Map<String, String> requestFields) {
+    var state = stateRepository.get();
+    state.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
+    stateRepository.save();
+
+    var oldContainerIds = state.getContainerIds() == null ? List.<String>of() : new ArrayList<>(state.getContainerIds());
+    if (!oldContainerIds.isEmpty()) {
+      try {
+        dockerService.stopContainers(oldContainerIds);
+      } catch (RuntimeException e) {
+        LOG.warn("Failed to stop stack containers before reprovisioning.", e);
+      }
+      dockerService.removeContainers(oldContainerIds);
+    }
+
+    provisionStack();
+  }
 
 	@Override
 	protected Map<String, Object> toResponse(StackState stack) {

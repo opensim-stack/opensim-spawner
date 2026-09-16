@@ -28,6 +28,28 @@
 	"tokens": [],
 	"exports": [
 	],
+    "configuration": [
+        {
+            "name": "OPENCODE_INITIAL_PROVIDER",
+            "type": "TEXT",
+            "description": "The initial OpenCode provider ID, e.g. `opencode`, `opencode-go`, `github-copilot` etc."
+        },
+        {
+            "name": "OPENCODE_INITIAL_MODEL",
+            "type": "TEXT",
+            "description": "The initial OpenCode model ID that the providere supports, e.g. `glm-5.3`, `gpt-5`,  etc."
+        },
+        {
+            "name": "OPENSIM_LOGIN_TIMEOUT_SECONDS",
+            "type": "TEXT",
+            "description": "Login timeout in seconds for the bot to login to the OpenSimulator grid. Default is 30 seconds."
+        },
+        {
+            "name": "WEAR_FOLDER_NAME",
+            "type": "TEXT",
+            "description": "The name of the folder in the bot's inventory that should be automaticallly worn on login."
+        }
+    ],
 	"extensions": {
 		"GOVERNOR": {
 			"level": 0,
@@ -113,9 +135,6 @@
 						"OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
 						"OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%"
 					},
-                    "ports": {
-                        "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
-                    },
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
 					}

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenSim Spawner UI - Variables</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            dark: {
+              900: '#0a0a12',
+              800: '#12121f',
+              700: '#1a1a2e'
+            },
+            neon: {
+              primary: '#8b5cf6',
+              secondary: '#d946ef',
+              accent: '#06b6d4'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body class="min-h-screen bg-dark-900 text-gray-100 dark">
+  <canvas id="code-rain"></canvas>
+  <div class="cyber-grid"></div>
+  <div class="shape shape-1"></div>
+  <div class="shape shape-2"></div>
+  <div class="shape shape-3"></div>
+
+  <div class="relative z-10 min-h-screen flex">
+    <spawner-side-menu></spawner-side-menu>
+
+    <main class="flex-1 p-6 lg:p-10">
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-6 flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-3xl lg:text-4xl font-bold text-white">Component Configuration</h1>
+            <p id="variables-subtitle" class="text-gray-400"></p>
+          </div>
+          <a id="variables-back-link" href="/ui/bots.html" class="px-4 py-2 rounded-lg border border-neon-primary/50 text-gray-100 hover:bg-neon-primary/10 transition-colors">Back</a>
+        </div>
+
+        <section class="feature-card bg-dark-800/80 backdrop-blur rounded-xl p-6 border border-neon-primary/20">
+          <form id="variables-form" class="space-y-4">
+            <div id="variables-list" class="space-y-3"></div>
+            <p id="variables-error" class="hidden text-sm text-rose-300"></p>
+            <div class="flex justify-end">
+              <button id="variables-save" type="submit" class="px-4 py-2 rounded-lg bg-neon-primary text-white font-semibold hover:bg-violet-500 transition-colors btn-glow">Save</button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <div id="toast-container" class="fixed right-6 top-6 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-3 pointer-events-none"></div>
+    </main>
+  </div>
+
+  <script type="module" src="/ui/menu-component.js"></script>
+  <script src="/ui/ui-common.js"></script>
+  <script type="module" src="/ui/variables.js"></script>
+</body>
+</html>

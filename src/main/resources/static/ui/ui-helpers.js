@@ -138,7 +138,8 @@ const iconByAction = {
   female: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="7" r="4"></circle><path d="M10 11v6"></path><path d="M7 14h6"></path></svg>',
   neutral: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="5"></circle><path d="M10 3.8v2.2"></path><path d="M10 14v2.2"></path></svg>',
   standalone: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="6"></circle><path d="M10 4v12"></path><path d="M4 10h12"></path></svg>',
-  robust: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6.2 10 3l6 3.2-6 3.2L4 6.2Z"></path><path d="M4 10l6 3.2 6-3.2"></path><path d="M4 13.8 10 17l6-3.2"></path></svg>'
+  robust: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6.2 10 3l6 3.2-6 3.2L4 6.2Z"></path><path d="M4 10l6 3.2 6-3.2"></path><path d="M4 13.8 10 17l6-3.2"></path></svg>',
+  settings: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="10" r="2.4"></circle><path d="M10 3.8v1.8"></path><path d="M10 14.4v1.8"></path><path d="M3.8 10h1.8"></path><path d="M14.4 10h1.8"></path><path d="m5.6 5.6 1.3 1.3"></path><path d="m13.1 13.1 1.3 1.3"></path><path d="m14.4 5.6-1.3 1.3"></path><path d="m6.9 13.1-1.3 1.3"></path></svg>'
 };
 
 export const actionIconSvg = (action) => iconByAction[action] || '';

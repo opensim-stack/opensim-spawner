@@ -1,4 +1,4 @@
-import { fetchWithTimeout, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
+import { fetchWithTimeout, iconSpan, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
 
 const addOnsList = document.getElementById('add-ons-list');
 const addOnsEmpty = document.getElementById('add-ons-empty');
@@ -166,6 +166,8 @@ const renderRow = (addOn) => {
   const addOnName = normalizedText(manifest.name, '');
   const name = normalizedText(manifest.name, 'Unnamed add-on');
   const levels = extensionLevels(manifest);
+  const configItems = Array.isArray(manifest.configuration) ? manifest.configuration : [];
+  const hasConfiguration = configItems.length > 0;
 
   const row = document.createElement('div');
   row.className = 'grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-3 items-center';
@@ -212,7 +214,26 @@ const renderRow = (addOn) => {
   left.appendChild(details);
 
   const toggleHost = document.createElement('div');
-  toggleHost.className = 'flex items-center';
+  toggleHost.className = 'flex items-center gap-3';
+
+  if (hasConfiguration) {
+    if (addOn?.enabled) {
+      const configureLink = document.createElement('a');
+      configureLink.href = `/ui/variables.html?type=ADD_ON&name=${encodeURIComponent(addOnName || name)}`;
+      configureLink.className = 'inline-flex h-8 w-8 items-center justify-center rounded-md border border-neon-primary/40 text-neon-accent hover:border-neon-accent hover:text-neon-secondary';
+      configureLink.title = `Configure ${name}`;
+      configureLink.setAttribute('aria-label', `Configure ${name}`);
+      configureLink.innerHTML = iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0');
+      toggleHost.appendChild(configureLink);
+    } else {
+      const disabledCog = document.createElement('span');
+      disabledCog.className = 'inline-flex h-8 w-8 items-center justify-center rounded-md border border-neon-primary/20 text-gray-500';
+      disabledCog.title = `Enable ${name} to configure variables`;
+      disabledCog.innerHTML = iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0');
+      toggleHost.appendChild(disabledCog);
+    }
+  }
+  
   toggleHost.appendChild(createToggle(addOnName || name, !!addOn?.enabled));
 
   row.appendChild(left);

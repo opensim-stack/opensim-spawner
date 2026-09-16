@@ -27,8 +27,9 @@ class BotLevelProfileServiceTest {
         props.setConfigDir(tempDir.resolve("config"));
         Files.createDirectories(props.getConfigDir());
         var resolver = new TemplateResolver();
-        var service = new BotLevelProfileService(new ObjectMapper(), props, resolver,
-        		new StackStateRepository(new ObjectMapper(), tempDir.resolve("grids"), props, resolver, new RandomPasswordService()));
+        var stackStateRepository = new StackStateRepository(new ObjectMapper(), tempDir.resolve("grids"), props, resolver,
+                new RandomPasswordService());
+        var service = new BotLevelProfileService(new ObjectMapper(), props, resolver, stackStateRepository);
 
         var bot = new BotInstanceData();
         bot.setFirst("Ada");
@@ -36,7 +37,8 @@ class BotLevelProfileServiceTest {
         bot.setLevel(BotLevel.BUILDER);
         bot.setPassword("pw");
 
-        var plan = service.resolvePlan(bot, Map.of());
+        var env = stackStateRepository.resolveEnvironment(service.component().getConstants(), Map.of());
+        var plan = service.resolvePlan(bot, env);
         assertEquals(2, plan.containers().size());
         var hasBotsPath = plan.containers().stream()
                 .flatMap(container -> container.getVolumes().entrySet().stream())

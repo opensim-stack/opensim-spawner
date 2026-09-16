@@ -174,10 +174,14 @@ public abstract class AbstractContainerGroupProvisioningService<
 	}
 
 	protected boolean installExports(String name, COM component) {
+    return installExports(name, component, component.getConstants());
+  }
+
+  protected boolean installExports(String name, COM component, Map<String, String> resolvedEnvironment) {
 		if(!component.getExports().isEmpty()) {
 			StackState stackState = stackStateRepository.get();
 			for(var varName : component.getExports()) {
-				var value = component.getConstants().get(varName);
+        var value = resolvedEnvironment.getOrDefault(varName, component.getConstants().get(varName));
 				if(value == null || value.isBlank()) {
 					throw new IllegalStateException("Component " + name + " export '" + varName + "' is not defined in manifest constants.");
 				}

@@ -345,6 +345,14 @@ public class BotProvisioningService
 		provisionBot(bot, new ArrayList<>(), new ArrayList<>(), plan);
 	}
 
+	public synchronized void reconfigureBot(String name, Map<String, String> requestFields) {
+		var bot = stateRepository.load(name)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+		bot.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
+		stateRepository.save(bot);
+		reprovisionBot(bot);
+	}
+
 	private void provisionBot(BotInstanceData bot, List<Path> materializedFiles, List<String> createdContainerIds,
 			ResolvedBotPlan plan) {
 		LOG.info("Resolved {} container spec(s) for bot {}.", plan.containers().size(), bot.displayName());
