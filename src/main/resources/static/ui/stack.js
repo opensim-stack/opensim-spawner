@@ -7,6 +7,9 @@ const updateAllButton = document.getElementById('update-all');
 const toastContainer = document.getElementById('toast-container');
 const REQUEST_RECOVERY_WINDOW_MS = 180000;
 const REQUEST_RECOVERY_POLL_MS = 3000;
+const SELF_UPDATE_DOWN_WAIT_MS = 120000;
+const SELF_UPDATE_AUTH_WAIT_MS = 300000;
+const SELF_UPDATE_POLL_MS = 2000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const buttonClassesByAction = {
@@ -59,6 +62,53 @@ const callUpdateAll = async () => {
     throw new Error(message || `Could not update all stack containers (${response.status}).`);
   }
   return response.json();
+};
+
+const isConnectionFailure = (error) => {
+  if (!error) {
+    return false;
+  }
+  if (error instanceof TypeError) {
+    return true;
+  }
+  const message = String(error.message || '').toLowerCase();
+  return message.includes('failed to fetch') || message.includes('networkerror') || message.includes('network error');
+};
+
+const waitForSelfUpdateReauth = async () => {
+  const shutdownDeadline = Date.now() + SELF_UPDATE_DOWN_WAIT_MS;
+  let sawShutdown = false;
+
+  while (Date.now() < shutdownDeadline) {
+    try {
+      await fetchWithTimeout('/api/stack', { cache: 'no-store' }, 5000);
+    } catch (error) {
+      if (isConnectionFailure(error)) {
+        sawShutdown = true;
+        break;
+      }
+    }
+    await sleep(SELF_UPDATE_POLL_MS);
+  }
+
+  if (!sawShutdown) {
+    throw new Error('Self-update did not appear to stop the spawner in time.');
+  }
+
+  const authDeadline = Date.now() + SELF_UPDATE_AUTH_WAIT_MS;
+  while (Date.now() < authDeadline) {
+    try {
+      const response = await fetchWithTimeout('/api/stack', { cache: 'no-store' }, 5000);
+      if (response.status === 401) {
+        return;
+      }
+    } catch (_ignored) {
+      // Still offline while the replacement instance is starting.
+    }
+    await sleep(SELF_UPDATE_POLL_MS);
+  }
+
+  throw new Error('Self-update completed but authentication reset was not detected in time.');
 };
 
 const actionButton = (action, containerName) => {
@@ -161,6 +211,12 @@ const renderRow = (container) => {
       try {
         await withWorkingOverlay(async () => {
           const result = await callAction(container.containerName, action);
+          if (result?.selfUpdate) {
+            showToast(toastContainer, 'Spawner self-update started. Waiting for restart ...', 'info');
+            await waitForSelfUpdateReauth();
+            window.location.assign('/ui/stack.html');
+            return;
+          }
           showToast(toastContainer, `Container ${result.container}: ${result.action} requested (${result.status}).`, 'success');
           await loadStack();
         }, `${actionVerb(action)} container ${container.containerName} ...`);
@@ -278,6 +334,12 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await withWorkingOverlay(async () => {
         const response = await callUpdateAll();
+        if (response?.selfUpdate) {
+          showToast(toastContainer, 'Spawner self-update started. Waiting for restart ...', 'info');
+          await waitForSelfUpdateReauth();
+          window.location.assign('/ui/stack.html');
+          return;
+        }
         await loadStack();
         showToast(toastContainer, `Updated ${response.count || 0} container(s).`, 'success');
       }, 'Updating containers sequentially ...');

@@ -5,5 +5,6 @@ public record StackContainerView(
         String status,
         String image,
         boolean running,
-        boolean updateAvailable) {
+        boolean updateAvailable,
+        boolean selfUpdate) {
 }

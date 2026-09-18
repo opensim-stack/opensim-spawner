@@ -112,6 +112,10 @@ class BotProvisioningServiceTest {
 		public ContainerDetails inspect(String id) {
 			return null;
 		}
+
+    @Override
+    public void scheduleSelfUpdate(String containerName, String targetImage) {
+    }
     }
 
     @TempDir

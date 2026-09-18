@@ -29,6 +29,7 @@ import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import jakarta.annotation.PreDestroy;
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.StackContainerView;
+import uk.co.bithatch.opensim.spawner.service.UpdateService.StackContainerUpdateStatus;
 
 @Service
 public class StackContainerService {
@@ -87,7 +88,8 @@ public class StackContainerService {
                     state,
                     container.getImage(),
                     "running".equalsIgnoreCase(container == null ? null : container.getState()),
-                    updateAvailable));
+                    updateAvailable,
+                    false));
         }
 
         response.sort(Comparator.comparing(StackContainerView::containerName));
@@ -97,6 +99,7 @@ public class StackContainerService {
     public StackContainerView applyAction(String containerName, String action) {
         var normalizedName = normalizeContainerName(containerName);
         var normalizedAction = normalizeAction(action);
+        var selfUpdate = false;
 
         try {
             dockerClient.inspectContainerCmd(normalizedName).exec();
@@ -117,7 +120,8 @@ public class StackContainerService {
                         throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                                 "Update service is not available.");
                     }
-                    updateService.updateContainer(normalizedName);
+                    var updateStatus = updateService.updateContainer(normalizedName);
+                    selfUpdate = isSpawnerImage(updateStatus);
                 }
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Unsupported action '" + action + "'. Supported actions: start, stop, restart, update.");
@@ -130,10 +134,10 @@ public class StackContainerService {
         }
 
         try {
-            return inspectView(normalizedName);
+            return inspectView(normalizedName, selfUpdate);
         } catch (RuntimeException e) {
             // The action has already been issued, so return best-effort status.
-            return new StackContainerView(normalizedName, "unknown",  "unknown", false, false);
+            return new StackContainerView(normalizedName, "unknown",  "unknown", false, false, selfUpdate);
         }
     }
 
@@ -144,13 +148,22 @@ public class StackContainerService {
         var updated = updateService.updateAllSequentially();
         var views = new ArrayList<StackContainerView>();
         for (var status : updated) {
-            views.add(inspectView(status.containerName()));
+            var selfUpdate = isSpawnerImage(status);
+            try {
+                views.add(inspectView(status.containerName(), selfUpdate));
+            } catch (RuntimeException ignored) {
+                views.add(new StackContainerView(status.containerName(), "unknown", "unknown", false, false, selfUpdate));
+            }
         }
         views.sort(Comparator.comparing(StackContainerView::containerName));
         return views;
     }
 
     private StackContainerView inspectView(String containerName) {
+        return inspectView(containerName, false);
+    }
+
+    private StackContainerView inspectView(String containerName, boolean selfUpdate) {
         var inspect = dockerClient.inspectContainerCmd(containerName).exec();
         var state = inspect.getState();
         var running = state != null && Boolean.TRUE.equals(state.getRunning());
@@ -167,7 +180,20 @@ public class StackContainerService {
                 normalizeState(state == null ? null : state.getStatus(), null),
                 inspect.getConfig().getImage(),
                 running,
-                updates.containsKey(containerName) && updates.get(containerName).updateAvailable());
+                updates.containsKey(containerName) && updates.get(containerName).updateAvailable(),
+                selfUpdate);
+    }
+
+    private static boolean isSpawnerImage(StackContainerUpdateStatus status) {
+        if (status == null || status.targetImage() == null) {
+            return false;
+        }
+        var repository = DockerService.repositoryPart(status.targetImage());
+        if (repository.isBlank()) {
+            return false;
+        }
+        var tail = repository.substring(repository.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+        return "opensim-spawner".equals(tail);
     }
 
     public List<NetworkContainerPortsView> listNetworkContainerPorts() {

@@ -22,6 +22,10 @@ public interface DockerService {
 	}
 	
 	String DIGEST_UNKNOWN = "unknown";
+	String ENV_SELF_UPDATE_WORKER = "SPAWNER_SELF_UPDATE_WORKER";
+	String ENV_SELF_UPDATE_TARGET_CONTAINER = "SPAWNER_SELF_UPDATE_TARGET_CONTAINER";
+	String ENV_SELF_UPDATE_TARGET_IMAGE = "SPAWNER_SELF_UPDATE_TARGET_IMAGE";
+	String ENV_SELF_UPDATE_PULL = "SPAWNER_SELF_UPDATE_PULL";
 
 	List<String> createContainers(Collection<ContainerSpec> specs);
 
@@ -58,6 +62,8 @@ public interface DockerService {
 	}
 
 	void recreateContainer(String containerName, String targetImage, Consumer<ContainerUpdateContext> context);
+
+	void scheduleSelfUpdate(String containerName, String targetImage);
 
 	void pullImage(String image);
 

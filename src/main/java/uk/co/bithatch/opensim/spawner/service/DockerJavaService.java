@@ -52,6 +52,8 @@ public class DockerJavaService implements DockerService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DockerJavaService.class);
     static final String LABEL_IMAGE_REF = "com.bithatch.opensim.image.ref";
+    private static final String LABEL_SELF_UPDATE_WORKER = "com.bithatch.opensim.self-update-worker";
+    private static final String LABEL_SELF_UPDATE_TARGET = "com.bithatch.opensim.self-update-target";
 
     private final DockerClient dockerClient;
     private final SpawnerProperties properties;
@@ -217,6 +219,60 @@ public class DockerJavaService implements DockerService {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Failed to replace container " + oldContainerName + " with updated image: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void scheduleSelfUpdate(String containerName, String targetImage) {
+        var inspect = inspectContainer(containerName);
+        var oldContainerName = trimLeadingSlash(inspect.getName());
+        removeExistingSelfUpdateWorkers(oldContainerName);
+
+        var helperName = "spawner-self-update-worker-" + System.currentTimeMillis();
+        var helperHostConfig = HostConfig.newHostConfig()
+                .withAutoRemove(Boolean.TRUE)
+                .withRestartPolicy(RestartPolicy.noRestart())
+                .withBinds(new Bind("/var/run/docker.sock", new Volume("/var/run/docker.sock")));
+
+        var inspectedHostConfig = inspect.getHostConfig();
+        if (inspectedHostConfig != null) {
+            if (inspectedHostConfig.getBinds() != null && inspectedHostConfig.getBinds().length > 0) {
+                var existing = new ArrayList<Bind>(Arrays.asList(inspectedHostConfig.getBinds()));
+                var hasDockerSocket = existing.stream()
+                        .anyMatch(bind -> bind != null
+                                && bind.getPath() != null
+                                && "/var/run/docker.sock".equals(bind.getPath()));
+                if (!hasDockerSocket) {
+                    existing.add(new Bind("/var/run/docker.sock", new Volume("/var/run/docker.sock")));
+                }
+                helperHostConfig.withBinds(existing);
+            }
+            var networkMode = normalizeNetworkName(inspectedHostConfig.getNetworkMode());
+            if (networkMode != null) {
+                helperHostConfig.withNetworkMode(networkMode);
+            }
+            if (inspectedHostConfig.getExtraHosts() != null && inspectedHostConfig.getExtraHosts().length > 0) {
+                helperHostConfig.withExtraHosts(inspectedHostConfig.getExtraHosts());
+            }
+        }
+
+        var helperEnv = mergeEnv(inspect.getConfig() == null ? null : inspect.getConfig().getEnv(), Map.of(
+                ENV_SELF_UPDATE_WORKER, "true",
+                ENV_SELF_UPDATE_TARGET_CONTAINER, oldContainerName,
+                ENV_SELF_UPDATE_TARGET_IMAGE, targetImage,
+                ENV_SELF_UPDATE_PULL, "true"));
+
+        var helperLabels = new LinkedHashMap<String, String>();
+        helperLabels.put(LABEL_SELF_UPDATE_WORKER, "true");
+        helperLabels.put(LABEL_SELF_UPDATE_TARGET, oldContainerName);
+
+        dockerClient.createContainerCmd(targetImage)
+                .withName(helperName)
+                .withHostConfig(helperHostConfig)
+                .withEnv(helperEnv)
+                .withLabels(helperLabels)
+                .exec();
+        dockerClient.startContainerCmd(helperName).exec();
+        LOG.info("Scheduled self-update for {} via worker {} using image {}.", oldContainerName, helperName, targetImage);
     }
 
     @Override
@@ -992,5 +1048,37 @@ public class DockerJavaService implements DockerService {
             labels.put(LABEL_IMAGE_REF, resolved);
         }
         return labels;
+    }
+
+    private void removeExistingSelfUpdateWorkers(String targetContainerName) {
+        var existingWorkers = dockerClient.listContainersCmd().withShowAll(true).exec().stream()
+                .filter(container -> container != null && container.getLabels() != null)
+                .filter(container -> "true".equalsIgnoreCase(container.getLabels().get(LABEL_SELF_UPDATE_WORKER)))
+                .filter(container -> targetContainerName.equals(container.getLabels().get(LABEL_SELF_UPDATE_TARGET)))
+                .toList();
+
+        for (var worker : existingWorkers) {
+            try {
+                dockerClient.removeContainerCmd(worker.getId()).withForce(true).exec();
+                LOG.info("Removed stale self-update worker {} for target {}.", worker.getId(), targetContainerName);
+            } catch (NotFoundException ignored) {
+                LOG.debug("Self-update worker {} already removed.", worker.getId());
+            }
+        }
+    }
+
+    private static String[] mergeEnv(String[] existing, Map<String, String> overrides) {
+        var merged = new LinkedHashMap<String, String>();
+        if (existing != null) {
+            for (var entry : existing) {
+                if (entry == null || entry.isBlank() || !entry.contains("=")) {
+                    continue;
+                }
+                var split = entry.split("=", 2);
+                merged.put(split[0], split.length > 1 ? split[1] : "");
+            }
+        }
+        merged.putAll(overrides);
+        return merged.entrySet().stream().map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new);
     }
 }

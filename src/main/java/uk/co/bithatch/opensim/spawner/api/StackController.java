@@ -43,6 +43,7 @@ public class StackController {
         response.put("status", status.status());
         response.put("running", status.running());
         response.put("updateAvailable", status.updateAvailable());
+        response.put("selfUpdate", status.selfUpdate());
         response.put("ok", true);
         return response;
     }
@@ -54,6 +55,7 @@ public class StackController {
         response.put("ok", true);
         response.put("updated", statuses.stream().map(StackContainerView::containerName).toList());
         response.put("count", statuses.size());
+        response.put("selfUpdate", statuses.stream().anyMatch(StackContainerView::selfUpdate));
         return response;
     }
 }

@@ -104,6 +104,14 @@ public class UpdateService {
         if (!isLocalImage(state.targetImage())) {
             dockerService.pullImage(state.targetImage());
         }
+
+        if (isSpawnerImage(state.targetImage())) {
+            dockerService.scheduleSelfUpdate(state.containerName(), state.targetImage());
+            LOG.info("Scheduled self-update worker for container {}. Current process may terminate shortly.",
+                    state.containerName());
+            return state;
+        }
+
         dockerService.recreateContainer(state.containerName(), state.targetImage());
         var refreshed = inspectContainerForUpdate(normalizedName);
         LOG.info("Updated container {}. newLocalDigest={}, newRemoteDigest={}, updateAvailable={}.",
@@ -120,7 +128,13 @@ public class UpdateService {
         var updates = availableUpdatesOnly();
         var updated = new ArrayList<StackContainerUpdateStatus>();
         for (var candidate : updates) {
-            updated.add(updateContainer(candidate.containerName()));
+            var result = updateContainer(candidate.containerName());
+            updated.add(result);
+            if (isSpawnerImage(result.targetImage())) {
+                LOG.info("Stopping bulk update loop after scheduling spawner self-update for {}.",
+                        result.containerName());
+                break;
+            }
         }
         return updated;
     }
@@ -147,7 +161,12 @@ public class UpdateService {
             LOG.info("Daily stack update check found {} container update(s). Applying sequentially.", candidates.size());
             for (var candidate : candidates) {
                 try {
-                    updateContainer(candidate.containerName());
+                    var updated = updateContainer(candidate.containerName());
+                    if (isSpawnerImage(updated.targetImage())) {
+                        LOG.info("Stopping automatic update loop after scheduling spawner self-update for {}.",
+                                updated.containerName());
+                        break;
+                    }
                 } catch (RuntimeException e) {
                     LOG.warn("Automatic update failed for container {}.", candidate.containerName(), e);
                 }
