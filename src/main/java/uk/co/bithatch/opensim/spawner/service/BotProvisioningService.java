@@ -2,6 +2,10 @@ package uk.co.bithatch.opensim.spawner.service;
 
 import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -59,7 +63,7 @@ public class BotProvisioningService
 			SimulatorProvisioningService simulatorProvisioningService, 
 			HandlerStateRepository handlerStateRepository,
 			RandomPasswordService randomPasswordService) {
-		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService);
+		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService, "bots");
 		this.profileService = profileService;
 		this.openSimService = openSimService;
 		this.passwordService = passwordService;
@@ -297,11 +301,6 @@ public class BotProvisioningService
 				throw new IllegalArgumentException("No appearance archive found for appearance '" + appearance
 						+ "' and gender '" + (gender == null ? "" : gender.name().toLowerCase(Locale.ROOT)) + "'.");
 			}
-			var workspaceArchivePath = copyArchiveToWorkspace(appearanceArchiveResource, materializedFiles);
-			openSimService.loadInventoryArchive(first, last, "/", password, workspaceArchivePath.toString());
-			containerRequestFields.put("WEAR_FOLDER_NAME",
-					extractOutfitNameFromArchivePath(workspaceArchivePath.toString()));
-
 			var bot = new BotInstanceData();
 			bot.setFirst(first);
 			bot.setLast(last);
@@ -313,6 +312,12 @@ public class BotProvisioningService
 			bot.setUuid(uuid);
 			bot.setRequestFields(containerRequestFields);
 			stateRepository.save(bot);
+
+			var workspaceArchivePath = copyArchiveToWorkspace(appearanceArchiveResource, bot, materializedFiles);
+			openSimService.loadInventoryArchive(first, last, "/", password, workspaceArchivePath.toString());
+			containerRequestFields.put("WEAR_FOLDER_NAME",
+					extractOutfitNameFromArchivePath(workspaceArchivePath.toString()));
+
 			provisionBot(bot, materializedFiles, createdContainerIds,
 					profileService.resolvePlan(bot, resolveEnvironment(profileService.component().getConstants(),  bot.getRequestFields())));
 			return bot;
@@ -555,5 +560,44 @@ public class BotProvisioningService
 		status.put("uuid", bot.getUuid());
 		status.put("model", bot.getModel());
 		return status;
+	}
+
+	public synchronized void importIAR(String first, String last, InputStream archiveStream, String archiveFileName,
+			String inventoryPath) {
+		var normalizedFirst = normalizeBotName(first);
+		var normalizedLast = normalizeBotName(last);
+		var botName = normalizeRequiredName("importIAR", normalizedFirst + "-" + normalizedLast);
+
+		var bot = stateRepository.load(key(normalizedFirst, normalizedLast))
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+
+		if (archiveFileName == null || archiveFileName.isBlank()) {
+			throw new IllegalArgumentException("archive filename is required.");
+		}
+		var filename = archiveFileName.trim();
+
+		var targetPath = inventoryPath == null || inventoryPath.isBlank()
+				? Path.of("Imports", filename)
+				: Path.of(inventoryPath.trim());
+
+		var workspaceDir = getWorkspaceDir(bot);
+		try {
+			Files.createDirectories(workspaceDir);
+		}
+		catch (IOException ioe) {
+			throw new UncheckedIOException("Failed to create workspace dir for importIAR of bot " + botName + ".", ioe);
+		}
+
+		var destination = workspaceDir.resolve(filename);
+		try (var input = archiveStream) {
+			Files.copy(input, destination);
+		}
+		catch (IOException ioe) {
+			throw new UncheckedIOException("Failed to write imported archive " + destination + ".", ioe);
+		}
+
+		LOG.info("Imported IAR '{}' into {} {} at '{}'.", filename, normalizedFirst, normalizedLast, targetPath);
+		openSimService.loadInventoryArchive(normalizedFirst, normalizedLast, targetPath.toString(), bot.getPassword(),
+				destination.toString());
 	}
 }

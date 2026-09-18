@@ -32,7 +32,7 @@ public class StackProvisioningService extends AbstractContainerGroupProvisioning
 			TemplateResolver templateResolver, 
 			SpawnerProperties properties,
 			RandomPasswordService randomPasswordService) {
-		super(stateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService);
+		super(stateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService, "grid");
 		this.profileService = profileService;
 	}
 	

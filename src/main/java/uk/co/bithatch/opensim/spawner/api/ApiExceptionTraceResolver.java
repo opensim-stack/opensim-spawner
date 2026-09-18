@@ -7,6 +7,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.server.ResponseStatusException;
@@ -67,6 +68,9 @@ public class ApiExceptionTraceResolver implements HandlerExceptionResolver {
     private static int resolveStatus(Exception ex) {
         if (ex instanceof ResponseStatusException statusException) {
             return statusException.getStatusCode().value();
+        }
+        if (ex instanceof MaxUploadSizeExceededException) {
+            return HttpStatus.PAYLOAD_TOO_LARGE.value();
         }
         var responseStatus = ex.getClass().getAnnotation(ResponseStatus.class);
         if (responseStatus != null) {

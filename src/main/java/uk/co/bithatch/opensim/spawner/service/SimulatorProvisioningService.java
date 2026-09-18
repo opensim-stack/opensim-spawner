@@ -48,7 +48,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
             PortService portService,
 			RandomPasswordService randomPasswordService
 			) {
-		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService);
+		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService, "sins");
 		this.portService = portService;
 		this.oars = oars;
 		this.openSimService = openSimService;
@@ -181,7 +181,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
         	if(oar != null) {
         		// TODO standalone sims .. we need to wait for the console to be ready before we can import the OAR, otherwise it will fail with "Region not found" errors
         		LOG.info("Sim {} requires a region, importing OAR {}.", name, oarName);
-	            var workspaceArchivePath = copyArchiveToWorkspace(oar.archivePath(), materializedFiles);
+	            var workspaceArchivePath = copyArchiveToWorkspace(oar.archivePath(), sim, materializedFiles);
 	            
 	            for(int i = 0 ; i < MAX_IMPORT_RETRIES ; i++) {
 	            	try {

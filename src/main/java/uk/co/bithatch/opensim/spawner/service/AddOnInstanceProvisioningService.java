@@ -74,7 +74,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			BotProvisioningService botProvisioningService,
 			DockerService dockerService,
 			RandomPasswordService randomPasswordService) {
-		super(stackStateRepository, addOnInstanceStateRepository, dockerService, templateResolver, properties, randomPasswordService);
+		super(stackStateRepository, addOnInstanceStateRepository, dockerService, templateResolver, properties, randomPasswordService, "add-ons");
 		this.addOnRepository = addOnRepository;
 		this.botProvisioningService = botProvisioningService;
 		this.properties = properties;

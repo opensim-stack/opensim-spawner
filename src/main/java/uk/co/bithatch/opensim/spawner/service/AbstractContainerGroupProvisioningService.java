@@ -1,6 +1,7 @@
 package uk.co.bithatch.opensim.spawner.service;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,6 +47,7 @@ public abstract class AbstractContainerGroupProvisioningService<
     protected final TemplateResolver templateResolver;
     protected final RandomPasswordService randomPasswordService;
 	protected final StackStateRepository stackStateRepository;
+    protected final String workspaceDirName;
 
 	public AbstractContainerGroupProvisioningService(
 			StackStateRepository stackStateRepository,
@@ -53,13 +55,15 @@ public abstract class AbstractContainerGroupProvisioningService<
 			DockerService dockerService,
 			TemplateResolver templateResolver,
 			SpawnerProperties properties,
-			RandomPasswordService randomPasswordService) {
+			RandomPasswordService randomPasswordService,
+            String workspaceDirName) {
 		this.stateRepository = stateRepository;
 		this.dockerService = dockerService;
 		this.properties = properties;
 		this.templateResolver = templateResolver;
 		this.randomPasswordService = randomPasswordService;
 		this.stackStateRepository = stackStateRepository;
+        this.workspaceDirName = workspaceDirName;
 	}
 	
 	public Map<String, String> resolveEnvironment(Map<String, String> defaultVariables, Map<String, String> requestVariables) {
@@ -263,8 +267,20 @@ public abstract class AbstractContainerGroupProvisioningService<
         }
     }
 
-    protected java.nio.file.Path copyArchiveToWorkspace(String resourcePath, List<java.nio.file.Path> writtenFiles) {
-        return ArchiveWorkspaceResolver.resolveArchivePath(resourcePath, properties.getWorkspaceDir(), writtenFiles, LOG);
+    protected java.nio.file.Path copyArchiveToWorkspace(String resourcePath, T instance, List<java.nio.file.Path> writtenFiles) {
+        var dir = getWorkspaceDir(instance);
+        try {
+            Files.createDirectories(dir);
+        }
+        catch(IOException ioe) {
+            throw new UncheckedIOException(ioe);
+        }
+        return ArchiveWorkspaceResolver.resolveArchivePath(resourcePath, dir , writtenFiles, LOG);
+    }
+
+    protected Path getWorkspaceDir(T instance) {
+        var dir = properties.getWorkspaceDir().resolve(workspaceDirName).resolve(instance.getName());
+        return dir;
     }
 
     protected void waitForStartupWindow(List<String> containerIds, Duration startupWindow, Duration pollInterval) {
