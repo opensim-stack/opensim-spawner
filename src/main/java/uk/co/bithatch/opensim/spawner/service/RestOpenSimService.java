@@ -112,6 +112,7 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     @Override
+    @Deprecated
 	public void loadRegionArchive(String archivePath) {
 	    	 try {
              LOG.info("Loading opensimulator archive '{}''.", archivePath);
@@ -125,6 +126,27 @@ public class RestOpenSimService implements OpenSimService {
          } catch (RuntimeException e) {
              throw new ExternalDependencyException("Failed to load OpenSimulator inventory archive via REST console. " + e.getMessage(), e);
          }
+		
+	}
+
+    @Override
+	public void loadRegionArchive(String regionName, String regionUuid, String archivePath, boolean merge, boolean skipAssets) {
+		try {
+			LOG.info("Loading opensimulator archive '{}'' (merge={}, skipAssets={}).", archivePath, merge, skipAssets);
+			var admin= openRemoteAdmin();
+			if(regionUuid != null && !regionUuid.isBlank()) {
+				admin.loadOarById(regionUuid, archivePath, merge, skipAssets);
+			}
+			else if(regionName != null && !regionName.isBlank()) {
+				admin.loadOarByName(regionName, archivePath, merge, skipAssets);
+			}
+			else {
+				throw new IllegalArgumentException("Either region name or region UUID must be provided to load OAR.");
+			}
+			LOG.info("Loaded opensimulator archive '{}'' (merge={}).", archivePath, merge);
+		} catch (RuntimeException e) {
+			throw new ExternalDependencyException("Failed to load OpenSimulator inventory archive via REST console. " + e.getMessage(), e);
+		}
 		
 	}
 

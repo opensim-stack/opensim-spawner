@@ -22,6 +22,8 @@ const regionOptionsForm = document.getElementById('region-options-form');
 const detailOptionPublic = document.getElementById('detail-option-public');
 const detailOptionVoice = document.getElementById('detail-option-voice');
 const saveRegionOptionsButton = document.getElementById('save-region-options');
+const restartActionLink = document.getElementById('detail-action-restart');
+const importOarLink = document.getElementById('detail-action-import-oar');
 const toastContainer = document.getElementById('toast-container');
 
 const addRegionModal = document.getElementById('add-region-modal');
@@ -150,6 +152,9 @@ const renderDetails = (region) => {
   if (!region) {
     detailsPanel.classList.add('hidden');
     detailsEmpty.classList.remove('hidden');
+    if (importOarLink) {
+      importOarLink.href = '/ui/import-oar.html';
+    }
     return;
   }
 
@@ -163,6 +168,15 @@ const renderDetails = (region) => {
   detailPort.textContent = Number.isFinite(regionPort) && regionPort > 0 ? String(regionPort) : 'Unknown';
   detailOptionPublic.checked = inferRegionPublic(region);
   detailOptionVoice.checked = inferRegionVoice(region);
+
+  if (importOarLink) {
+    const params = new URLSearchParams();
+    params.set('region', String(region.name || ''));
+    if (simulatorName) {
+      params.set('simulator', simulatorName);
+    }
+    importOarLink.href = `/ui/import-oar.html?${params.toString()}`;
+  }
 
   const flags = Array.isArray(region.flags) ? region.flags : [];
   detailFlags.innerHTML = '';
@@ -633,13 +647,26 @@ const actionIcon = (action) => {
 };
 
 const syncActionButtonIcons = () => {
-  document.querySelectorAll('button[data-region-action]').forEach((button) => {
+  document.querySelectorAll('button[data-region-action], a[data-region-action]').forEach((button) => {
     const action = String(button.getAttribute('data-region-action') || '').toLowerCase();
     if (!action) {
       return;
     }
     button.innerHTML = `${iconSpan(actionIcon(action), 'h-4 w-4 inline-block align-middle shrink-0')}<span>${actionLabel(action)}</span>`;
   });
+};
+
+const setActionBusy = (element, busy) => {
+  if (!element) {
+    return;
+  }
+  if ('disabled' in element) {
+    element.disabled = busy;
+    return;
+  }
+  element.classList.toggle('pointer-events-none', busy);
+  element.classList.toggle('opacity-60', busy);
+  element.setAttribute('aria-disabled', busy ? 'true' : 'false');
 };
 
 const submitRegionOptions = async (event) => {
@@ -688,7 +715,7 @@ const handleRegionActionClick = async (button) => {
     return;
   }
 
-  button.disabled = true;
+  setActionBusy(button, true);
   try {
     await withWorkingOverlay(async () => {
       await callRegionAction(selected.id, action);
@@ -704,7 +731,7 @@ const handleRegionActionClick = async (button) => {
   } catch (err) {
     showToast(toastContainer, err instanceof Error ? err.message : `Failed to ${action} region.`, 'error');
   } finally {
-    button.disabled = false;
+    setActionBusy(button, false);
   }
 };
 
@@ -745,8 +772,9 @@ document.addEventListener('DOMContentLoaded', () => {
   addRegionNextFreePortInput?.addEventListener('change', () => syncRegionPortField());
   addRegionForm?.addEventListener('submit', submitCreateRegion);
   regionOptionsForm?.addEventListener('submit', submitRegionOptions);
-  document.querySelectorAll('button[data-region-action]').forEach((button) => {
-    button.addEventListener('click', async () => {
+  document.querySelectorAll('button[data-region-action], a[data-region-action]').forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.preventDefault();
       await handleRegionActionClick(button);
     });
   });

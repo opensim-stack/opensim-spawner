@@ -1,13 +1,12 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import static uk.co.bithatch.opensim.spawner.domain.SpawnerStrings.normalize;
+import static uk.co.bithatch.opensim.spawner.domain.SpawnerStrings.normalizeBotName;
+import static uk.co.bithatch.opensim.spawner.domain.SpawnerStrings.normalizeRequiredName;
 import static uk.co.bithatch.opensim.spawner.state.BotStateRepository.key;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,7 +14,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.slf4j.Logger;
@@ -49,6 +47,7 @@ public class BotProvisioningService
 	private final Appearances appearances;
 	private final SimulatorProvisioningService simulatorProvisioningService;
 	private final HandlerStateRepository handlerStateRepository;
+	private final ImportService importService;
 
 	@Autowired
 	public BotProvisioningService(
@@ -63,7 +62,8 @@ public class BotProvisioningService
 			Appearances appearances,
 			SimulatorProvisioningService simulatorProvisioningService, 
 			HandlerStateRepository handlerStateRepository,
-			RandomPasswordService randomPasswordService) {
+			RandomPasswordService randomPasswordService,
+			ImportService importService) {
 		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService, "bots");
 		this.profileService = profileService;
 		this.openSimService = openSimService;
@@ -71,6 +71,7 @@ public class BotProvisioningService
 		this.appearances = appearances;
 		this.simulatorProvisioningService = simulatorProvisioningService;
 		this.handlerStateRepository = handlerStateRepository;
+		this.importService = importService;
 
 		reconnectKnownBotsOnStartup();
 
@@ -81,9 +82,9 @@ public class BotProvisioningService
 			BotStateRepository stateRepository, BotLevelProfileService profileService,
 			OpenSimService openSimService, DockerService dockerService, RandomPasswordService passwordService,
 			TemplateResolver templateResolver, SpawnerProperties properties, Appearances appearances,
-			RandomPasswordService randomPasswordService) {
+			RandomPasswordService randomPasswordService, ImportService importService) {
 		this(stackStateRepository, stateRepository, profileService, openSimService, dockerService, passwordService, templateResolver,
-				properties, appearances, null, null, randomPasswordService);
+				properties, appearances, null, null, randomPasswordService, importService);
 	}
 
 	public synchronized void addHandler(String botFirst, String botLast, String handlerFirst, String handlerLast) {
@@ -161,23 +162,6 @@ public class BotProvisioningService
 		}
 	}
 
-	private static String normalizeBotName(String value) {
-		var normalized = normalize(value);
-		return normalized.isBlank() ? "*" : normalized;
-	}
-
-	private static String normalizeRequiredName(String field, String value) {
-		var normalized = normalize(value);
-		if (normalized.isBlank()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing required field: " + field + ".");
-		}
-		return normalized;
-	}
-
-	private static String normalize(String value) {
-		return value == null ? "" : value.trim();
-	}
-
 	private static boolean sameIgnoreCase(String a, String b) {
 		return String.valueOf(a).equalsIgnoreCase(String.valueOf(b));
 	}
@@ -251,7 +235,7 @@ public class BotProvisioningService
 		var email = defaultEmail(first, last, createRequestFields.get("email"));
 		var appearance = resolveRequestedAppearance(level, createRequestFields);
 		var gender = resolveRequestedGender(level, createRequestFields);
-		var token = UUID.randomUUID().toString();
+		var token = randomPasswordService.nextPassword();
 		
 		var x = Integer.parseInt(defaultValue(createRequestFields.get("x"), "-1"));
 		var y = Integer.parseInt(defaultValue(createRequestFields.get("y"), "-1"));
@@ -567,44 +551,10 @@ public class BotProvisioningService
 			String inventoryPath) {
 		var normalizedFirst = normalizeBotName(first);
 		var normalizedLast = normalizeBotName(last);
-		var botName = normalizeRequiredName("importIAR", normalizedFirst + "-" + normalizedLast);
-
 		var bot = stateRepository.load(key(normalizedFirst, normalizedLast))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
 
-		if (archiveFileName == null || archiveFileName.isBlank()) {
-			throw new IllegalArgumentException("archive filename is required.");
-		}
-		var filename = archiveFileName.trim();
-		var foldername = filename;
-		if(foldername.toLowerCase().endsWith(".iar")) {
-			foldername = filename.substring(0, filename.length() - 4);
-		}
-
-		var targetPath = inventoryPath == null || inventoryPath.isBlank()
-				? Path.of("Imports", foldername)
-				: Path.of(inventoryPath.trim());
-
-		var workspaceDir = getWorkspaceDir(bot);
-		try {
-			Files.createDirectories(workspaceDir);
-		}
-		catch (IOException ioe) {
-			throw new UncheckedIOException("Failed to create workspace dir for importIAR of bot " + botName + ".", ioe);
-		}
-
-		var destination = workspaceDir.resolve(filename);
-		try (var input = archiveStream) {
-			Files.copy(input, destination, StandardCopyOption.REPLACE_EXISTING);
-		}
-		catch (IOException ioe) {
-			throw new UncheckedIOException("Failed to write imported archive " + destination + ".", ioe);
-		}
-
-		LOG.info("Imported IAR '{}' into {} {} at '{}'.", filename, normalizedFirst, normalizedLast, targetPath);
-		openSimService.loadInventoryArchive(normalizedFirst, normalizedLast, targetPath.toString(), bot.getPassword(),
-				destination.toString());
-		
-		return targetPath.toString();
+		return importService.importIAR(getWorkspaceDir(bot), normalizedFirst, normalizedLast, archiveStream, archiveFileName,
+				inventoryPath, bot.getPassword());
 	}
 }

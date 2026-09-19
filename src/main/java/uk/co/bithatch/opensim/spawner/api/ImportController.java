@@ -20,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import uk.co.bithatch.opensim.jlib.IO;
 import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
+import uk.co.bithatch.opensim.spawner.service.SimulatorProvisioningService;
 
 @RestController
 @RequestMapping("/api/import")
@@ -28,9 +29,75 @@ public class ImportController {
     private static final Logger LOG = LoggerFactory.getLogger(ImportController.class);
 
     private final BotProvisioningService provisioningService;
+    private final SimulatorProvisioningService simulatorProvisioningService;
 
-    public ImportController(BotProvisioningService provisioningService) {
+    public ImportController(BotProvisioningService provisioningService,
+    		SimulatorProvisioningService simulatorProvisioningService) {
         this.provisioningService = provisioningService;
+        this.simulatorProvisioningService = simulatorProvisioningService;
+    }
+
+    @GetMapping(path = "/oar-url/{region}",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public java.util.LinkedHashMap<String, Object> importOARByUrl(
+    		@PathVariable String region,
+            @RequestParam("url") String url,
+            @RequestParam(value = "merge", defaultValue = "true") boolean merge,
+            @RequestParam(value = "skipAssets", defaultValue = "false") boolean skipAssets
+          ) {
+        try {
+            var openUrl = URI.create(url.trim()).toURL();
+            var urlc = (HttpURLConnection)openUrl.openConnection();
+            var filename = IO.getFilename(urlc);
+            try (var stream = urlc.getInputStream()) {
+                if(filename == null) {
+                	filename = openUrl.getPath();
+                }
+                filename = Path.of(filename).getFileName().toString();
+                simulatorProvisioningService.importOAR(region, stream, filename, merge, skipAssets);
+            }
+
+            var response = new java.util.LinkedHashMap<String, Object>();
+            response.put("region", region);
+            response.put("file", filename);
+            response.put("url", url.trim());
+            response.put("imported", true);
+            return response;
+        } catch (IllegalArgumentException | IOException e) {
+            LOG.error("Failed to import OAR for region {} from URL {}.", region, url, e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
+
+    @PostMapping(path = "/oar/{region}",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public java.util.LinkedHashMap<String, Object> importOAR(@PathVariable String region,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "merge", defaultValue = "true") boolean merge,
+            @RequestParam(value = "skipAssets", defaultValue = "false") boolean skipAssets) {
+        try {
+            if (file == null || file.isEmpty()) {
+                throw new IllegalArgumentException("Uploaded file is empty.");
+            }
+
+            var filename = file.getOriginalFilename();
+            if (filename == null || filename.isBlank()) {
+                throw new IllegalArgumentException("Uploaded filename is missing.");
+            }
+            filename = Path.of(filename).getFileName().toString();
+
+            simulatorProvisioningService.importOAR(region, file.getInputStream(), filename, merge, skipAssets);
+
+            var response = new java.util.LinkedHashMap<String, Object>();
+            response.put("region", region);
+            response.put("file", filename);
+            response.put("imported", true);
+            return response;
+        } catch (IOException | IllegalArgumentException e) {
+            LOG.error("Failed to import IAR for region {}.", region, e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
     }
 
     @PostMapping(path = "/iar/{first}/{last}",

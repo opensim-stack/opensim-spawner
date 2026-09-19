@@ -70,4 +70,6 @@ public interface OpenSimService {
 	Optional<AgentLocation> findAgentByName(String first, String last);
 
 	Optional<AgentLocation> findAgentByUuid(String uuid);
+
+	void loadRegionArchive(String regionName, String regionUuid, String archivePath, boolean merge, boolean skipAssets);
 }

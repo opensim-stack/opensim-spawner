@@ -1,11 +1,11 @@
 import { fetchWithTimeout, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
 
 const form = document.getElementById('import-form');
-const pathInput = document.getElementById('import-path');
 const fileInput = document.getElementById('import-file');
 const urlInput = document.getElementById('import-url');
+const mergeInput = document.getElementById('import-merge');
+const skipAssetsInput = document.getElementById('import-skip-assets');
 const errorMessage = document.getElementById('import-error');
-const successMessage = document.getElementById('import-success');
 const submitButton = document.getElementById('import-submit');
 const subtitle = document.getElementById('import-subtitle');
 const backLink = document.getElementById('import-back-link');
@@ -13,21 +13,19 @@ const toastContainer = document.getElementById('toast-container');
 const dropTarget = document.getElementById('import-drop-target');
 
 const query = new URLSearchParams(window.location.search);
-const first = String(query.get('first') || '').trim();
-const last = String(query.get('last') || '').trim();
+const region = String(query.get('region') || '').trim();
+const simulator = String(query.get('simulator') || '').trim();
 
 if (subtitle) {
-  const label = `${first} ${last}`.trim();
-  subtitle.textContent = label
-    ? `Import an IAR file into ${label}'s inventory.`
-    : 'Import an IAR file into a bot\'s inventory.';
+  subtitle.textContent = region
+    ? `Import an OAR archive into region ${region}.`
+    : 'Import an OAR archive into a region.';
 }
 if (backLink) {
-  backLink.href = '/ui/bots.html';
+  backLink.href = simulator ? `/ui/regions.html?simulator=${encodeURIComponent(simulator)}` : '/ui/simulators.html';
 }
 
 function clearMessages() {
-  successMessage?.classList.add('hidden');
   errorMessage?.classList.add('hidden');
 }
 
@@ -170,13 +168,18 @@ document.addEventListener('DOMContentLoaded', () => {
     submitButton.disabled = true;
 
     try {
-      const inventoryPath = pathInput?.value?.trim() || '';
+      if (!region) {
+        throw new Error('Missing region parameter.');
+      }
+
       const urlValue = urlInput?.value?.trim() || '';
       const fileSelected = hasFileSelection();
       const urlSelected = Boolean(urlValue);
+      const merge = Boolean(mergeInput?.checked);
+      const skipAssets = Boolean(skipAssetsInput?.checked);
 
       if (!fileSelected && !urlSelected) {
-        throw new Error('Select an IAR file or provide an IAR URL.');
+        throw new Error('Select an OAR file or provide an OAR URL.');
       }
       if (fileSelected && urlSelected) {
         throw new Error('Choose either file upload or URL import, not both.');
@@ -188,36 +191,40 @@ document.addEventListener('DOMContentLoaded', () => {
         if (urlSelected) {
           const params = new URLSearchParams();
           params.set('url', urlValue);
-          if (inventoryPath) {
-            params.set('inventoryPath', inventoryPath);
-          }
+          params.set('merge', merge ? 'true' : 'false');
+          params.set('skipAssets', skipAssets ? 'true' : 'false');
           response = await fetchWithTimeout(
-            `/api/import/iar-url/${encodeURIComponent(first)}/${encodeURIComponent(last)}?${params.toString()}`,
+            `/api/import/oar-url/${encodeURIComponent(region)}?${params.toString()}`,
             { method: 'GET' }
           );
         } else {
           const formData = new FormData();
-          formData.append('inventoryPath', inventoryPath);
           if (fileInput?.files?.length) {
             formData.append('file', fileInput.files[0]);
           }
+          formData.append('merge', merge ? 'true' : 'false');
+          formData.append('skipAssets', skipAssets ? 'true' : 'false');
 
           response = await fetchWithTimeout(
-            `/api/import/iar/${encodeURIComponent(first)}/${encodeURIComponent(last)}`,
+            `/api/import/oar/${encodeURIComponent(region)}`,
             { method: 'POST', body: formData }
           );
         }
 
         if (!response.ok) {
           const text = await response.text();
-          throw new Error(text || `Could not import inventory (${response.status}).`);
+          throw new Error(text || `Could not import archive (${response.status}).`);
         }
-      }, urlSelected ? 'Fetching and importing inventory ...' : 'Uploading and importing inventory ...');
+      }, urlSelected ? 'Fetching and importing region archive ...' : 'Uploading and importing region archive ...');
 
-      showToast(toastContainer, 'Inventory imported successfully.', 'success');
-      window.location.assign('/ui/bots.html');
+      showToast(toastContainer, 'OAR imported successfully.', 'success');
+      if (simulator) {
+        window.location.assign(`/ui/regions.html?simulator=${encodeURIComponent(simulator)}`);
+      } else {
+        window.location.assign('/ui/simulators.html');
+      }
     } catch (err) {
-      const text = err instanceof Error ? err.message : 'Failed to import inventory.';
+      const text = err instanceof Error ? err.message : 'Failed to import OAR.';
       setError(text);
       showToast(toastContainer, text, 'error');
     } finally {

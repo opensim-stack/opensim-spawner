@@ -1,5 +1,8 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import static uk.co.bithatch.opensim.spawner.domain.SpawnerStrings.normalize;
+
+import java.io.InputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -34,6 +37,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 	private final OpenSimService openSimService;
 	private final SimulatorLevelProfileService profileService;
 	private final PortService portService;
+	private final ImportService importService;
     
 	public SimulatorProvisioningService(
 			StackStateRepository stackStateRepository,
@@ -46,7 +50,8 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 			SpawnerProperties properties,
             OARs oars,
             PortService portService,
-			RandomPasswordService randomPasswordService
+			RandomPasswordService randomPasswordService,
+			ImportService importService
 			) {
 		super(stackStateRepository, stateRepository, dockerService, templateResolver, properties, randomPasswordService, "sins");
 		this.portService = portService;
@@ -54,6 +59,7 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 		this.openSimService = openSimService;
 		this.passwordService = passwordService;
 		this.profileService = profileService;
+		this.importService = importService;
 	}
 
   public boolean hasActiveGridLoginService() {
@@ -79,6 +85,15 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
 
     return false;
   }
+
+	public void importOAR(String region, InputStream archiveStream, String archiveFileName, boolean merge, boolean skipAssets) {
+
+		var normalized = normalize(region);
+		var bot = stateRepository.load(normalized)
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+
+		importService.importOAR(getWorkspaceDir(bot), normalized, archiveStream, archiveFileName, merge, skipAssets);
+	}
 
     public synchronized SimulatorInstanceData createSim(String name, String levelName, Map<String, String> requestFields) {
         if (stateRepository.exists(name)) {

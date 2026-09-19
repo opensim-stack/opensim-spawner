@@ -146,7 +146,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                pw);
+                pw,
+                null);
 
         service.restart(key("Ada", "Actor"));
 
@@ -177,7 +178,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                new RandomPasswordService());
+                new RandomPasswordService(),
+                null);
 
         service.start(key("Ada", "Actor"));
 
@@ -211,7 +213,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                new RandomPasswordService());
+                new RandomPasswordService(),
+                null);
 
         assertEquals(List.of("container-1", "container-2"), dockerService.started);
         assertEquals(List.of(), dockerService.attachedLogs);
@@ -244,7 +247,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                new RandomPasswordService());
+                new RandomPasswordService(),
+                null);
 
         assertEquals(List.of(), dockerService.started);
         assertEquals(List.of("container-1", "container-2"), dockerService.attachedLogs);
@@ -274,7 +278,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                new RandomPasswordService());
+                new RandomPasswordService(),
+                null);
 
         service.stop(key("Ada", "Actor"));
 
@@ -297,7 +302,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                new RandomPasswordService());
+                new RandomPasswordService(),
+                null);
 
         var ex = assertThrows(ResponseStatusException.class, () -> service.restart(key("No", "Bot")));
         assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
@@ -327,7 +333,8 @@ class BotProvisioningServiceTest {
                 null,
                 props,
                 new Appearances(),
-                new RandomPasswordService());
+                new RandomPasswordService(),
+                null);
 
         service.deleteContainerGroup(key("Ada", "Actor"));
 
