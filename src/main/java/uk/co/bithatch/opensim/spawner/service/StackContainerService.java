@@ -81,12 +81,14 @@ public class StackContainerService {
                             ? updateRecord.targetImage()
                             : (container == null ? "unknown" : container.getImage());
 
-            LOG.info("Stack list entry: container={}, dockerImage={}, state={}, running={}, updateAvailable={}.",
-                    containerName,
-                    container == null ? null : container.getImage(),
-                    state,
-                    "running".equalsIgnoreCase(container == null ? null : container.getState()),
-                    updateAvailable);
+            if(LOG.isDebugEnabled()) {
+				LOG.debug("Stack list entry: container={}, dockerImage={}, state={}, running={}, updateAvailable={}.",
+						containerName,
+						container == null ? null : container.getImage(),
+						state,
+						"running".equalsIgnoreCase(container == null ? null : container.getState()),
+						updateAvailable);
+			}
 
             response.add(new StackContainerView(
                     containerName,

@@ -23,7 +23,9 @@
         "OPENSIM_LOGIN_START": "last",
         "OPENSIM_LOGIN_TIMEOUT_SECONDS" : "30",
         "SPAWNER_HOST": "%cfg.projectName%-spawner",
-        "OPENSIM_LOGIN_URI": "http://%cfg.projectName%-grid-services:9000"
+        "OPENSIM_LOGIN_URI": "http://%cfg.projectName%-grid-services:9000",
+        "MCP_DIAGNOSTICS": "false",
+        "ALLOW_IAR_IMPORT": "true"
     },
 	"tokens": [],
 	"exports": [
@@ -48,6 +50,16 @@
             "name": "WEAR_FOLDER_NAME",
             "type": "TEXT",
             "description": "The name of the folder in the bot's inventory that should be automaticallly worn on login."
+        },
+        {
+            "name": "ALLOW_IAR_IMPORT",
+            "type": "BOOLEAN",
+            "description": "Whether to allow the bot import inventory archive files."
+        },
+        {
+            "name": "MCP_DIAGNOSTICS",
+            "type": "BOOLEAN",
+            "description": "Whether to enable additional diagnostics MCP operations (output to log). Default is false."
         }
     ],
 	"extensions": {
@@ -133,7 +145,9 @@
 						"OPENCODE_DEFAULT_PROMPT_PATH": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
 						"WEAR_FOLDER_NAME": "%env.WEAR_FOLDER_NAME%",
 						"OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
-						"OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%"
+						"OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
+						"ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
+                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
@@ -220,7 +234,9 @@
 						"OPENCODE_DEFAULT_PROMPT_PATH": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
 						"WEAR_FOLDER_NAME": "%env.WEAR_FOLDER_NAME%",
                         "OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
-                        "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%"
+                        "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
+                        "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
+                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
@@ -306,7 +322,9 @@
 						"OPENCODE_DEFAULT_PROMPT_PATH": "/config/bots/%bot.first%-%bot.last%/AGENTS.md",
 						"WEAR_FOLDER_NAME": "%env.WEAR_FOLDER_NAME%",
                         "OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
-                        "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%"
+                        "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
+                        "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
+                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
