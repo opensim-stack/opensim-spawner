@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -562,7 +563,7 @@ public class BotProvisioningService
 		return status;
 	}
 
-	public synchronized void importIAR(String first, String last, InputStream archiveStream, String archiveFileName,
+	public synchronized String importIAR(String first, String last, InputStream archiveStream, String archiveFileName,
 			String inventoryPath) {
 		var normalizedFirst = normalizeBotName(first);
 		var normalizedLast = normalizeBotName(last);
@@ -575,9 +576,13 @@ public class BotProvisioningService
 			throw new IllegalArgumentException("archive filename is required.");
 		}
 		var filename = archiveFileName.trim();
+		var foldername = filename;
+		if(foldername.toLowerCase().endsWith(".iar")) {
+			foldername = filename.substring(0, filename.length() - 4);
+		}
 
 		var targetPath = inventoryPath == null || inventoryPath.isBlank()
-				? Path.of("Imports", filename)
+				? Path.of("Imports", foldername)
 				: Path.of(inventoryPath.trim());
 
 		var workspaceDir = getWorkspaceDir(bot);
@@ -590,7 +595,7 @@ public class BotProvisioningService
 
 		var destination = workspaceDir.resolve(filename);
 		try (var input = archiveStream) {
-			Files.copy(input, destination);
+			Files.copy(input, destination, StandardCopyOption.REPLACE_EXISTING);
 		}
 		catch (IOException ioe) {
 			throw new UncheckedIOException("Failed to write imported archive " + destination + ".", ioe);
@@ -599,5 +604,7 @@ public class BotProvisioningService
 		LOG.info("Imported IAR '{}' into {} {} at '{}'.", filename, normalizedFirst, normalizedLast, targetPath);
 		openSimService.loadInventoryArchive(normalizedFirst, normalizedLast, targetPath.toString(), bot.getPassword(),
 				destination.toString());
+		
+		return targetPath.toString();
 	}
 }

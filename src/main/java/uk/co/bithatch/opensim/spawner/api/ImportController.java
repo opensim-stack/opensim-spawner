@@ -1,6 +1,7 @@
 package uk.co.bithatch.opensim.spawner.api;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.file.Path;
 
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import uk.co.bithatch.opensim.jlib.IO;
 import uk.co.bithatch.opensim.spawner.service.BotProvisioningService;
 
 @RestController
@@ -49,12 +51,13 @@ public class ImportController {
             }
             filename = Path.of(filename).getFileName().toString();
 
-            provisioningService.importIAR(first, last, file.getInputStream(), filename, inventoryPath);
+            inventoryPath = provisioningService.importIAR(first, last, file.getInputStream(), filename, inventoryPath);
 
             var response = new java.util.LinkedHashMap<String, Object>();
             response.put("first", first);
             response.put("last", last);
             response.put("file", filename);
+            response.put("inventoryPath", inventoryPath);
             response.put("imported", true);
             return response;
         } catch (IOException | IllegalArgumentException e) {
@@ -71,17 +74,21 @@ public class ImportController {
             @RequestParam(value = "inventoryPath", required = false) String inventoryPath) {
         try {
             var openUrl = URI.create(url.trim()).toURL();
-
-            try (var stream = openUrl.openStream()) {
-                var filename = openUrl.getPath();
+            var urlc = (HttpURLConnection)openUrl.openConnection();
+            var filename = IO.getFilename(urlc);
+            try (var stream = urlc.getInputStream()) {
+                if(filename == null) {
+                	filename = openUrl.getPath();
+                }
                 filename = Path.of(filename).getFileName().toString();
-
-                provisioningService.importIAR(first, last, stream, filename, inventoryPath);
+                inventoryPath = provisioningService.importIAR(first, last, stream, filename, inventoryPath);
             }
 
             var response = new java.util.LinkedHashMap<String, Object>();
             response.put("first", first);
             response.put("last", last);
+            response.put("file", filename);
+            response.put("inventoryPath", inventoryPath);
             response.put("url", url.trim());
             response.put("imported", true);
             return response;
