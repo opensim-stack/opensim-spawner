@@ -1,7 +1,7 @@
 import {
+  createContainerActionsMenu,
   fetchWithTimeout,
   iconSpan,
-  renderContainerStatusRows,
   showToast,
   withWorkingOverlay
 } from '/ui/ui-helpers.js';
@@ -41,6 +41,7 @@ let cachedSimulatorStatuses = [];
 let cachedCreatePolicy = null;
 let cachedLevelRules = [];
 let cachedOars = [];
+let cachedStackByContainerName = new Map();
 
 const REQUEST_RECOVERY_WINDOW_MS = 180000;
 const REQUEST_RECOVERY_POLL_MS = 3000;
@@ -168,6 +169,22 @@ const callAction = async (name, action) => {
   if (!response.ok) {
     throw new Error(`Action '${action}' failed (${response.status}).`);
   }
+};
+
+const callStackContainerAction = async (containerName, action) => {
+  const payload = new URLSearchParams();
+  payload.set('container', containerName);
+  payload.set('action', action);
+  const response = await fetchWithTimeout('/api/stack', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload.toString()
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Action '${action}' failed for container ${containerName} (${response.status}).`);
+  }
+  return response.json();
 };
 
 const deleteSimulator = async (name) => {
@@ -400,25 +417,87 @@ const openCreateDialog = async () => {
   createSimulatorName?.focus();
 };
 
+const stackContainerMetaFor = (container) => {
+  const byName = String(container?.containerName || '').trim();
+  if (byName && cachedStackByContainerName.has(byName)) {
+    return cachedStackByContainerName.get(byName);
+  }
+  const byId = String(container?.containerId || '').trim();
+  if (byId && cachedStackByContainerName.has(byId)) {
+    return cachedStackByContainerName.get(byId);
+  }
+  return null;
+};
+
+const createContainerRow = (container) => {
+  const row = document.createElement('div');
+  row.className = 'flex items-center justify-between gap-3 text-sm';
+
+  const details = document.createElement('div');
+  details.className = 'min-w-0';
+
+  const rawName = container?.containerName || container?.containerId || 'unknown-container';
+  const resolvedName = String(rawName || '').trim() || 'unknown-container';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'text-gray-300 truncate';
+  nameEl.textContent = resolvedName;
+  nameEl.title = resolvedName;
+  details.appendChild(nameEl);
+
+  const stackMeta = stackContainerMetaFor(container);
+  const updateAvailable = !!stackMeta?.updateAvailable;
+  if (updateAvailable) {
+    const updateText = document.createElement('div');
+    updateText.className = 'text-xs text-emerald-200 truncate';
+    updateText.textContent = `Update available to ${stackMeta.image || resolvedName}`;
+    updateText.title = updateText.textContent;
+    details.appendChild(updateText);
+  }
+
+  const menu = createContainerActionsMenu({
+    containerName: resolvedName,
+    status: container?.status,
+    running: container?.running,
+    updateAvailable,
+    onAction: async (action, actionButton) => {
+      if (action === 'update' && !window.confirm(`Update container '${resolvedName}' now?`)) {
+        return;
+      }
+      actionButton.disabled = true;
+      try {
+        await withWorkingOverlay(async () => {
+          await callStackContainerAction(resolvedName, action);
+          await loadSimulators();
+        }, `${actionVerb(action)} container ${resolvedName} ...`);
+        showToast(toastContainer, `Sent '${action}' for container ${resolvedName}.`, 'success');
+      } catch (err) {
+        showToast(toastContainer, err instanceof Error ? err.message : 'Container action failed.', 'error');
+      } finally {
+        actionButton.disabled = false;
+      }
+    }
+  });
+
+  row.appendChild(details);
+  row.appendChild(menu);
+  return row;
+};
+
 const createCard = (status) => {
   const card = document.createElement('section');
-  card.className = 'feature-card bg-dark-800/80 backdrop-blur rounded-xl p-5 flex flex-col gap-4 sm:col-span-2 xl:col-span-2';
+  card.className = 'feature-card bg-dark-800/80 backdrop-blur rounded-xl p-5 flex flex-col gap-4';
 
   const name = String(status.name || '').trim() || 'Unnamed Simulator';
   const level = status.level || 'UNKNOWN';
   const levelUpper = String(level || '').toUpperCase();
   const regionsLink = (levelUpper === 'GRID' || levelUpper === 'STANDALONE')
-    ? `<a href="/ui/regions.html?simulator=${encodeURIComponent(name)}" class="inline-flex items-center rounded-md border border-neon-accent/40 bg-neon-accent/10 px-2.5 py-1 text-xs font-medium text-neon-accent hover:bg-neon-accent/20 transition-colors">Regions</a>`
+    ? `<a href="/ui/regions.html?simulator=${encodeURIComponent(name)}" class="inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('select', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Regions</span></a>`
     : '';
   const ownerFirst = status.ownerFirst || '';
   const ownerLast = status.ownerLast || '';
   const ownerDisplay = `${ownerFirst} ${ownerLast}`.trim();
   const ownerLine = ownerDisplay
     ? `<p class="text-sm text-gray-400">Owner: ${ownerDisplay}</p>`
-    : '';
-  const port = Number(status?.port);
-  const portBadge = Number.isFinite(port) && port > 0
-    ? `<div class="mt-2"><span class="inline-flex items-center rounded-md border border-neon-accent/40 bg-neon-accent/10 px-2.5 py-1 text-xs font-medium text-neon-accent">Port ${port}</span></div>`
     : '';
   const containers = Array.isArray(status.containerStatus) ? status.containerStatus : [];
   const worldMapUrl = buildWorldMapUrl(status);
@@ -429,11 +508,9 @@ const createCard = (status) => {
       </div>`
     : `<div class="h-full w-full rounded-lg border border-neon-accent/20 bg-dark-900/40 text-sm text-gray-400 flex items-center justify-center text-center px-4">World map unavailable</div>`;
 
-  const containerRows = renderContainerStatusRows(containers);
-
   card.innerHTML = `
-    <div class="flex flex-col lg:flex-row gap-4">
-      <div class="w-full lg:w-1/2 flex flex-col gap-4 min-w-0">
+    <div class="grid gap-4 lg:grid-cols-3">
+      <div class="min-w-0 flex flex-col gap-4">
         <div class="flex items-start justify-between gap-3">
           <div>
             <h2 class="text-xl font-semibold text-white">${name}</h2>
@@ -448,27 +525,38 @@ const createCard = (status) => {
 
         <div class="text-xs uppercase tracking-wide text-neon-accent">${level}</div>
 
-        ${regionsLink ? `<div>${regionsLink}</div>` : ''}
-
-        <div class="space-y-2 bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
-          ${containerRows || '<div class="text-sm text-gray-400">No tracked containers.</div>'}
-          ${portBadge}
+        <div class="bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
+          <div data-container-rows class="space-y-2"></div>
         </div>
+      </div>
 
-        <div class="grid grid-cols-2 gap-2 mt-auto">
+      <div class="min-h-[220px] lg:min-h-full">
+        ${worldMapPane}
+      </div>
+
+      <div class="flex flex-col gap-3 lg:border-l lg:border-neon-primary/15 lg:pl-4">
+        <div class="grid grid-cols-2 gap-2">
           <button data-action="start" class="px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-400/40 text-emerald-200 hover:bg-emerald-600/30 inline-flex items-center justify-center gap-2">${iconSpan('start', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Start</span></button>
-          <button data-action="stop" class="px-3 py-2 rounded-lg bg-amber-600/20 border border-amber-400/40 text-amber-200 hover:bg-amber-600/30 inline-flex items-center justify-center gap-2">${iconSpan('stop', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Stop</span></button>
+          <button data-action="stop" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('stop', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Stop</span></button>
           <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30 inline-flex items-center justify-center gap-2">${iconSpan('restart', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Restart</span></button>
           <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('delete', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Delete</span></button>
         </div>
-        <a href="/ui/variables.html?type=SIMULATOR&name=${encodeURIComponent(name)}" class="mt-2 inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Configuration</span></a>
-      </div>
-
-      <div class="w-full lg:w-1/2 min-h-[220px] lg:min-h-full">
-        ${worldMapPane}
+        <a href="/ui/variables.html?type=SIMULATOR&name=${encodeURIComponent(name)}" class="inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Configuration</span></a>
+        ${regionsLink}
       </div>
     </div>
   `;
+
+  const containerRowsHost = card.querySelector('[data-container-rows]');
+  if (containerRowsHost) {
+    if (containers.length === 0) {
+      containerRowsHost.innerHTML = '<div class="text-sm text-gray-400">No tracked containers.</div>';
+    } else {
+      containers.forEach((container) => {
+        containerRowsHost.appendChild(createContainerRow(container));
+      });
+    }
+  }
 
   card.querySelectorAll('button[data-action]').forEach((button) => {
     button.addEventListener('click', async () => {
@@ -523,6 +611,22 @@ const loadSimulators = async () => {
 
   simulatorsGrid.innerHTML = '';
   simulatorsEmpty.classList.add('hidden');
+
+  try {
+    const stackResponse = await fetchWithTimeout('/api/stack');
+    if (stackResponse.ok) {
+      const stackContainers = await stackResponse.json();
+      cachedStackByContainerName = new Map(
+        (Array.isArray(stackContainers) ? stackContainers : [])
+          .filter((item) => item && typeof item.containerName === 'string' && item.containerName.trim())
+          .map((item) => [item.containerName, item])
+      );
+    } else {
+      cachedStackByContainerName = new Map();
+    }
+  } catch (_ignored) {
+    cachedStackByContainerName = new Map();
+  }
 
   const listResponse = await fetchWithTimeout('/api/simulator');
   if (!listResponse.ok) {

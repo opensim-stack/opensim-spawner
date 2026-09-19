@@ -149,6 +149,43 @@ export const iconSpan = (action, className = 'h-4 w-4 inline-block align-middle 
   return icon ? `<span class="${className}">${icon}</span>` : '';
 };
 
+const containerStatusText = (status, running) => {
+  if (running) {
+    return 'Running';
+  }
+  const normalized = String(status || '').trim();
+  return normalized || 'Stopped';
+};
+
+const containerStatusToneClasses = (status, running) => {
+  const normalized = String(status || '').toLowerCase();
+  if (running || normalized.includes('up') || normalized.includes('health')) {
+    return 'text-emerald-200 border-emerald-400/40 bg-emerald-500/15';
+  }
+  if (normalized.includes('pause')) {
+    return 'text-amber-200 border-amber-400/40 bg-amber-500/15';
+  }
+  return 'text-rose-200 border-rose-400/40 bg-rose-500/15';
+};
+
+const actionMenuItemClassesByAction = {
+  start: 'text-emerald-200 hover:bg-emerald-600/20',
+  stop: 'text-rose-200 hover:bg-rose-600/20',
+  restart: 'text-sky-200 hover:bg-sky-600/20',
+  update: 'text-emerald-200 hover:bg-emerald-600/20',
+  console: 'text-neon-accent hover:bg-neon-primary/10',
+  logs: 'text-sky-200 hover:bg-sky-600/20'
+};
+
+const actionMenuLabelByAction = {
+  start: 'Start',
+  stop: 'Stop',
+  restart: 'Restart',
+  update: 'Update',
+  console: 'Console',
+  logs: 'Logs'
+};
+
 export const consoleTargetForContainer = (containerIdOrName) => {
   const raw = String(containerIdOrName || '').trim();
   if (!raw) {
@@ -246,4 +283,99 @@ export const buildLogsIconLink = (
   }
   const target = logsTargetForContainer(targetSeed || resolvedName);
   return `<a href="/ui/logs.html?container=${encodeURIComponent(resolvedName)}" target="${target}" rel="noopener" aria-label="${label}" title="${label}" class="inline-flex items-center justify-center h-5 w-5 ${className}">${iconSpan('logs')}</a>`;
+};
+
+export const createContainerActionsMenu = ({
+  containerName,
+  status,
+  running,
+  updateAvailable = false,
+  onAction = null
+}) => {
+  const name = String(containerName || '').trim();
+  const toneClasses = containerStatusToneClasses(status, running);
+  const statusText = containerStatusText(status, running);
+
+  const root = document.createElement('div');
+  root.className = 'relative inline-flex items-stretch rounded-lg border border-neon-primary/25 bg-dark-900/70';
+
+  const statusButton = document.createElement('button');
+  statusButton.type = 'button';
+  statusButton.disabled = true;
+  statusButton.className = `inline-flex min-w-[7.5rem] items-center justify-center rounded-l-lg border-r border-neon-primary/20 px-3 py-1.5 text-xs font-medium whitespace-nowrap ${toneClasses}`;
+  statusButton.textContent = statusText;
+  root.appendChild(statusButton);
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'inline-flex items-center justify-center rounded-r-lg px-2 text-gray-200 hover:bg-neon-primary/15 transition-colors';
+  toggle.setAttribute('aria-haspopup', 'menu');
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-label', `Container actions for ${name || 'container'}`);
+  toggle.innerHTML = iconSpan('chevronDown');
+  root.appendChild(toggle);
+
+  const menu = document.createElement('div');
+  menu.className = 'hidden absolute right-0 top-[calc(100%+0.4rem)] z-30 min-w-[11rem] rounded-lg border border-neon-primary/30 bg-dark-800/95 p-1 shadow-lg backdrop-blur';
+  menu.setAttribute('role', 'menu');
+
+  const menuActions = ['start', 'stop', 'restart', 'update', 'console', 'logs'];
+  menuActions.forEach((action) => {
+    const itemClasses = actionMenuItemClassesByAction[action] || 'text-gray-100 hover:bg-dark-700';
+    const label = actionMenuLabelByAction[action] || action;
+    const icon = iconSpan(action, 'h-4 w-4 inline-block align-middle shrink-0');
+    if (action === 'console' || action === 'logs') {
+      const link = document.createElement('a');
+      link.className = `flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${itemClasses}`;
+      link.setAttribute('role', 'menuitem');
+      link.target = action === 'console' ? consoleTargetForContainer(name) : logsTargetForContainer(name);
+      link.rel = 'noopener';
+      link.href = action === 'console'
+        ? `/ui/console.html?container=${encodeURIComponent(name)}`
+        : `/ui/logs.html?container=${encodeURIComponent(name)}`;
+      link.innerHTML = `${icon}<span>${label}</span>`;
+      link.addEventListener('click', () => {
+        menu.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+      menu.appendChild(link);
+      return;
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.action = action;
+    button.className = `flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors ${itemClasses}`;
+    button.innerHTML = `${icon}<span>${label}</span>`;
+    if (action === 'update' && !updateAvailable) {
+      button.disabled = true;
+      button.classList.add('opacity-40', 'cursor-not-allowed');
+      button.classList.remove('hover:bg-emerald-600/20');
+    }
+    button.addEventListener('click', async () => {
+      menu.classList.add('hidden');
+      toggle.setAttribute('aria-expanded', 'false');
+      if (typeof onAction === 'function') {
+        await onAction(action, button);
+      }
+    });
+    menu.appendChild(button);
+  });
+
+  root.appendChild(menu);
+
+  toggle.addEventListener('click', () => {
+    const open = menu.classList.contains('hidden');
+    menu.classList.toggle('hidden', !open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!root.contains(event.target)) {
+      menu.classList.add('hidden');
+      toggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  return root;
 };

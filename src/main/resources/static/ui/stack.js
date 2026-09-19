@@ -1,4 +1,4 @@
-import { actionIconSvg, consoleTargetForContainer, fetchWithTimeout, logsTargetForContainer, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
+import { actionIconSvg, createContainerActionsMenu, fetchWithTimeout, showToast, withWorkingOverlay } from '/ui/ui-helpers.js';
 
 const stackList = document.getElementById('stack-list');
 const stackEmpty = document.getElementById('stack-empty');
@@ -11,15 +11,6 @@ const SELF_UPDATE_DOWN_WAIT_MS = 120000;
 const SELF_UPDATE_AUTH_WAIT_MS = 300000;
 const SELF_UPDATE_POLL_MS = 2000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const buttonClassesByAction = {
-  start: 'text-emerald-200 border-emerald-400/40 hover:bg-emerald-600/20',
-  stop: 'text-amber-200 border-amber-400/40 hover:bg-amber-600/20',
-  restart: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20',
-  update: 'text-violet-200 border-violet-400/40 hover:bg-violet-600/20',
-  console: 'text-neon-accent border-neon-primary/40 hover:bg-neon-primary/10',
-  logs: 'text-sky-200 border-sky-400/40 hover:bg-sky-600/20'
-};
 
 const actionVerb = (action) => {
   switch (String(action || '').toLowerCase()) {
@@ -111,41 +102,6 @@ const waitForSelfUpdateReauth = async () => {
   throw new Error('Self-update completed but authentication reset was not detected in time.');
 };
 
-const actionButton = (action, containerName) => {
-  const button = document.createElement(action === 'console' || action === 'logs' ? 'a' : 'button');
-  const className = buttonClassesByAction[action] || '';
-  button.className = `inline-flex items-center justify-center h-9 w-9 rounded-lg border transition-colors ${className}`;
-  button.dataset.action = action;
-  button.setAttribute('title', action.charAt(0).toUpperCase() + action.slice(1));
-  button.setAttribute('aria-label', `${action} ${containerName}`);
-  button.innerHTML = `<span class="h-4 w-4 shrink-0">${actionIconSvg(action)}</span>`;
-
-  if (action === 'console') {
-    button.href = `/ui/console.html?container=${encodeURIComponent(containerName)}`;
-    button.target = consoleTargetForContainer(containerName);
-    button.rel = 'noopener';
-  } else if (action === 'logs') {
-    button.href = `/ui/logs.html?container=${encodeURIComponent(containerName)}`;
-    button.target = logsTargetForContainer(containerName);
-    button.rel = 'noopener';
-  }
-
-  return button;
-};
-
-const stateBadge = (status, running) => {
-  const badge = document.createElement('span');
-  const active = !!running;
-  badge.className = `inline-flex items-center gap-2 text-xs rounded-full border px-2 py-1 ${active
-    ? 'text-emerald-200 border-emerald-400/40 bg-emerald-500/10'
-    : 'text-rose-200 border-rose-400/40 bg-rose-500/10'}`;
-  const dot = document.createElement('span');
-  dot.className = `w-2 h-2 rounded-full ${active ? 'bg-emerald-400' : 'bg-rose-400'}`;
-  badge.appendChild(dot);
-  badge.appendChild(document.createTextNode(status || 'unknown'));
-  return badge;
-};
-
 const renderRow = (container) => {
   const row = document.createElement('div');
   row.className = 'grid grid-cols-[auto_minmax(0,1fr)_auto] gap-4 px-5 py-3 items-center';
@@ -155,7 +111,7 @@ const renderRow = (container) => {
 
   if (container.updateAvailable) {
     const updateMarker = document.createElement('span');
-    updateMarker.className = 'inline-flex items-center justify-center h-6 w-6 rounded-full border border-violet-400/40 bg-violet-500/10 text-violet-200';
+    updateMarker.className = 'inline-flex items-center justify-center h-6 w-6 rounded-full border border-emerald-400/40 bg-emerald-500/10 text-emerald-200 update-pulse';
     updateMarker.title = 'Update available';
     updateMarker.setAttribute('aria-label', 'Update available');
     updateMarker.innerHTML = `<span class="h-3.5 w-3.5 shrink-0">${actionIconSvg('update')}</span>`;
@@ -163,7 +119,7 @@ const renderRow = (container) => {
   }
 
   const left = document.createElement('div');
-  left.className = 'min-w-0 flex items-start gap-3';
+  left.className = 'min-w-0';
 
   const identity = document.createElement('div');
   identity.className = 'min-w-0';
@@ -174,40 +130,33 @@ const renderRow = (container) => {
   name.title = container.containerName;
 
   const image = document.createElement('div');
-  image.className = 'font-mono text-xs text-gray-400 truncate';
-  image.textContent = container.image || 'unknown image';
-  image.title = container.image || 'unknown image';
+  if (container.updateAvailable) {
+    image.className = 'font-mono text-xs text-emerald-200 truncate';
+    image.textContent = `Update available to ${container.image || 'unknown image'}`;
+    image.title = image.textContent;
+  } else {
+    image.className = 'font-mono text-xs text-gray-400 truncate';
+    image.textContent = container.image || 'unknown image';
+    image.title = container.image || 'unknown image';
+  }
 
   identity.appendChild(name);
   identity.appendChild(image);
   left.appendChild(identity);
-  left.appendChild(stateBadge(container.status, container.running));
 
   const actions = document.createElement('div');
-  actions.className = 'flex items-center gap-2';
+  actions.className = 'flex items-center justify-end';
 
-  const startButton = actionButton('start', container.containerName);
-  const stopButton = actionButton('stop', container.containerName);
-  const restartButton = actionButton('restart', container.containerName);
-  const updateButton = actionButton('update', container.containerName);
-  const consoleButton = actionButton('console', container.containerName);
-  const logsButton = actionButton('logs', container.containerName);
-
-  updateButton.disabled = !container.updateAvailable;
-  updateButton.classList.toggle('opacity-40', !container.updateAvailable);
-  updateButton.classList.toggle('cursor-not-allowed', !container.updateAvailable);
-
-  [startButton, stopButton, restartButton, updateButton].forEach((button) => {
-    button.addEventListener('click', async () => {
-      const action = button.dataset.action || '';
-      if (action === 'update' && !container.updateAvailable) {
-        return;
-      }
+  const menu = createContainerActionsMenu({
+    containerName: container.containerName,
+    status: container.status,
+    running: container.running,
+    updateAvailable: container.updateAvailable,
+    onAction: async (action, actionButton) => {
       if (action === 'update' && !window.confirm(`Update container '${container.containerName}' now?`)) {
         return;
       }
-
-      button.disabled = true;
+      actionButton.disabled = true;
       try {
         await withWorkingOverlay(async () => {
           const result = await callAction(container.containerName, action);
@@ -232,17 +181,11 @@ const renderRow = (container) => {
         }
         showToast(toastContainer, err instanceof Error ? err.message : 'Action failed.', 'error');
       } finally {
-        button.disabled = false;
+        actionButton.disabled = false;
       }
-    });
+    }
   });
-
-  actions.appendChild(startButton);
-  actions.appendChild(stopButton);
-  actions.appendChild(restartButton);
-  actions.appendChild(updateButton);
-  actions.appendChild(consoleButton);
-  actions.appendChild(logsButton);
+  actions.appendChild(menu);
 
   row.appendChild(updates);
   row.appendChild(left);

@@ -73,8 +73,13 @@ public class StackContainerService {
 
             var state = normalizeState(container == null ? null : container.getState(),
                     container == null ? null : container.getStatus());
+            var updateRecord = updateStatus.get(containerName);
             var updateAvailable = updateStatus.get(containerName) != null
                     && updateStatus.get(containerName).updateAvailable();
+            var preferredImage = updateRecord != null && updateRecord.targetImage() != null
+                    && !updateRecord.targetImage().isBlank()
+                            ? updateRecord.targetImage()
+                            : (container == null ? "unknown" : container.getImage());
 
             LOG.info("Stack list entry: container={}, dockerImage={}, state={}, running={}, updateAvailable={}.",
                     containerName,
@@ -86,7 +91,7 @@ public class StackContainerService {
             response.add(new StackContainerView(
                     containerName,
                     state,
-                    container.getImage(),
+                    preferredImage,
                     "running".equalsIgnoreCase(container == null ? null : container.getState()),
                     updateAvailable,
                     false));

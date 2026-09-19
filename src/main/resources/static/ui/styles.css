@@ -261,3 +261,17 @@ code {
   margin: 0;
   height: 100%;
 }
+
+@keyframes updatePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+}
+
+.update-pulse {
+  animation: updatePulse 1.8s ease-in-out infinite;
+}

@@ -1,7 +1,7 @@
 import {
+  createContainerActionsMenu,
   fetchWithTimeout,
   iconSpan,
-  renderContainerStatusRows,
   showToast,
   withWorkingOverlay
 } from '/ui/ui-helpers.js';
@@ -34,6 +34,7 @@ const botsGridServicePill = document.getElementById('bots-grid-service-pill');
 
 let gridServiceAvailable = false;
 let cachedAppearanceNames = [];
+let cachedStackByContainerName = new Map();
 const gridServiceUnavailableMessage = 'Bot management is disabled until a ROBUST or STANDALONE simulator is active.';
 const REQUEST_RECOVERY_WINDOW_MS = 180000;
 const REQUEST_RECOVERY_POLL_MS = 3000;
@@ -107,6 +108,22 @@ const deleteBot = async (first, last) => {
   if (!response.ok) {
     throw new Error(`Delete failed (${response.status}).`);
   }
+};
+
+const callStackContainerAction = async (containerName, action) => {
+  const payload = new URLSearchParams();
+  payload.set('container', containerName);
+  payload.set('action', action);
+  const response = await fetchWithTimeout('/api/stack', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload.toString()
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Action '${action}' failed for container ${containerName} (${response.status}).`);
+  }
+  return response.json();
 };
 
 const createBot = async ({ first, last, level, parent, email, appearance, gender }) => {
@@ -304,7 +321,7 @@ const openChildDialog = async (parentStatus) => {
   resetCreateDialog();
   createMode.value = 'child';
   createParent.value = `${parentStatus.first} ${parentStatus.last}`.trim();
-  createBotTitle.textContent = 'Spawn Child Bot';
+  createBotTitle.textContent = 'Create Subordinate Bot';
   createBotSubtitle.textContent = `Parent: ${createParent.value} (${parentLevel})`;
   createBotInfo.textContent = 'Child bot types are constrained by parent level policy.';
 
@@ -321,6 +338,72 @@ const openChildDialog = async (parentStatus) => {
   createFirst?.focus();
 };
 
+const stackContainerMetaFor = (container) => {
+  const byName = String(container?.containerName || '').trim();
+  if (byName && cachedStackByContainerName.has(byName)) {
+    return cachedStackByContainerName.get(byName);
+  }
+  const byId = String(container?.containerId || '').trim();
+  if (byId && cachedStackByContainerName.has(byId)) {
+    return cachedStackByContainerName.get(byId);
+  }
+  return null;
+};
+
+const createContainerRow = (container) => {
+  const row = document.createElement('div');
+  row.className = 'flex items-center justify-between gap-3 text-sm';
+
+  const details = document.createElement('div');
+  details.className = 'min-w-0';
+
+  const rawName = container?.containerName || container?.containerId || 'unknown-container';
+  const resolvedName = String(rawName || '').trim() || 'unknown-container';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'text-gray-300 truncate';
+  nameEl.textContent = resolvedName;
+  nameEl.title = resolvedName;
+  details.appendChild(nameEl);
+
+  const stackMeta = stackContainerMetaFor(container);
+  const updateAvailable = !!stackMeta?.updateAvailable;
+  if (updateAvailable) {
+    const updateText = document.createElement('div');
+    updateText.className = 'text-xs text-emerald-200 truncate';
+    updateText.textContent = `Update available to ${stackMeta.image || resolvedName}`;
+    updateText.title = updateText.textContent;
+    details.appendChild(updateText);
+  }
+
+  const menu = createContainerActionsMenu({
+    containerName: resolvedName,
+    status: container?.status,
+    running: container?.running,
+    updateAvailable,
+    onAction: async (action, actionButton) => {
+      if (action === 'update' && !window.confirm(`Update container '${resolvedName}' now?`)) {
+        return;
+      }
+      actionButton.disabled = true;
+      try {
+        await withWorkingOverlay(async () => {
+          await callStackContainerAction(resolvedName, action);
+          await loadBots();
+        }, `${actionVerb(action)} container ${resolvedName} ...`);
+        showToast(toastContainer, `Sent '${action}' for container ${resolvedName}.`, 'success');
+      } catch (err) {
+        showToast(toastContainer, err instanceof Error ? err.message : 'Container action failed.', 'error');
+      } finally {
+        actionButton.disabled = false;
+      }
+    }
+  });
+
+  row.appendChild(details);
+  row.appendChild(menu);
+  return row;
+};
+
 const createCard = (status) => {
   const card = document.createElement('section');
   card.className = 'feature-card bg-dark-800/80 backdrop-blur rounded-xl p-5 flex flex-col gap-4';
@@ -332,7 +415,6 @@ const createCard = (status) => {
   const containers = Array.isArray(status.containerStatus) ? status.containerStatus : [];
   const normalizedLevel = String(level).toUpperCase();
   const canSpawnChild = normalizedLevel === 'GOVERNOR' || normalizedLevel === 'BUILDER';
-  const containerRows = renderContainerStatusRows(containers);
 
   card.innerHTML = `
     <div class="flex items-start justify-between gap-3">
@@ -349,8 +431,8 @@ const createCard = (status) => {
 
     <div class="text-xs uppercase tracking-wide text-neon-accent">${level}</div>
 
-    <div class="space-y-2 bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
-      ${containerRows || '<div class="text-sm text-gray-400">No tracked containers.</div>'}
+    <div class="bg-dark-900/50 rounded-lg p-3 border border-neon-primary/20">
+      <div data-container-rows class="space-y-2"></div>
     </div>
 
     <div class="grid grid-cols-2 gap-2 mt-auto">
@@ -359,10 +441,23 @@ const createCard = (status) => {
       <button data-action="restart" class="px-3 py-2 rounded-lg bg-sky-600/20 border border-sky-400/40 text-sky-200 hover:bg-sky-600/30 inline-flex items-center justify-center gap-2">${iconSpan('restart', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Restart</span></button>
       <button data-action="delete" class="px-3 py-2 rounded-lg bg-rose-600/20 border border-rose-400/40 text-rose-200 hover:bg-rose-600/30 inline-flex items-center justify-center gap-2">${iconSpan('delete', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Delete</span></button>
     </div>
-    <a href="/ui/variables.html?type=BOT&name=${encodeURIComponent(`${first}-${last}`)}" class="mt-2 inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Configuration</span></a>
-    <a href="/ui/import-iar.html?first=${encodeURIComponent(first)}&last=${encodeURIComponent(last)}" class="mt-2 inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('plus', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Import Inventory</span></a>
-    ${canSpawnChild ? `<button data-spawn-child class="mt-2 text-sm text-neon-accent hover:text-neon-secondary text-left inline-flex items-center gap-1">${iconSpan('plus', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Spawn child bot</span></button>` : ''}
+    <div class="mt-1 flex flex-col gap-1">
+      <a href="/ui/variables.html?type=BOT&name=${encodeURIComponent(`${first}-${last}`)}" class="inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('settings', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Configuration</span></a>
+      <a href="/ui/import-iar.html?first=${encodeURIComponent(first)}&last=${encodeURIComponent(last)}" class="inline-flex items-center gap-2 text-sm text-neon-accent hover:text-neon-secondary">${iconSpan('plus', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Import Inventory</span></a>
+      ${canSpawnChild ? `<button data-spawn-child class="text-sm text-neon-accent hover:text-neon-secondary text-left inline-flex items-center gap-1">${iconSpan('plus', 'h-4 w-4 inline-block align-middle shrink-0')}<span>Create subordinate bot</span></button>` : ''}
+    </div>
   `;
+
+  const containerRowsHost = card.querySelector('[data-container-rows]');
+  if (containerRowsHost) {
+    if (containers.length === 0) {
+      containerRowsHost.innerHTML = '<div class="text-sm text-gray-400">No tracked containers.</div>';
+    } else {
+      containers.forEach((container) => {
+        containerRowsHost.appendChild(createContainerRow(container));
+      });
+    }
+  }
 
   card.querySelectorAll('button[data-action]').forEach((button) => {
     const action = button.getAttribute('data-action');
@@ -433,6 +528,22 @@ const loadBots = async () => {
 
   botsGrid.innerHTML = '';
   botsEmpty.classList.add('hidden');
+
+  try {
+    const stackResponse = await fetchWithTimeout('/api/stack');
+    if (stackResponse.ok) {
+      const stackContainers = await stackResponse.json();
+      cachedStackByContainerName = new Map(
+        (Array.isArray(stackContainers) ? stackContainers : [])
+          .filter((item) => item && typeof item.containerName === 'string' && item.containerName.trim())
+          .map((item) => [item.containerName, item])
+      );
+    } else {
+      cachedStackByContainerName = new Map();
+    }
+  } catch (_ignored) {
+    cachedStackByContainerName = new Map();
+  }
 
   try {
     gridServiceAvailable = await fetchGridServiceAvailability();

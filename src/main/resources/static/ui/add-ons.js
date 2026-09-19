@@ -188,7 +188,7 @@ const renderRow = (addOn) => {
   const description = normalizedText(manifest.description);
   if (description) {
     const subtitle = document.createElement('div');
-    subtitle.className = 'text-sm text-gray-400 truncate';
+    subtitle.className = 'text-sm text-gray-400 whitespace-normal break-words';
     subtitle.textContent = description;
     subtitle.title = description;
     details.appendChild(title);
