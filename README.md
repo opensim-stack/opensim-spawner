@@ -1,6 +1,7 @@
 # opensim-spawner
 
-[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-bithatch%2Fopensim--spawner-latest?logo=docker&logoColor=white)](https://hub.docker.com/repository/docker/bithatch/opensim-spawner)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-bithatch%2Fopensim--spawner-latest?logo=docker&logoColor=white)](https://hub.docker.com/r/bithatch/opensim-spawner)
+[![Docker Publish](https://github.com/opensim-stack/opensim-spawner/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/opensim-stack/opensim-spawner/actions/workflows/docker-publish.yml)
 
 HTTP API service that creates and coordinates OpenSim simulators and bot containers from a strict profiles.
 
@@ -109,4 +110,8 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 | `PROMPT_PROJECT_AGENTS_ENABLED` | `true` |
 | `PROMPT_PROJECT_AGENTS_FILE` | /app/AGENTS.md |
 | `PROMPT_NOTECARD_REQUIRE_HANDLER` | `true` |
+
+## Building and publishing
+
+See `BUILDING.md` for local build/run steps, manual multiarch publish commands, and automated GitHub Actions publish details.
 
