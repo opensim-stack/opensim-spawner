@@ -36,6 +36,7 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 ## Image Names
 
 | Name | Default Value |
+| ---- | ------------- |
 | `OPENSIM_OPENCODE_IMAGE` | `bithatch/opensim-opencode:latest` |
 | `OPENSIM_METAVERSE2MCP_IMAGE` | `bithatch/opensim-metaverse2mcp:latest` |
 | `OPENSIM_SIMULATOR_IMAGE` | `bithatch/opensim-simulator:latest` |
@@ -43,6 +44,7 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 ## Main environment variables
 
 | Name | Default Value |
+| ---- | ------------- |
 | `COMPOSE_PROJECT_NAME`| `opensim-ai` |
 | `OPENSIM_SPAWNER_HTTP_HOST`| `0.0.0.0` |
 | `OPENSIM_SPAWNER_HTTP_PORT`| `8993` |
@@ -63,6 +65,7 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 ## Environment Variables Passed To `simulator`
 
 | Name | Default Value |
+| ---- | ------------- |
 | `MARIADB_HOST` | `mariadb` |
 | `MARIADB_DATABASE` | `opensim` |
 | `MARIADB_USER` | `opensim` |
@@ -81,6 +84,7 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 ## Environment Variables Passed To `opencode`
 
 | Name | Default Value |
+| ---- | ------------- |
 | `OPENCODE_HOST` | `0.0.0.0` |
 | `OPENCODE_PORT` | `8998` |
 | `OPENCODE_SERVER_USERNAME` | `<first>-<last>` |
@@ -89,6 +93,7 @@ OPENSIM_SPAWNER_HTTP_HOST=127.0.0.1 OPENSIM_SPAWNER_HTTP_PORT=8993 mvn spring-bo
 ## Environment Variables Passed To `metaverse2mcp`
 
 | Name | Default Value |
+| ---- | ------------- |
 | `OPENSIM_LOGIN_START` | `last` |
 | `OPENSIM_LOGIN_URI` | `http://opensim:9000` |
 | `SPAWNER_HOST` | `opensim-spawner` |
