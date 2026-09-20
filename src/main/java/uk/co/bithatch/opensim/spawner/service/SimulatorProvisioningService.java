@@ -86,13 +86,12 @@ public class SimulatorProvisioningService extends AbstractContainerGroupProvisio
     return false;
   }
 
-	public void importOAR(String region, InputStream archiveStream, String archiveFileName, boolean merge, boolean skipAssets) {
+	public void importOAR(String simulatorName, String region, InputStream archiveStream, String archiveFileName, boolean merge, boolean skipAssets) {
 
-		var normalized = normalize(region);
-		var bot = stateRepository.load(normalized)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bot not found."));
+		var simulator = stateRepository.load(normalize(simulatorName))
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Simulator " + simulatorName + " not found."));
 
-		importService.importOAR(getWorkspaceDir(bot), normalized, archiveStream, archiveFileName, merge, skipAssets);
+		importService.importOAR(getWorkspaceDir(simulator), normalize(region), archiveStream, archiveFileName, merge, skipAssets);
 	}
 
     public synchronized SimulatorInstanceData createSim(String name, String levelName, Map<String, String> requestFields) {

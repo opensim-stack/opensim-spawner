@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
           params.set('merge', merge ? 'true' : 'false');
           params.set('skipAssets', skipAssets ? 'true' : 'false');
           response = await fetchWithTimeout(
-            `/api/import/oar-url/${encodeURIComponent(region)}?${params.toString()}`,
+            `/api/import/oar-url/${encodeURIComponent(simulator)}/${encodeURIComponent(region)}?${params.toString()}`,
             { method: 'GET' }
           );
         } else {
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
           formData.append('skipAssets', skipAssets ? 'true' : 'false');
 
           response = await fetchWithTimeout(
-            `/api/import/oar/${encodeURIComponent(region)}`,
+            `/api/import/oar/${encodeURIComponent(simulator)}/${encodeURIComponent(region)}`,
             { method: 'POST', body: formData }
           );
         }

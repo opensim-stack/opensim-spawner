@@ -37,9 +37,10 @@ public class ImportController {
         this.simulatorProvisioningService = simulatorProvisioningService;
     }
 
-    @GetMapping(path = "/oar-url/{region}",
+    @GetMapping(path = "/oar-url/{simulator}/{region}",
             produces = MediaType.APPLICATION_JSON_VALUE)
     public java.util.LinkedHashMap<String, Object> importOARByUrl(
+    		@PathVariable String simulator,
     		@PathVariable String region,
             @RequestParam("url") String url,
             @RequestParam(value = "merge", defaultValue = "true") boolean merge,
@@ -54,7 +55,7 @@ public class ImportController {
                 	filename = openUrl.getPath();
                 }
                 filename = Path.of(filename).getFileName().toString();
-                simulatorProvisioningService.importOAR(region, stream, filename, merge, skipAssets);
+                simulatorProvisioningService.importOAR(simulator, region, stream, filename, merge, skipAssets);
             }
 
             var response = new java.util.LinkedHashMap<String, Object>();
@@ -69,10 +70,12 @@ public class ImportController {
         }
     }
 
-    @PostMapping(path = "/oar/{region}",
+    @PostMapping(path = "/oar/{simulator}/{region}",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public java.util.LinkedHashMap<String, Object> importOAR(@PathVariable String region,
+    public java.util.LinkedHashMap<String, Object> importOAR(
+    		@PathVariable String simulator,
+    		@PathVariable String region,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "merge", defaultValue = "true") boolean merge,
             @RequestParam(value = "skipAssets", defaultValue = "false") boolean skipAssets) {
@@ -87,7 +90,7 @@ public class ImportController {
             }
             filename = Path.of(filename).getFileName().toString();
 
-            simulatorProvisioningService.importOAR(region, file.getInputStream(), filename, merge, skipAssets);
+            simulatorProvisioningService.importOAR(simulator, region, file.getInputStream(), filename, merge, skipAssets);
 
             var response = new java.util.LinkedHashMap<String, Object>();
             response.put("region", region);
