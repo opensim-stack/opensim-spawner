@@ -3,7 +3,7 @@
 [![Docker Hub](https://img.shields.io/badge/Docker%20Hub-bithatch%2Fopensim--spawner-latest?logo=docker&logoColor=white)](https://hub.docker.com/r/bithatch/opensim-spawner)
 [![Docker Publish](https://github.com/opensim-stack/opensim-spawner/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/opensim-stack/opensim-spawner/actions/workflows/docker-publish.yml)
 
-HTTP API service that creates and coordinates OpenSim simulators and bot containers from a strict profiles.
+HTTP API service that creates and coordinates OpenSim simulators and bot containers from strict profiles, and also provides the administrator and user facing web interface for OpenSim AI Stack.
 
 *This is part of the [opensim-stack](https://opensim-stack.github.io/) and is intended to be used in conjunction with other parts of the stack. See [Docs](https://opensim-stack.github.io/docs/index.html) for full details.*
 
