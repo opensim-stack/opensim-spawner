@@ -25,7 +25,8 @@
         "SPAWNER_HOST": "%cfg.projectName%-spawner",
         "OPENSIM_LOGIN_URI": "http://%cfg.projectName%-grid-services:9000",
         "MCP_DIAGNOSTICS": "false",
-        "ALLOW_IAR_IMPORT": "true"
+        "ALLOW_IAR_IMPORT": "true",
+        "ALLOW_RLV": "true"
     },
 	"tokens": [],
 	"exports": [
@@ -55,6 +56,11 @@
             "name": "ALLOW_IAR_IMPORT",
             "type": "BOOLEAN",
             "description": "Whether to allow the bot import inventory archive files."
+        },
+        {
+            "name": "ALLOW_RLV",
+            "type": "BOOLEAN",
+            "description": "Whether to allow the bot to be controlled with RLVa. The bot also has a runtime switch that must be enabled via MCP tools, setting this to false prevents RLV from activating at all."
         },
         {
             "name": "MCP_DIAGNOSTICS",
@@ -147,6 +153,7 @@
 						"OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
 						"OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
 						"ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
+                        "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
 					"volumes": {
@@ -236,6 +243,7 @@
                         "OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
                         "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
+                        "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
 					"volumes": {
@@ -324,6 +332,7 @@
                         "OPENCODE_SERVER_EXTRA_ARGS": "%env.OPENCODE_SERVER_EXTRA_ARGS%",
                         "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
+                        "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
 					"volumes": {
