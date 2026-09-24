@@ -9,7 +9,7 @@ RUN apt-get update \
 
 COPY pom.xml ./
 COPY src ./src
-RUN mvn -q -DskipTests -Dspring-boot.repackage.skip=true package dependency:copy-dependencies -DincludeScope=runtime
+RUN mvn -U -q -DskipTests -Dspring-boot.repackage.skip=true package dependency:copy-dependencies -DincludeScope=runtime
 
 FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /opt/opensim-spawner
