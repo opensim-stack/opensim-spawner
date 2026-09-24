@@ -30,6 +30,7 @@ import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.AuthConfig;
 import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.Capability;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.InternetProtocol;
@@ -54,6 +55,10 @@ public class DockerJavaService implements DockerService {
     static final String LABEL_IMAGE_REF = "com.bithatch.opensim.image.ref";
     private static final String LABEL_SELF_UPDATE_WORKER = "com.bithatch.opensim.self-update-worker";
     private static final String LABEL_SELF_UPDATE_TARGET = "com.bithatch.opensim.self-update-target";
+    private static final String TRACE_PROPERTY_ENABLE = "osais.enableTracing";
+    private static final String TRACE_IMAGE_HINT = "opensim-metaverse2mcp";
+    private static final String TRACE_SECURITY_OPT_SECCOMP = "seccomp=unconfined";
+    private static final String TRACE_SECURITY_OPT_APPARMOR = "apparmor=unconfined";
 
     private final DockerClient dockerClient;
     private final SpawnerProperties properties;
@@ -143,6 +148,10 @@ public class DockerJavaService implements DockerService {
         var oldContainerId = inspect.getId();
         var oldContainerName = trimLeadingSlash(inspect.getName());
         var preservedHostConfig = inspect.getHostConfig();
+        if (preservedHostConfig == null) {
+            preservedHostConfig = HostConfig.newHostConfig();
+        }
+        applyTracingOptionsIfEnabled(preservedHostConfig, targetImage);
         var preservedEnv = inspect.getConfig().getEnv();
         var preservedAliases = collectNetworkAliases(inspect);
         var preservedLabels = preserveLabels(inspect, targetImage);
@@ -412,6 +421,7 @@ public class DockerJavaService implements DockerService {
         if (!portBindings.isEmpty()) {
             hostConfig.withPortBindings(portBindings);
         }
+        applyTracingOptionsIfEnabled(hostConfig, spec.getImage());
 
         var envList= Arrays.asList(Strings.mapToEnvVars(spec.getEnvironment()));
         var createCommand = dockerClient.createContainerCmd(spec.getImage())
@@ -451,6 +461,42 @@ public class DockerJavaService implements DockerService {
         }
 
         return createCommand;
+    }
+
+    private static void applyTracingOptionsIfEnabled(HostConfig hostConfig, String imageName) {
+        if (hostConfig == null || !isTracingEnabledForImage(imageName)) {
+            return;
+        }
+
+        var securityOpts = new ArrayList<String>();
+        if (hostConfig.getSecurityOpts() != null) {
+            securityOpts.addAll(hostConfig.getSecurityOpts());
+        }
+        if (!securityOpts.contains(TRACE_SECURITY_OPT_SECCOMP)) {
+            securityOpts.add(TRACE_SECURITY_OPT_SECCOMP);
+        }
+        if (!securityOpts.contains(TRACE_SECURITY_OPT_APPARMOR)) {
+            securityOpts.add(TRACE_SECURITY_OPT_APPARMOR);
+        }
+        hostConfig.withSecurityOpts(securityOpts);
+
+        var capAdd = new ArrayList<Capability>();
+        if (hostConfig.getCapAdd() != null) {
+            capAdd.addAll(Arrays.asList(hostConfig.getCapAdd()));
+        }
+        if (!capAdd.contains(Capability.SYS_PTRACE)) {
+            capAdd.add(Capability.SYS_PTRACE);
+        }
+        hostConfig.withCapAdd(capAdd.toArray(Capability[]::new));
+    }
+
+    private static boolean isTracingEnabledForImage(String imageName) {
+        if (!Boolean.parseBoolean(System.getProperty(TRACE_PROPERTY_ENABLE, "true"))) {
+            return false;
+        }
+
+        return imageName != null
+                && imageName.toLowerCase(Locale.ROOT).contains(TRACE_IMAGE_HINT);
     }
 
     private void removeExistingContainerByName(String name) {
