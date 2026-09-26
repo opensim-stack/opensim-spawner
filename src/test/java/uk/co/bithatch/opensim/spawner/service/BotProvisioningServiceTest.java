@@ -96,6 +96,11 @@ class BotProvisioningServiceTest {
 		}
 
 		@Override
+		public Map<String, String> getContainerLabels(String ref) {
+			return new HashMap<>();
+		}
+
+		@Override
 		public void recreateContainer(String containerName, String targetImage, Consumer<ContainerUpdateContext> context) {
 		}
 

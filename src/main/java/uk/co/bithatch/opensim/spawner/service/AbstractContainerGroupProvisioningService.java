@@ -350,8 +350,8 @@ public abstract class AbstractContainerGroupProvisioningService<
 		LOG.info("Materializing files for {} container(s).", plan.containers().size());
 		var variables = plan.variables();
 		for (var container : plan.containers()) {
-			LOG.info("Container materialization step: {} directories, {} files, {} managed files.",
-					container.getDirectories().size(), container.getFiles().size(), container.getManagedFiles().size());
+			LOG.info("Container materialization step: {} directories, {} files.",	
+					container.getDirectories().size(), container.getFiles().size());
 			for (var dir : container.getDirectories()) {
 				var targetPath = Path.of(dir);
 				try {

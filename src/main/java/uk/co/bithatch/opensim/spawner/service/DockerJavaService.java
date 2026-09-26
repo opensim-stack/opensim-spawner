@@ -13,8 +13,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -428,7 +430,11 @@ public class DockerJavaService implements DockerService {
                 .withName(spec.getName())
                 .withHostConfig(hostConfig)
                 .withEnv(envList)
-                .withLabels(imageLabels(spec.getImage(), null));
+                .withLabels(Stream.of(
+                		imageLabels(spec.getImage(), null), 
+                		spec.getLabels()
+                	).flatMap(m -> m.entrySet().stream())
+                	       .collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
 
         var exposedPorts = toExposedPorts(portBindings);
         if (!exposedPorts.isEmpty()) {
@@ -636,6 +642,23 @@ public class DockerJavaService implements DockerService {
         try {
             var inspect = inspectContainer(id);
             return Strings.envVarsToMap(inspect.getConfig().getEnv());
+        } catch (RuntimeException e) {
+            LOG.error("Failed to inspect container {} (resolved id={}).", ref, id, e);
+            throw new ExternalDependencyException("Failed to inspect Docker container " + ref + ". " + e.getMessage(), e);
+        }
+    }
+
+    
+    @Override
+    public Map<String, String> getContainerLabels(String ref) {
+        var idsByName = indexContainerIdsByName();
+        var id = resolveContainerId(ref, idsByName);
+        if (id == null) {
+            throw new IllegalArgumentException("Container {} not found while fetching status. " + ref);
+        }
+        try {
+            var inspect = inspectContainer(id);
+            return inspect.getConfig().getLabels();
         } catch (RuntimeException e) {
             LOG.error("Failed to inspect container {} (resolved id={}).", ref, id, e);
             throw new ExternalDependencyException("Failed to inspect Docker container " + ref + ". " + e.getMessage(), e);

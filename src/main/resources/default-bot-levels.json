@@ -75,6 +75,9 @@
 			"containers": {
 				"%env.OPENSIM_OPENCODE_IMAGE%": {
 					"name": "%cfg.projectName%-opencode-%bot.first%-%bot.last%",
+					"labels": {
+                        "configured.by": "opencode-extensions"
+                    },
 					"environment": {
 						"OPENCODE_HOST": "%env.OPENCODE_HOST%",
 						"OPENCODE_PORT": "%env.OPENCODE_PORT%",
@@ -168,6 +171,9 @@
 			"containers": {
 				"%env.OPENSIM_OPENCODE_IMAGE%": {
 					"name": "%cfg.projectName%-opencode-%bot.first%-%bot.last%",
+                    "labels": {
+                        "configured.by": "opencode-extensions"
+                    },
 					"environment": {
 						"OPENCODE_HOST": "%env.OPENCODE_HOST%",
 						"OPENCODE_PORT": "%env.OPENCODE_PORT%",
@@ -258,6 +264,9 @@
 			"containers": {
 				"%env.OPENSIM_OPENCODE_IMAGE%": {
 					"name": "%cfg.projectName%-opencode-%bot.first%-%bot.last%",
+                    "labels": {
+                        "configured.by": "opencode-extensions"
+                    },
 					"environment": {
 						"OPENCODE_HOST": "%env.OPENCODE_HOST%",
 						"OPENCODE_PORT": "%env.OPENCODE_PORT%",

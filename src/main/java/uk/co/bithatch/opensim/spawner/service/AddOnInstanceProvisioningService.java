@@ -8,6 +8,7 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -21,6 +22,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sshtools.jini.Data;
 import com.sshtools.jini.INI;
 import com.sshtools.jini.INI.Section;
@@ -31,6 +36,7 @@ import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
 import uk.co.bithatch.opensim.spawner.domain.AddOn;
 import uk.co.bithatch.opensim.spawner.domain.AddOnInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.BotInstanceData;
+import uk.co.bithatch.opensim.spawner.domain.BotLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerGroupInstanceData;
 import uk.co.bithatch.opensim.spawner.domain.ContainerLevel;
 import uk.co.bithatch.opensim.spawner.domain.ContainerSpec;
@@ -50,6 +56,7 @@ import uk.co.bithatch.opensim.spawner.state.StackStateRepository;
 @Service
 public class AddOnInstanceProvisioningService extends AbstractContainerGroupProvisioningService<Manifest, ContainerLevel, AddOnInstanceStateRepository, AddOnInstanceData> {
 	private static final Logger LOG = LoggerFactory.getLogger(AddOnInstanceProvisioningService.class);
+	private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
 
 	private final AddOnRepository addOnRepository;
 	private final SpawnerProperties properties;
@@ -170,11 +177,14 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 	}
 	
 	public void enableAddOn(String addOnName) {
-		LOG.info("Enabling add-on {}.", addOnName);
 		if(!exists(addOnName)) {
+			LOG.info("Enabling add-on {}.", addOnName);
 			var created = installAddOn(addOnName, Map.of());
 			var contributions = resolveAddOnManagedContributions(created);
 			reconcileParentConfigurations(contributions, "enabled", addOnName);
+		}
+		else {
+			LOG.warn("{} add-on already enabled.", addOnName);
 		}
 	}
 
@@ -213,7 +223,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			removeAddOnManagedContributions(contributions);
 			reconcileParentConfigurations(contributions, "disabled", addOnName);
 			mfOpt.ifPresent(mf -> {
-	            reprovisionContainersWithVariables(mf, addOn.getContainerIds());
+				reprovisionContainersWithVariablesOrLabelMatches(mf, addOn.getContainerIds());
 	            runHooks(HookType.POST_UNINSTALL, mf, addOn, saveVars);	
 			});
 		}
@@ -411,16 +421,22 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
         addOnInstance.setName(name);
 		var manifest = addOnRepository.load(name)
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Add-on not found."));
-		var addOnLevel = resolveAddOnLevel(manifest.getExtensions());
-		addOnInstance.setLevel(addOnLevel);
-		addOnInstance.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
+		
+		List<SimulatorInstanceData> attachedGridSimulators = new ArrayList<>();
+		addOnInstance.setLevel(ContainerLevel.SIMULATOR);
+		for (var addOnLevel : resolveAddOnLevels(manifest.getExtensions())) {
 
-		SimulatorInstanceData attachedGridSimulator = null;
-		if (addOnLevel == ContainerLevel.SIMULATOR) {
-		  attachedGridSimulator = requireGridServiceSimulator();
-		  addOnInstance.setGridServiceSimulatorName(attachedGridSimulator.getName());
-		  LOG.info("GRID add-on '{}' attached to grid-service simulator '{}'.", name, attachedGridSimulator.getName());
+			addOnInstance.setLevel(addOnLevel);
+
+			if (addOnLevel == ContainerLevel.SIMULATOR) {
+				var sim = requireGridServiceSimulator();
+				attachedGridSimulators.add(sim);
+				addOnInstance.setGridServiceSimulatorName(sim.getName());
+				LOG.info("GRID add-on '{}' attached to grid-service simulator '{}'.", name, sim.getName());
+			}
 		}
+
+		addOnInstance.setRequestFields(requestFields == null ? Map.of() : new LinkedHashMap<>(requestFields));
         
         var materializedFiles = new ArrayList<java.nio.file.Path>();
         var createdContainerIds = new ArrayList<String>();
@@ -445,9 +461,11 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             addOnInstance.setContainerIds(createdContainerIds);
             stateRepository.save(addOnInstance);
 
-			if (attachedGridSimulator != null && !createdContainerIds.isEmpty()) {
-			  attachAddOnContainersToGridSimulator(attachedGridSimulator.getName(), createdContainerIds);
-			}
+            if(!createdContainerIds.isEmpty()) {
+	            for(var attachedGridSimulator : attachedGridSimulators) {
+	            	attachAddOnContainersToGridSimulator(attachedGridSimulator.getName(), createdContainerIds);
+				}
+            }
             
             runHooks(HookType.POST_INSTALL, manifest, addOnInstance, variables);
 
@@ -456,7 +474,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
             waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
             LOG.info("Add-on {} provisioned successfully.", name);
             
-            reprovisionContainersWithVariables(manifest, createdContainerIds);
+            reprovisionContainersWithVariablesOrLabelMatches(manifest, createdContainerIds);
 
             return addOnInstance;
         } catch (RuntimeException e) {
@@ -504,11 +522,11 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 
 		dockerService.startContainers(createdContainerIds);
 		waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
-		reprovisionContainersWithVariables(manifest, createdContainerIds);
+		reprovisionContainersWithVariablesOrLabelMatches(manifest, createdContainerIds);
 	}
 	
 
-	private void reprovisionContainersWithVariables(Manifest manifest, Collection<String> ignoredIds) {
+	private void reprovisionContainersWithVariablesOrLabelMatches(Manifest manifest, Collection<String> ignoredIds) {
 		var restartableContainers = new ArrayList<String>();
 		for(var ref : dockerService.listStackContainers()) {
 			if(ignoredIds.contains(ref)) {
@@ -518,6 +536,16 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			if(containsAny(env.keySet(), manifest.getExports())) {
 				LOG.info("Add-on export(s) detected in container {} environment: {}", ref, env);
 				restartableContainers.add(ref);
+			}
+			else {
+				var label = dockerService.getContainerLabels(ref).get("configured.by");
+				if(manifest.getReconfigures().contains(label)) {
+					LOG.info("Add-on label match configured.by detected in container {} label: {}", ref, label);
+					restartableContainers.add(ref);
+				}
+				else {
+					LOG.info("No add-on label match configured.by detected in container {} environment or labels.", ref);
+				}
 			}
 		}
 		
@@ -566,7 +594,19 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 									sim, new LinkedHashMap<>(variables), 
 									resolveEnvironment(manifest.getConstants(), Map.of()));
 							
-							runHooksForSimulator(sim, scriptDef, manifest, vars);
+							runHooksForInstance(sim, scriptDef, manifest, vars);
+						}
+						break;
+					case BOT:
+						var botType = BotLevel.valueOf((String)scriptDef.getOrDefault("level", BotLevel.ACTOR.name()));
+						for(var bot : botStateRepository.list().stream().filter(s -> s.getLevel() == botType).toList()) {
+							LOG.info("Executing {} hook script for add-on {} on bot {}.", hookType, manifest.getName(), bot.getName());
+							
+							var vars = botLevelProfileService.buildBaseVariables(
+									bot, new LinkedHashMap<>(variables), 
+									resolveEnvironment(manifest.getConstants(), Map.of()));
+							
+							runHooksForInstance(bot, scriptDef, manifest, vars);
 						}
 						break;
 					default:
@@ -580,42 +620,52 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		}
 	}
 	
-	private void runHooksForSimulator(SimulatorInstanceData sim, Map<String, Object> def, Manifest manifest, Map<String, String> variables) throws IOException {
+	private void runHooksForInstance(DomainObject instance, Map<String, Object> def, Manifest manifest, Map<String, String> variables) throws IOException {
 		var addOnDir = addOnRepository.resolve(manifest.getName())
 				.orElseThrow(() -> new IllegalStateException("Add-on manifest directory not found for " + manifest.getName() + ".")).toAbsolutePath().getParent();
 
 		switch((String)def.getOrDefault("type", "throw")) {
 		case "copy":
 		{
-			copyFile(def, addOnDir, variables);
+			copyFile(instance, def, addOnDir, variables);
 			break;
 		}
 		case "delete":
 		{
-			deleteFile(def, variables);
+			deleteFile(instance, def, variables);
 			break;
 		}
 		case "deleteIni":
 		{
-			deleteIni(sim, def, variables);
+			deleteIni(instance, def, variables);
 			break;
 		}
 		case "createIniKey":
 		{
-			createIniKey(sim, def, variables);
+			createIniKey(instance, def, variables);
+			break;
+		}
+		case "deleteJson":
+		{
+			deleteJson(instance, def, variables);
+			break;
+		}
+		case "createJson":
+		{
+			createJson(instance, def, variables);
 			break;
 		}
 		case "exec":
 		{
-			exec(def, addOnDir, variables);
+			exec(instance, def, addOnDir, variables);
 			break;
 		}
 		case "throw":
-			throw new UnsupportedOperationException("Hook script type not specified for add-on install on simulator " + sim.getName() + ".");
+			throw new UnsupportedOperationException("Hook script type not specified for add-on install on simulator " + instance.getName() + ".");
 		}
 	}
 	
-	private void exec(Map<String, Object> def, Path addOnDir, Map<String, String> variables) throws IOException {
+	private void exec(DomainObject instance, Map<String, Object> def, Path addOnDir, Map<String, String> variables) throws IOException {
 		var cmdArgs = new ArrayList<String>();
 		if(def.containsKey("line")) {
 			cmdArgs.addAll(Strings.parseQuotedString(templateResolver.resolve((String)def.get("line"), variables)));
@@ -632,7 +682,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		}
 
 		else if(def.containsKey("script")) {
-			var scriptPath = addOnDir.resolve(getHookOpPath("script", def, variables)).normalize();
+			var scriptPath = addOnDir.resolve(getHookOpPath(instance, "script", def, variables)).normalize();
 			if(!def.containsKey("process") || (Boolean)def.get("process")) {
 				var target = Files.createTempFile("osais", "bash");
 				Files.writeString(target, templateResolver.resolve(loadFileTemplate(scriptPath.toAbsolutePath().toString()), variables), StandardCharsets.UTF_8);
@@ -659,6 +709,9 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 				collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
 		prcbldr.directory(addOnDir.toFile());
 		prcbldr.inheritIO();
+		
+		LOG.info("Executing hook script for add-on with command: {} in directory: {}.", cmdArgs, addOnDir);
+		
 		var process = prcbldr.start();
 		try {
 			var exitCode = process.waitFor();
@@ -671,18 +724,20 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		}
 	}
 	
-	private void copyFile(Map<String, Object> def, Path addOnsDir, Map<String, String> variables) throws IOException {
-		var target = getHookOpPath("target", def, variables);
+	private void copyFile(DomainObject instance, Map<String, Object> def, Path addOnsDir, Map<String, String> variables) throws IOException {
+		var target = getHookOpPath(instance, "target", def, variables);
 		if(!target.isAbsolute()) {
 			throw new IllegalArgumentException("Hook script for add-on specifies non-absolute target path: " + target);
 		}
 		
-		var source = addOnsDir.resolve(getHookOpPath("source", def, variables)).normalize();
+		var source = addOnsDir.resolve(getHookOpPath(instance, "source", def, variables)).normalize();
 		mkdirsForPath(target);
 		if(!def.containsKey("process") || (Boolean)def.get("process")) {
+			LOG.info("Processing hook script for add-on copy from {} to {}.", source, target);
 			Files.writeString(target, templateResolver.resolve(loadFileTemplate(source.toAbsolutePath().toString()), variables), StandardCharsets.UTF_8);
 		}
 		else {
+			LOG.info("Copying hook script for add-on from {} to {}.", source, target);
 			Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
 		}
 		
@@ -696,14 +751,16 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		return path;
 	}
 
-	private void deleteFile(Map<String, Object> def, Map<String, String> variables) throws IOException {
-		var path = getHookOpPath("path", def, variables);
+	private void deleteFile(DomainObject instance, Map<String, Object> def, Map<String, String> variables) throws IOException {
+		var path = getHookOpPath(instance, "path", def, variables);
+		LOG.info("Deleting hook script for add-on file {}.", path);
 		Files.deleteIfExists(path);
+		LOG.info("Deleted hook script for add-on file {}.", path);
 	}
 
 	private void createIniKey(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
 		
-		var path = getHookOpPath("path", def, variables);
+		var path = getHookOpPath(dobj, "path", def, variables);
 		
 		var ini = INI.fromFile(path);
 		var section = (String)def.get("section");
@@ -712,10 +769,11 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 			sectionData = ini.sectionOr(templateResolver.resolve(section,variables)).orElse(null);
 		}
 		if(sectionData == null) {
-			LOG.info("Hook script for add-on hook on {} specifies section '{}' in INI file {}, but section does not exist. Creataing.", dobj.getName(), section, path);
+			LOG.info("Hook script for add-on hook on {} specifies section '{}' in INI file {}, but section does not exist. Creating.", dobj.getName(), section, path);
 			sectionData = ini.section(templateResolver.resolve(section,variables));
 		}
 		else {
+			LOG.info("Hook script for add-on hook on {} specifies section '{}' in INI file {}, and section exists. Adding/updating key.", dobj.getName(), section, path);
 			var key = Optional.ofNullable((String)def.get("key"))
 					.map(template -> templateResolver.resolve(template, variables))
 					.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on on " + dobj.getName() + " does not specify INI key."));;
@@ -730,7 +788,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 
 	private void deleteIni(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
 		
-		var path = getHookOpPath("path", def, variables);
+		var path = getHookOpPath(dobj, "path", def, variables);
 		
 		var ini = INI.fromFile(path);
 		var section = (String)def.get("section");
@@ -748,6 +806,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 						.get();
 						
 				if(sectionData.remove(key)) {
+					LOG.info("Hook script for add-on on {} specifies key '{}' in INI file {}, and key exists. Deleting.", dobj.getName(), key, path);
 					new INIWriter.Builder().build().write(ini, path);
 				}
 				else {
@@ -766,14 +825,366 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 		}
 	}
 
-	private Path getHookOpPath(String key, Map<String, Object> def, Map<String, String> variables) {
+	private void deleteJson(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
+		var path = getHookOpPath(dobj, "path", def, variables);
+		if (!Files.exists(path)) {
+			LOG.warn("Hook script for add-on on {} references JSON file {}, but file does not exist. Skipping.", dobj.getName(), path);
+			return;
+		}
+
+		var root = JSON_MAPPER.readTree(path.toFile());
+		if (root == null) {
+			LOG.warn("Hook script for add-on on {} references empty JSON file {}. Skipping.", dobj.getName(), path);
+			return;
+		}
+
+		var pathTokenSets = resolveJsonPathTokenSets(def, variables, true, dobj);
+		var changed = false;
+		for (var tokens : pathTokenSets) {
+			var parent = getJsonParentNode(root, tokens, false);
+			if (parent == null) {
+				LOG.warn("Hook script for add-on on {} references missing JSON path {} in {}. Skipping.", dobj.getName(),
+						String.join("/", tokens), path);
+				continue;
+			}
+
+			var leaf = tokens.get(tokens.size() - 1);
+			if (parent.isObject()) {
+				changed = ((ObjectNode) parent).remove(leaf) != null || changed;
+			} else if (parent.isArray()) {
+				var idx = parseArrayIndex(leaf, dobj, path);
+				var array = (ArrayNode) parent;
+				if (idx >= 0 && idx < array.size()) {
+					array.remove(idx);
+					changed = true;
+					LOG.info("Hook script for add-on on {} removed JSON array index {} in {}.", dobj.getName(), idx, path);
+				} else {
+					LOG.warn("Hook script for add-on on {} references missing JSON key/index '{}' in {}. Skipping.",
+							dobj.getName(), leaf, path);
+				}
+			} else {
+				LOG.warn("Hook script for add-on on {} targets non-container JSON node at path {} in {}. Skipping.",
+						dobj.getName(), String.join("/", tokens), path);
+			}
+		}
+
+		if (changed) {
+			JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), root);
+		}
+	}
+
+	private void createJson(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
+		var path = getHookOpPath(dobj, "path", def, variables);
+		mkdirsForPath(path);
+
+		JsonNode root;
+		if (!Files.exists(path) || Files.size(path) == 0L) {
+			root = JSON_MAPPER.createObjectNode();
+		} else {
+			root = JSON_MAPPER.readTree(path.toFile());
+			if (root == null) {
+				root = JSON_MAPPER.createObjectNode();
+			}
+		}
+
+		var payload = resolveJsonPayload(dobj, def, variables);
+		var tokens = resolveJsonPathTokens(def, variables, false, dobj);
+
+		if (tokens.isEmpty()) {
+			root = mergeOrReplaceNode(root, payload, resolveJsonMode(def, variables));
+			LOG.info("Hook script for add-on on {} replaced root JSON node in {}.", dobj.getName(), path);
+		} else {
+			var parent = getJsonParentNode(root, tokens, true);
+			if (parent == null) {
+				throw new IllegalArgumentException("Hook script for add-on on " + dobj.getName()
+						+ " has an invalid JSON target path.");
+			}
+			var leaf = tokens.get(tokens.size() - 1);
+			if (parent.isObject()) {
+				var objectParent = (ObjectNode) parent;
+				var existing = objectParent.get(leaf);
+				objectParent.set(leaf, mergeOrReplaceNode(existing, payload, resolveJsonMode(def, variables)));
+				LOG.info("Hook script for add-on on {} set JSON key '{}' in {}.", dobj.getName(), leaf, path);
+			} else if (parent.isArray()) {
+				var idx = parseArrayIndex(leaf, dobj, path);
+				var arrayParent = (ArrayNode) parent;
+				ensureArraySize(arrayParent, idx + 1);
+				var existing = arrayParent.get(idx);
+				arrayParent.set(idx, mergeOrReplaceNode(existing, payload, resolveJsonMode(def, variables)));
+				LOG.info("Hook script for add-on on {} set JSON array index {} in {}.", dobj.getName(), idx, path);
+			} else {
+				throw new IllegalArgumentException("Hook script for add-on on " + dobj.getName()
+						+ " targets non-container JSON node at path " + String.join("/", tokens) + ".");
+			}
+		}
+
+		JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), root);
+	}
+
+	private String resolveJsonMode(Map<String, Object> def, Map<String, String> variables) {
+		var mode = Optional.ofNullable((String) def.get("mode"))
+				.map(template -> templateResolver.resolve(template, variables))
+				.map(String::trim)
+				.map(String::toLowerCase)
+				.orElse("merge");
+		if (!mode.equals("merge") && !mode.equals("replace")) {
+			throw new IllegalArgumentException("Unsupported JSON hook mode '" + mode + "'. Use 'merge' or 'replace'.");
+		}
+		return mode;
+	}
+
+	private JsonNode resolveJsonPayload(DomainObject dobj, Map<String, Object> def, Map<String, String> variables) throws IOException {
+		if (!def.containsKey("json") && !def.containsKey("value")) {
+			throw new IllegalArgumentException(
+					"Hook script for add-on on " + dobj.getName() + " does not specify JSON payload (`json` or `value`).");
+		}
+
+		var payloadDef = def.containsKey("json") ? def.get("json") : def.get("value");
+		if (payloadDef instanceof String payloadString) {
+			var resolved = templateResolver.resolve(payloadString, variables);
+			return JSON_MAPPER.readTree(resolved);
+		}
+
+		var resolvedObject = resolveTemplatedJsonValue(payloadDef, variables);
+		return JSON_MAPPER.valueToTree(resolvedObject);
+	}
+
+	private Object resolveTemplatedJsonValue(Object value, Map<String, String> variables) {
+		if (value instanceof String template) {
+			return templateResolver.resolve(template, variables);
+		}
+		if (value instanceof Map<?, ?> mapValue) {
+			var resolved = new LinkedHashMap<String, Object>();
+			for (var entry : mapValue.entrySet()) {
+				resolved.put(String.valueOf(entry.getKey()), resolveTemplatedJsonValue(entry.getValue(), variables));
+			}
+			return resolved;
+		}
+		if (value instanceof List<?> listValue) {
+			var resolved = new ArrayList<Object>(listValue.size());
+			for (var item : listValue) {
+				resolved.add(resolveTemplatedJsonValue(item, variables));
+			}
+			return resolved;
+		}
+		return value;
+	}
+
+	private JsonNode mergeOrReplaceNode(JsonNode existing, JsonNode payload, String mode) {
+		if (existing == null || existing.isMissingNode() || mode.equals("replace")) {
+			return payload.deepCopy();
+		}
+		if (existing.isObject() && payload.isObject()) {
+			var merged = existing.deepCopy();
+			deepMergeObjectNodes((ObjectNode) merged, (ObjectNode) payload);
+			return merged;
+		}
+		return payload.deepCopy();
+	}
+
+	private void deepMergeObjectNodes(ObjectNode target, ObjectNode update) {
+		var fields = update.fields();
+		while (fields.hasNext()) {
+			var field = fields.next();
+			var existing = target.get(field.getKey());
+			if (existing != null && existing.isObject() && field.getValue().isObject()) {
+				deepMergeObjectNodes((ObjectNode) existing, (ObjectNode) field.getValue());
+			} else {
+				target.set(field.getKey(), field.getValue().deepCopy());
+			}
+		}
+	}
+
+	private List<String> resolveJsonPathTokens(Map<String, Object> def,
+			Map<String, String> variables,
+			boolean required,
+			DomainObject dobj) {
+		var paths = resolveJsonPathTokenSets(def, variables, required, dobj);
+		if (paths.isEmpty()) {
+			return Collections.emptyList();
+		}
+		if (paths.size() > 1) {
+			throw new IllegalArgumentException("Hook script for add-on on " + dobj.getName()
+					+ " specifies multiple JSON paths where only one is supported.");
+		}
+		return paths.get(0);
+	}
+
+	private List<List<String>> resolveJsonPathTokenSets(Map<String, Object> def,
+			Map<String, String> variables,
+			boolean required,
+			DomainObject dobj) {
+		var tokenSets = new ArrayList<List<String>>();
+
+		var rawPaths = def.get("jsonPaths");
+		if (rawPaths instanceof List<?> listPaths) {
+			for (var item : listPaths) {
+				if (item == null) {
+					continue;
+				}
+				var pathSpec = templateResolver.resolve(String.valueOf(item), variables).trim();
+				if (!pathSpec.isBlank()) {
+					tokenSets.add(parseJsonPathTokens(pathSpec));
+				}
+			}
+		}
+
+		if (tokenSets.isEmpty()) {
+			var rawPath = Optional.ofNullable((String) def.get("jsonPath"))
+					.or(() -> Optional.ofNullable((String) def.get("pointer")))
+					.or(() -> Optional.ofNullable((String) def.get("section")))
+					.map(template -> templateResolver.resolve(template, variables))
+					.map(String::trim)
+					.orElse("");
+
+			if (rawPath.isBlank()) {
+				if (required) {
+					throw new IllegalArgumentException("Hook script for add-on on " + dobj.getName()
+							+ " does not specify JSON path (`jsonPath`, `jsonPaths` or `pointer`).");
+				}
+				return Collections.emptyList();
+			}
+
+			tokenSets.add(parseJsonPathTokens(rawPath));
+		}
+
+		return tokenSets;
+	}
+
+	private List<String> parseJsonPathTokens(String rawPath) {
+		if (rawPath.equals("/")) {
+			return Collections.emptyList();
+		}
+
+		var slashMode = rawPath.startsWith("/");
+		var tokens = new ArrayList<String>();
+		var current = new StringBuilder();
+		var escaped = false;
+		for (var i = slashMode ? 1 : 0; i < rawPath.length(); i++) {
+			var c = rawPath.charAt(i);
+			if (escaped) {
+				current.append(c);
+				escaped = false;
+				continue;
+			}
+			if (c == '\\') {
+				escaped = true;
+				continue;
+			}
+			if ((slashMode && c == '/') || (!slashMode && (c == '/' || c == '.'))) {
+				addJsonPathToken(tokens, current, slashMode);
+				continue;
+			}
+			current.append(c);
+		}
+		if (escaped) {
+			current.append('\\');
+		}
+		addJsonPathToken(tokens, current, slashMode);
+		return tokens;
+	}
+
+	private void addJsonPathToken(List<String> tokens, StringBuilder tokenBuilder, boolean decodeJsonPointer) {
+		var token = tokenBuilder.toString();
+		tokenBuilder.setLength(0);
+		if (token.isBlank()) {
+			return;
+		}
+		var normalized = decodeJsonPointer ? token.replace("~1", "/").replace("~0", "~") : token.trim();
+		if (!normalized.isBlank()) {
+			tokens.add(normalized);
+		}
+	}
+
+	private JsonNode getJsonParentNode(JsonNode root, List<String> tokens, boolean createMissing) {
+		if (tokens.isEmpty()) {
+			return null;
+		}
+
+		var current = root;
+		for (var i = 0; i < tokens.size() - 1; i++) {
+			var token = tokens.get(i);
+			var next = i + 1 < tokens.size() ? tokens.get(i + 1) : null;
+
+			if (current == null) {
+				return null;
+			}
+
+			if (current.isObject()) {
+				var objectNode = (ObjectNode) current;
+				var child = objectNode.get(token);
+				if (child == null || child.isNull()) {
+					if (!createMissing) {
+						return null;
+					}
+					child = isArrayToken(next) ? JSON_MAPPER.createArrayNode() : JSON_MAPPER.createObjectNode();
+					objectNode.set(token, child);
+				}
+				current = child;
+			} else if (current.isArray()) {
+				var index = parseArrayIndexSafe(token);
+				if (index < 0) {
+					return null;
+				}
+				var arrayNode = (ArrayNode) current;
+				if (index >= arrayNode.size()) {
+					if (!createMissing) {
+						return null;
+					}
+					ensureArraySize(arrayNode, index + 1);
+				}
+				var child = arrayNode.get(index);
+				if (child == null || child.isNull()) {
+					if (!createMissing) {
+						return null;
+					}
+					child = isArrayToken(next) ? JSON_MAPPER.createArrayNode() : JSON_MAPPER.createObjectNode();
+					arrayNode.set(index, child);
+				}
+				current = child;
+			} else {
+				return null;
+			}
+		}
+
+		return current;
+	}
+
+	private int parseArrayIndex(String token, DomainObject dobj, Path jsonPath) {
+		var index = parseArrayIndexSafe(token);
+		if (index < 0) {
+			throw new IllegalArgumentException("Hook script for add-on on " + dobj.getName()
+					+ " contains non-numeric JSON array index '" + token + "' for file " + jsonPath + ".");
+		}
+		return index;
+	}
+
+	private int parseArrayIndexSafe(String token) {
+		try {
+			return Integer.parseInt(token);
+		} catch (NumberFormatException e) {
+			return -1;
+		}
+	}
+
+	private boolean isArrayToken(String token) {
+		return parseArrayIndexSafe(token) >= 0;
+	}
+
+	private void ensureArraySize(ArrayNode arrayNode, int targetSize) {
+		while (arrayNode.size() < targetSize) {
+			arrayNode.addNull();
+		}
+	}
+
+	private Path getHookOpPath(DomainObject instance, String key, Map<String, Object> def, Map<String, String> variables) {
 		return Optional.ofNullable((String)def.get(key))
 				.map(template -> templateResolver.resolve(template, variables))
 				.map(Path::of)
 				.orElseThrow(() -> new IllegalArgumentException("Hook script for add-on does not specify `" + key + "`."));
 	}
 
-	private ContainerLevel resolveAddOnLevel(Map<ContainerLevel, Map<String, Object>> extensions) {
+	private Set<ContainerLevel> resolveAddOnLevels(Map<ContainerLevel, Map<String, Object>> extensions) {
 		if (extensions == null || extensions.isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Add-on has no extensions.");
 		}
@@ -783,8 +1194,7 @@ public class AddOnInstanceProvisioningService extends AbstractContainerGroupProv
 					"Add-on has multiple extension types. Only one extension type per add-on is currently supported.");
 		}
 
-		var addOnType = extensions.keySet().iterator().next();
-		return ContainerLevel.valueOf(addOnType.name());
+		return extensions.keySet();
 	}
 
 	private SimulatorInstanceData requireGridServiceSimulator() {

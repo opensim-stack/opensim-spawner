@@ -18,6 +18,15 @@ public class Component<LVL extends Enum<LVL>> implements DomainObject {
 	private Map<HookType, List<Map<String, Object>>> hooks = new HashMap<>();
 	private List<String> exports = new ArrayList<>();
 	private List<ConfigItem> configuration = new ArrayList<>();
+	private List<String> reconfigures = new ArrayList<>();
+	
+	public List<String> getReconfigures() {
+		return reconfigures;
+	}
+	
+	public void setReconfigures(List<String> reconfigures) {
+		this.reconfigures = reconfigures;
+	}
 
 	public List<ConfigItem> getConfiguration() {
 		return configuration;

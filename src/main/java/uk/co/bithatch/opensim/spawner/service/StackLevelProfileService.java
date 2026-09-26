@@ -33,12 +33,12 @@ public class StackLevelProfileService  extends AbstractComponentProfileService<S
 	}
 
 	@Override
-	public Map<String, String> onBuildTypeVariables(StackState bot, Map<String, String> variables) {
+	public Map<String, String> onBuildTypeVariables(StackState stack, Map<String, String> variables) {
         return variables;
     }
 
 	@Override
-	protected ResolvedStackPlan createPlan(StackState bot, List<ContainerSpec> containers, Map<String, String> variables) {
-        return new ResolvedStackPlan(bot.getLevel(), containers, variables);
+	protected ResolvedStackPlan createPlan(StackState stack, List<ContainerSpec> containers, Map<String, String> variables) {
+        return new ResolvedStackPlan(stack.getLevel(), containers, variables);
 	}
 }

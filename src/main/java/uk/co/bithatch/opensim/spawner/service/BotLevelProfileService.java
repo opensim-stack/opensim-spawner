@@ -36,6 +36,8 @@ public class BotLevelProfileService extends AbstractComponentProfileService<Bots
 	public Map<String, String> onBuildTypeVariables(BotInstanceData bot, Map<String, String> variables) {
         variables.put("bot.first", bot.getFirst());
         variables.put("bot.last", bot.getLast());
+        variables.put("bot.name", bot.getName());
+        variables.put("bot.displayName", bot.displayName());
         variables.put("bot.password", bot.getPassword());
         variables.put("bot.token", bot.getToken());
         variables.put("bot.parent", bot.getParent() == null ? "" : bot.getParent());

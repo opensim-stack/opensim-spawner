@@ -46,6 +46,8 @@ public interface DockerService {
 	List<String> listStackContainers();
 
 	Map<String, String> getContainerVars(String ref);
+
+	Map<String, String> getContainerLabels(String ref);
 	
 	ContainerDetails inspect(String containerName);
 
