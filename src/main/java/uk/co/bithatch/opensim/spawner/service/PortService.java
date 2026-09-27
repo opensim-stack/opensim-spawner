@@ -3,6 +3,8 @@ package uk.co.bithatch.opensim.spawner.service;
 import java.util.Arrays;
 import java.util.HashSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import uk.co.bithatch.opensim.spawner.config.SpawnerProperties;
@@ -11,6 +13,8 @@ import uk.co.bithatch.opensim.spawner.state.SimulatorStateRepository;
 
 @Service
 public class PortService {
+	
+	private final static Logger LOG = LoggerFactory.getLogger(PortService.class);
 	
 	private final SimulatorStateRepository stateRepository;
 	private final SpawnerProperties properties;
@@ -37,16 +41,14 @@ public class PortService {
 						.filter(region -> region != null && region.getPort() != 0)
 						.forEach(region -> usedPorts.add(region.getPort()));
 				});
-			if(!usedPorts.contains(properties.getFirstPort())) {
-				return properties.getFirstPort();
-			}
-			else {
-				int nextPort = usedPorts.stream().max(Integer::compareTo).get() + 1;
-				if(nextPort > properties.getLastPort()) {
-					throw new RuntimeException("No available ports in range " + properties.getFirstPort() + "-" + properties.getLastPort());
+			
+			LOG.info("Used ports for level {}: {}", level, usedPorts);
+			for(int port = properties.getFirstPort(); port <= properties.getLastPort(); port++) {
+				if(!usedPorts.contains(port)) {
+					return port;
 				}
-				return nextPort;
 			}
+			throw new RuntimeException("No available ports in range " + properties.getFirstPort() + "-" + properties.getLastPort());
 		}
 	}
 }

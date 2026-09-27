@@ -1,5 +1,7 @@
 package uk.co.bithatch.opensim.spawner.service;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -17,6 +19,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import com.sshtools.jini.INI;
 
 import uk.co.bithatch.opensim.jlib.OpensimRESTConsole;
 import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient;
@@ -487,6 +491,9 @@ public class RestOpenSimService implements OpenSimService {
         try {
             openRemoteAdmin(simulator).deleteRegion(targetRegion.name());
             removeRegion(simulator, normalizedRegionId, targetRegion.name());
+            
+            removeRemoveConfigFile(simulator, targetRegion);
+            
             simStateRepository.save(simulator);
         } catch (RuntimeException e) {
             throw new ExternalDependencyException(
@@ -494,6 +501,31 @@ public class RestOpenSimService implements OpenSimService {
                     e);
         }
     }
+
+
+	public void removeRemoveConfigFile(SimulatorInstanceData simulator, RegionData targetRegion) {
+		var regionsDir = properties.getConfigDir().resolve("sims").resolve(simulator.getName()).resolve("Regions");
+		try(var file = Files.list(regionsDir)) {
+			for(var f : file.toList()) {
+				try {
+		    		if(Files.isRegularFile(f) && f.getFileName().toString().endsWith(".ini")) {
+		    			var ini = INI.fromFile(f);
+		    			if(ini.section(targetRegion.name()).get("RegionUUID").equals(targetRegion.id())) {
+		    				Files.delete(f);
+		    				LOG.info("Deleted region INI file {} for region {}.", f, targetRegion.name());
+		    				break;
+		    			}
+					}
+				}
+				catch(Exception e) {
+					LOG.warn("Failed to parse region INI file {}. Skipping.", f, e);
+				}
+			}
+		}
+		catch(IOException e) {
+			LOG.warn("Failed to list region INI files in {}. Skipping.", regionsDir, e);
+		}
+	}
 
     private void loadOarWithRetry(OpensimRemoteAdminClient admin, String regionId, String archivePath) {
         RuntimeException last = null;
