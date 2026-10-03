@@ -6,12 +6,21 @@ public class UpdatesConfiguration {
     private String dockerHubToken = "";
     private boolean automaticUpdates = true;
     private String tag;
+    private String group;
 
     public String getDockerHubUsername() {
         return dockerHubUsername;
     }
 
-    public void setDockerHubUsername(String dockerHubUsername) {
+    public String getGroup() {
+		return group;
+	}
+
+	public void setGroup(String group) {
+		this.group = group;
+	}
+
+	public void setDockerHubUsername(String dockerHubUsername) {
         this.dockerHubUsername = normalize(dockerHubUsername);
     }
 

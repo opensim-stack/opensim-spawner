@@ -159,6 +159,9 @@
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
+                    "ports": {
+                        "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
+                    },
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
 					}
@@ -251,9 +254,6 @@
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
-					},
-					"volumes": {
-						"%cfg.projectName%_opensim-config": "/config"
 					}
 				}
 			}

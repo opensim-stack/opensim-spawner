@@ -372,6 +372,10 @@ public class UpdateService {
         return normalize(Strings.firstNonBlank(gridStateRepository.get().getUpdates().getTag(), spawnerProperties.getOpensimTag(), "latest"));
     }
 
+    private String configuredGroup() {
+        return normalize(Strings.firstNonBlank(gridStateRepository.get().getUpdates().getGroup(), spawnerProperties.getOpensimGroup(), "bithatch/"));
+    }
+
    
 
     private static boolean isSpawnerImage(String imageRef) {

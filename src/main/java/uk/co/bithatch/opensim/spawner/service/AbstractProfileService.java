@@ -279,6 +279,10 @@ public abstract class AbstractProfileService<COM extends Component<LVL>, T exten
 				grid.getUpdates().getTag() == null || grid.getUpdates().getTag().isBlank() 
 					? properties.getOpensimTag()
 					: grid.getUpdates().getTag());
+		variables.put("grid.updates.group",
+				grid.getUpdates().getGroup() == null || grid.getUpdates().getGroup().isBlank() 
+					? properties.getOpensimGroup()
+					: grid.getUpdates().getGroup());
         
     	grid.getTokens().forEach((key, value) -> variables.put("token." + key, value));    	
     	

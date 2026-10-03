@@ -124,6 +124,7 @@ public class UiController {
         
         response.put("automaticUpdates", updates.isAutomaticUpdates());
         response.put("tag", updates.getTag() == null ? "" : updates.getTag());
+        response.put("group", updates.getGroup() == null ? "" : updates.getGroup());
         response.put("dockerHubUsername", normalize(updates.getDockerHubUsername()));
         response.put("dockerHubToken", normalize(updates.getDockerHubToken()));
         response.put("addOnsRepository", normalize(gridState.getAddOnsRepository()));
@@ -142,6 +143,7 @@ public class UiController {
     @ResponseBody
     public Map<String, Object> updateUpdatesConfig(@RequestParam(required = false) String automaticUpdates,
             @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String group,
             @RequestParam(required = false) String dockerHubUsername,
             @RequestParam(required = false) String dockerHubToken,
             @RequestParam(required = false) String addOnsRepository,
@@ -152,6 +154,7 @@ public class UiController {
         var updates = gridState.getUpdates();
         updates.setAutomaticUpdates(parseBoolean(automaticUpdates, updates.isAutomaticUpdates()));
         updates.setTag(tag == null || tag.equals("") ? null : tag.trim());
+        updates.setGroup(group == null || group.equals("") ? null : group.trim());
         updates.setDockerHubUsername(normalize(dockerHubUsername));
         updates.setDockerHubToken(normalize(dockerHubToken));
         gridState.setAddOnsRepository(normalize(addOnsRepository));

@@ -300,8 +300,7 @@ public class BotProvisioningService
 
 			var workspaceArchivePath = copyArchiveToWorkspace(appearanceArchiveResource, bot, materializedFiles);
 			openSimService.loadInventoryArchive(first, last, "/", password, workspaceArchivePath.toString());
-			containerRequestFields.put("WEAR_FOLDER_NAME",
-					extractOutfitNameFromArchivePath(workspaceArchivePath.toString()));
+			containerRequestFields.put("WEAR_FOLDER_NAME", "Setup");
 
 			provisionBot(bot, materializedFiles, createdContainerIds,
 					profileService.resolvePlan(bot, resolveEnvironment(profileService.component().getConstants(),  bot.getRequestFields())));
@@ -357,20 +356,6 @@ public class BotProvisioningService
 		LOG.info("Started {} container(s) for bot {}.", createdContainerIds.size(), bot.displayName());
 		waitForStartupWindow(createdContainerIds, Duration.ofMinutes(1), Duration.ofSeconds(2));
 		LOG.info("Bot {} provisioned successfully.", bot.displayName());
-	}
-
-	private String extractOutfitNameFromArchivePath(String archivePath) {
-		var fileName = java.nio.file.Path.of(archivePath).getFileName();
-		if (fileName == null) {
-			throw new IllegalArgumentException(
-					"Appearance archive path '" + archivePath + "' does not contain a file name.");
-		}
-		var name = fileName.toString();
-		if (!name.endsWith(".iar")) {
-			throw new IllegalArgumentException(
-					"Appearance archive path '" + archivePath + "' does not have a .iar extension.");
-		}
-		return name.substring(0, name.length() - 4).replaceAll("-", " ");
 	}
 
 	private String resolveRequestedAppearance(BotLevel level, Map<String, String> requestFields) {
