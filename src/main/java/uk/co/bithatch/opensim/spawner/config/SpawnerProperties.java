@@ -24,6 +24,7 @@ public class SpawnerProperties {
 	private String opensimBotFirst;
 	private String opensimBotLast;
 	private String opensimBotEmail;
+	private String opensimBotGroup;
 	private String opensimBotAppearance;
 	private String opensimBotGender;
 	private String opensimPullPolicy;
@@ -382,6 +383,14 @@ public class SpawnerProperties {
 		this.workspaceDir = workspaceDir;
 	}
 	
+	public String getOpensimBotGroup() {
+		return opensimBotGroup;
+	}
+
+	public void setOpensimBotGroup(String opensimBotGroup) {
+		this.opensimBotGroup = opensimBotGroup;
+	}
+
 	public Map<String, String> buildVariables() {
 		var map = new HashMap<String, String>();
 		map.put("cfg.createBotUser", String.valueOf(opensimCreateBotUser));
@@ -397,6 +406,7 @@ public class SpawnerProperties {
 		map.put("cfg.botFirst", opensimBotFirst);
 		map.put("cfg.botLast", opensimBotLast);
 		map.put("cfg.botEmail", opensimBotEmail);
+		map.put("cfg.botGroup", opensimBotGroup);
 		map.put("cfg.botAppearance", opensimBotAppearance);
 		map.put("cfg.botGender", opensimBotGender);
 		map.put("cfg.pullPolicy", opensimPullPolicy);

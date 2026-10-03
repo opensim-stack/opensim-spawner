@@ -22,6 +22,7 @@
         "OPENCODE_SERVER_EXTRA_ARGS" : "",
         "OPENSIM_LOGIN_START": "last",
         "OPENSIM_LOGIN_TIMEOUT_SECONDS" : "30",
+        "OPENSIM_BOT_GROUP" : "%cfg.botGroup%",
         "SPAWNER_HOST": "%cfg.projectName%-spawner",
         "OPENSIM_LOGIN_URI": "http://%cfg.projectName%-grid-services:9000",
         "MCP_DIAGNOSTICS": "false",
@@ -46,6 +47,11 @@
             "name": "OPENSIM_LOGIN_TIMEOUT_SECONDS",
             "type": "TEXT",
             "description": "Login timeout in seconds for the bot to login to the OpenSimulator grid. Default is 30 seconds."
+        },
+        {
+            "name": "OPENSIM_BOT_GROUP",
+            "type": "TEXT",
+            "description": "If not blank, bot will be enrolled in this group when it boots."
         },
         {
             "name": "WEAR_FOLDER_NAME",
@@ -134,6 +140,7 @@
 						"OPENSIM_BOT_FIRST": "%bot.first%",
 						"OPENSIM_BOT_LAST": "%bot.last%",
 						"OPENSIM_BOT_PASSWORD": "%bot.password%",
+                        "OPENSIM_BOT_GROUP": "%env.OPENSIM_BOT_GROUP%",
 						"OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
 						"OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
 						"OPENSIM_HANDLER_CONFIG": "%env.OPENSIM_HANDLER_CONFIG%",
@@ -159,9 +166,6 @@
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
-                    "ports": {
-                        "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
-                    },
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
 					}
@@ -234,6 +238,7 @@
 						"OPENSIM_BOT_FIRST": "%bot.first%",
 						"OPENSIM_BOT_LAST": "%bot.last%",
 						"OPENSIM_BOT_PASSWORD": "%bot.password%",
+                        "OPENSIM_BOT_GROUP": "%env.OPENSIM_BOT_GROUP%",
 						"OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
 						"OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
 						"OPENSIM_HANDLER_CONFIG": "%env.OPENSIM_HANDLER_CONFIG%",
@@ -323,6 +328,7 @@
 						"OPENSIM_BOT_FIRST": "%bot.first%",
 						"OPENSIM_BOT_LAST": "%bot.last%",
 						"OPENSIM_BOT_PASSWORD": "%bot.password%",
+                        "OPENSIM_BOT_GROUP": "%env.OPENSIM_BOT_GROUP%",
 						"OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
 						"OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
 						"OPENSIM_HANDLER_CONFIG": "%env.OPENSIM_HANDLER_CONFIG%",
