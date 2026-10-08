@@ -144,6 +144,7 @@
 						"OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
 						"OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
 						"OPENSIM_HANDLER_CONFIG": "%env.OPENSIM_HANDLER_CONFIG%",
+                        "OPENSIM_SECURITY_VERIFY_SERVER_CERTIFICATES": "false",
                         "OPENSIM_PROJECT_NAME": "%cfg.projectName%",
 						"VOICE_ROUTING_ENABLED": "%env.VOICE_ROUTING_ENABLED%",
 						"VOICE_BACKEND": "%env.VOICE_BACKEND%",
@@ -166,6 +167,9 @@
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
 					},
+                    "ports": {
+                        "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
+                    },
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
 					}
@@ -242,6 +246,7 @@
 						"OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
 						"OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
 						"OPENSIM_HANDLER_CONFIG": "%env.OPENSIM_HANDLER_CONFIG%",
+                        "OPENSIM_SECURITY_VERIFY_SERVER_CERTIFICATES": "false",
 						"VOICE_ROUTING_ENABLED": "%env.VOICE_ROUTING_ENABLED%",
 						"VOICE_BACKEND": "%env.VOICE_BACKEND%",
 						"PIPER_HOST": "%env.PIPER_HOST%",
@@ -332,6 +337,7 @@
 						"OPENSIM_LOGIN_URI": "%env.OPENSIM_LOGIN_URI%",
 						"OPENSIM_LOGIN_START": "%env.OPENSIM_LOGIN_START%",
 						"OPENSIM_HANDLER_CONFIG": "%env.OPENSIM_HANDLER_CONFIG%",
+                        "OPENSIM_SECURITY_VERIFY_SERVER_CERTIFICATES": "false",
 						"VOICE_ROUTING_ENABLED": "%env.VOICE_ROUTING_ENABLED%",
 						"VOICE_BACKEND": "%env.VOICE_BACKEND%",
 						"PIPER_HOST": "%env.PIPER_HOST%",
