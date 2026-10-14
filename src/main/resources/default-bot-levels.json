@@ -27,7 +27,8 @@
         "OPENSIM_LOGIN_URI": "http://%cfg.projectName%-grid-services:9000",
         "MCP_DIAGNOSTICS": "false",
         "ALLOW_IAR_IMPORT": "true",
-        "ALLOW_RLV": "true"
+        "ALLOW_RLV": "true",
+        "APPEARANCE_AUTO_REPAIR_ENABLED": "false"
     },
 	"tokens": [],
 	"exports": [
@@ -72,7 +73,12 @@
             "name": "MCP_DIAGNOSTICS",
             "type": "BOOLEAN",
             "description": "Whether to enable additional diagnostics MCP operations (output to log). Default is false."
-        }
+        },
+        {
+            "name": "APPEARANCE_AUTO_REPAIR_ENABLED",
+            "type": "BOOLEAN",
+            "description": "Whether to enable auto-repair (appearance problems when cross sims). Default is false."
+        }        
     ],
 	"extensions": {
 		"GOVERNOR": {
@@ -165,7 +171,8 @@
 						"OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
 						"ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
-                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
+                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
+                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%"
 					},
                     "ports": {
                         "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
@@ -263,7 +270,8 @@
                         "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
-                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
+                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
+                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%"
 					}
 				}
 			}
@@ -354,7 +362,8 @@
                         "OPENSIM_LOGIN_TIMEOUT_SECONDS": "%env.OPENSIM_LOGIN_TIMEOUT_SECONDS%",
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
-                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%"
+                        "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
+                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%"
 					},
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
