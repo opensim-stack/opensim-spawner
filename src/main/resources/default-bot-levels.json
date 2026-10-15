@@ -172,13 +172,15 @@
 						"ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
-                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%"
+                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%",
+                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%"
 					},
                     "ports": {
                         "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
                     },
 					"volumes": {
-						"%cfg.projectName%_opensim-config": "/config"
+						"%cfg.projectName%_opensim-config": "/config",
+                        "%cfg.projectName%_opensim-workspace": "/workspace"
 					}
 				}
 			}
@@ -271,8 +273,12 @@
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
-                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%"
-					}
+                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%",
+                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%"
+					},
+                    "volumes": {
+                        "%cfg.projectName%_opensim-workspace": "/workspace"
+                    }
 				}
 			}
 		},
@@ -363,11 +369,12 @@
                         "ALLOW_IAR_IMPORT": "%env.ALLOW_IAR_IMPORT%",
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
-                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%"
+                        "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%",
+                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%"
 					},
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
-					}
+				    }
 				}
 			}
 		}
