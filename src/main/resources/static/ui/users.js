@@ -15,8 +15,12 @@ const findResultContent = document.getElementById('find-result-content');
 
 const userFlagsSection = document.getElementById('user-flags-section');
 const userFlagsForm = document.getElementById('user-flags-form');
+const flagAllowPublish = document.getElementById('flag-allow-publish');
+const flagMaturePublish = document.getElementById('flag-mature-publish');
 const flagIdentified = document.getElementById('flag-identified');
+const flagTransacted = document.getElementById('flag-transacted');
 const flagAgeVerified = document.getElementById('flag-age-verified');
+const flagAccountLevel = document.getElementById('flag-account-level');
 const userFlagsError = document.getElementById('user-flags-error');
 const userFlagsSubmit = document.getElementById('user-flags-submit');
 
@@ -34,8 +38,13 @@ let botNameSet = new Set();
 let handlerNameSet = new Set();
 const gridServiceUnavailableMessage = 'User management is disabled until a ROBUST or STANDALONE simulator is active.';
 const ACTIVE_USERS_COLUMN_COUNT = 7;
+const PROFILE_FLAG_ALLOW_PUBLISH = 1 << 0;
+const PROFILE_FLAG_MATURE_PUBLISH = 1 << 1;
 const PROFILE_FLAG_IDENTIFIED = 1 << 2;
+const PROFILE_FLAG_TRANSACTED = 1 << 3;
 const PROFILE_FLAG_AGE_VERIFIED = 1 << 5;
+const ACCOUNT_LEVEL_SHIFT = 8;
+const ACCOUNT_LEVEL_MASK = 0x0f << ACCOUNT_LEVEL_SHIFT;
 
 const showInlineError = (el, message) => {
   if (!el) {
@@ -277,10 +286,14 @@ const resetUserPassword = async (first, last, password) => {
   }
 };
 
-const updateUserFlags = async (first, last, identified, ageVerified) => {
+const updateUserFlags = async (first, last, flags) => {
   const payload = new URLSearchParams();
-  payload.set('identified', identified ? 'true' : 'false');
-  payload.set('ageVerified', ageVerified ? 'true' : 'false');
+  payload.set('allowPublish', flags.allowPublish ? 'true' : 'false');
+  payload.set('maturePublish', flags.maturePublish ? 'true' : 'false');
+  payload.set('identified', flags.identified ? 'true' : 'false');
+  payload.set('transacted', flags.transacted ? 'true' : 'false');
+  payload.set('ageVerified', flags.ageVerified ? 'true' : 'false');
+  payload.set('accountLevel', String(flags.accountLevel));
 
   const response = await fetchWithTimeout(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}/flags`, {
     method: 'PATCH',
@@ -303,6 +316,17 @@ const parseUserFlags = (account) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const parseUserAccountLevel = (flags) => {
+  const rawLevel = (flags & ACCOUNT_LEVEL_MASK) >> ACCOUNT_LEVEL_SHIFT;
+  if (!Number.isFinite(rawLevel) || rawLevel < 0) {
+    return 0;
+  }
+  if (rawLevel > 3) {
+    return 3;
+  }
+  return rawLevel;
+};
+
 const renderFindResult = (result) => {
   if (!findResult || !findResultContent || !resetPasswordSection || !userFlagsSection) {
     return;
@@ -314,8 +338,12 @@ const renderFindResult = (result) => {
   const resultLast = String(result?.last || '').trim();
   const isBot = isBotUser(resultFirst, resultLast);
   const flags = parseUserFlags(account);
+  const isAllowPublish = (flags & PROFILE_FLAG_ALLOW_PUBLISH) !== 0;
+  const isMaturePublish = (flags & PROFILE_FLAG_MATURE_PUBLISH) !== 0;
   const isIdentified = (flags & PROFILE_FLAG_IDENTIFIED) !== 0;
+  const isTransacted = (flags & PROFILE_FLAG_TRANSACTED) !== 0;
   const isAgeVerified = (flags & PROFILE_FLAG_AGE_VERIFIED) !== 0;
+  const accountLevel = parseUserAccountLevel(flags);
 
   findResult.classList.remove('hidden');
 
@@ -352,8 +380,20 @@ const renderFindResult = (result) => {
     if (flagIdentified) {
       flagIdentified.checked = isIdentified;
     }
+    if (flagAllowPublish) {
+      flagAllowPublish.checked = isAllowPublish;
+    }
+    if (flagMaturePublish) {
+      flagMaturePublish.checked = isMaturePublish;
+    }
+    if (flagTransacted) {
+      flagTransacted.checked = isTransacted;
+    }
     if (flagAgeVerified) {
       flagAgeVerified.checked = isAgeVerified;
+    }
+    if (flagAccountLevel) {
+      flagAccountLevel.value = String(accountLevel);
     }
     clearInlineError(userFlagsError);
     userFlagsSection.classList.remove('hidden');
@@ -364,8 +404,20 @@ const renderFindResult = (result) => {
   if (flagIdentified) {
     flagIdentified.checked = isIdentified;
   }
+  if (flagAllowPublish) {
+    flagAllowPublish.checked = isAllowPublish;
+  }
+  if (flagMaturePublish) {
+    flagMaturePublish.checked = isMaturePublish;
+  }
+  if (flagTransacted) {
+    flagTransacted.checked = isTransacted;
+  }
   if (flagAgeVerified) {
     flagAgeVerified.checked = isAgeVerified;
+  }
+  if (flagAccountLevel) {
+    flagAccountLevel.value = String(accountLevel);
   }
   clearInlineError(userFlagsError);
   userFlagsSection.classList.remove('hidden');
@@ -736,15 +788,25 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const identified = !!flagIdentified?.checked;
-    const ageVerified = !!flagAgeVerified?.checked;
+    const payload = {
+      allowPublish: !!flagAllowPublish?.checked,
+      maturePublish: !!flagMaturePublish?.checked,
+      identified: !!flagIdentified?.checked,
+      transacted: !!flagTransacted?.checked,
+      ageVerified: !!flagAgeVerified?.checked,
+      accountLevel: Number.parseInt(String(flagAccountLevel?.value ?? '0'), 10)
+    };
+    if (!Number.isInteger(payload.accountLevel) || payload.accountLevel < 0 || payload.accountLevel > 3) {
+      showInlineError(userFlagsError, 'Account level must be between 0 and 3.');
+      return;
+    }
 
     if (userFlagsSubmit) {
       userFlagsSubmit.disabled = true;
     }
     try {
       await withWorkingOverlay(
-        async () => updateUserFlags(first, last, identified, ageVerified),
+        async () => updateUserFlags(first, last, payload),
         `Updating access flags for ${first} ${last} ...`
       );
       await findAndRenderUser(first, last);

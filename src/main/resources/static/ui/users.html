@@ -117,15 +117,37 @@
 
             <div id="user-flags-section" class="hidden mt-6 pt-5 border-t border-neon-primary/20">
               <h4 class="text-base font-semibold text-white">Access Flags</h4>
-              <p class="mt-1 text-sm text-gray-400">Controls estate access checks like <em>Must be 18+</em>.</p>
+              <p class="mt-1 text-sm text-gray-400">Controls profile flags and account level used by viewers/grid services.</p>
               <form id="user-flags-form" class="mt-3 space-y-4">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                  <input id="flag-allow-publish" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+                  <span>Allow profile publish/indexing (0x01)</span>
+                </label>
+                <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                  <input id="flag-mature-publish" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+                  <span>Mature profile content (0x02)</span>
+                </label>
+                <label class="inline-flex items-center gap-2 text-sm text-gray-300">
                   <input id="flag-identified" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
-                  <span>Identified</span>
+                  <span>Payment info on file / identified (0x04)</span>
+                </label>
+                <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                  <input id="flag-transacted" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+                  <span>Has transacted (0x08)</span>
                 </label>
                 <label class="inline-flex items-center gap-2 text-sm text-gray-300">
                   <input id="flag-age-verified" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
-                  <span>Age verified (18+)</span>
+                  <span>Age verified (18+) (0x20)</span>
+                </label>
+                <label class="block">
+                  <span class="text-sm text-gray-300">Account level (bits 8-11)</span>
+                  <select id="flag-account-level"
+                    class="mt-1 w-full rounded-lg bg-dark-700 border border-neon-primary/30 px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-neon-primary">
+                    <option value="0">0 - Resident (Normal user)</option>
+                    <option value="1">1 - Trial member</option>
+                    <option value="2">2 - Charter member</option>
+                    <option value="3">3 - Linden Labs employee</option>
+                  </select>
                 </label>
                 <p id="user-flags-error" class="hidden text-sm text-rose-300"></p>
                 <div class="flex justify-end">

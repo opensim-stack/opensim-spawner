@@ -45,8 +45,12 @@ public class UserController {
             @RequestParam String password,
             @RequestParam(defaultValue = "") String email,
             @RequestParam(defaultValue = "false") boolean botHandler,
+            @RequestParam(defaultValue = "false") boolean allowPublish,
+            @RequestParam(defaultValue = "false") boolean maturePublish,
             @RequestParam(defaultValue = "false") boolean identified,
+            @RequestParam(defaultValue = "false") boolean transacted,
             @RequestParam(defaultValue = "false") boolean ageVerified,
+            @RequestParam(defaultValue = "0") int accountLevel,
             @RequestParam(defaultValue = "") String region,
             @RequestParam(defaultValue = "-1") int x,
             @RequestParam(defaultValue = "-1") int y) {
@@ -57,8 +61,15 @@ public class UserController {
             botProvisioningService.addHandler("*", "*", first, last);
         }
         var userFlags = 0;
-        if (identified || ageVerified) {
-            userFlags = openSimService.updateUserFlags(first, last, identified, ageVerified);
+        if (allowPublish || maturePublish || identified || transacted || ageVerified || accountLevel != 0) {
+            var update = new OpenSimService.UserFlagsUpdate(
+                    allowPublish,
+                    maturePublish,
+                    identified,
+                    transacted,
+                    ageVerified,
+                    accountLevel);
+            userFlags = openSimService.updateUserFlags(first, last, update);
         }
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -67,8 +78,12 @@ public class UserController {
         response.put("last", last);
         response.put("email", email);
         response.put("botHandler", botHandler);
+        response.put("allowPublish", allowPublish);
+        response.put("maturePublish", maturePublish);
         response.put("identified", identified);
+        response.put("transacted", transacted);
         response.put("ageVerified", ageVerified);
+        response.put("accountLevel", accountLevel);
         response.put("userFlags", userFlags);
         response.put("uuid", uuid);
         return response;
@@ -170,17 +185,32 @@ public class UserController {
     }, produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> updateUserFlags(@PathVariable String first,
             @PathVariable String last,
-            @RequestParam(defaultValue = "false") boolean identified,
-            @RequestParam(defaultValue = "false") boolean ageVerified) {
+            @RequestParam(required = false) Boolean allowPublish,
+            @RequestParam(required = false) Boolean maturePublish,
+            @RequestParam(required = false) Boolean identified,
+            @RequestParam(required = false) Boolean transacted,
+            @RequestParam(required = false) Boolean ageVerified,
+            @RequestParam(required = false) Integer accountLevel) {
         ensureGridLoginServiceAvailable();
-        var flags = openSimService.updateUserFlags(first, last, identified, ageVerified);
+        var update = new OpenSimService.UserFlagsUpdate(
+                allowPublish,
+                maturePublish,
+                identified,
+                transacted,
+                ageVerified,
+                accountLevel);
+        var flags = openSimService.updateUserFlags(first, last, update);
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("ok", true);
         response.put("first", first);
         response.put("last", last);
+        response.put("allowPublish", allowPublish);
+        response.put("maturePublish", maturePublish);
         response.put("identified", identified);
+        response.put("transacted", transacted);
         response.put("ageVerified", ageVerified);
+        response.put("accountLevel", accountLevel);
         response.put("userFlags", flags);
         return response;
     }

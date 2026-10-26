@@ -46,9 +46,13 @@ public class RestOpenSimService implements OpenSimService {
     private static final long IMPORT_RETRY_DELAY_MS = 10000L;
     private static final Pattern ESTATE_LINE_PATTERN = Pattern
             .compile("^(?<name>.+?)\\s+(?<id>\\d+)\\s+(?<ownerFirst>\\S+)\\s+(?<ownerLast>\\S+)\\s*$");
+    private static final int PROFILE_FLAG_ALLOW_PUBLISH = 1 << 0;
+    private static final int PROFILE_FLAG_MATURE_PUBLISH = 1 << 1;
     private static final int PROFILE_FLAG_IDENTIFIED = 1 << 2;
+    private static final int PROFILE_FLAG_TRANSACTED = 1 << 3;
     private static final int PROFILE_FLAG_AGE_VERIFIED = 1 << 5;
-    private static final int PROFILE_FLAGS_ACCESS_MASK = PROFILE_FLAG_IDENTIFIED | PROFILE_FLAG_AGE_VERIFIED;
+    private static final int ACCOUNT_LEVEL_SHIFT = 8;
+    private static final int ACCOUNT_LEVEL_MASK = 0x0F << ACCOUNT_LEVEL_SHIFT;
     private final SpawnerProperties properties;
     private final SimulatorStateRepository simStateRepository;
     private final StackStateRepository gridStateRepository;
@@ -228,23 +232,30 @@ public class RestOpenSimService implements OpenSimService {
     }
 
     @Override
-    public int updateUserFlags(String first, String last, boolean identified, boolean ageVerified) {
+    public int updateUserFlags(String first, String last, UserFlagsUpdate update) {
         try {
-            LOG.info("Updating OpenSim user flags for {} {} (identified={}, ageVerified={}).", first, last, identified,
-                    ageVerified);
+            LOG.info("Updating OpenSim user flags for {} {} using {}.", first, last, update);
             var account = showAccount(first, last);
             var principalId = nonBlankOrNull(account == null ? null : account.get("ID"));
             if (principalId == null) {
                 principalId = nonBlankOrNull(account == null ? null : account.get("PrincipalID"));
             }
-            var currentFlags = parseIntValue(account, "Flags", 0);
-
-            var nextFlags = currentFlags & ~PROFILE_FLAGS_ACCESS_MASK;
-            if (identified) {
-                nextFlags |= PROFILE_FLAG_IDENTIFIED;
+            var currentFlags = parseIntValue(account, "Flags", Integer.MIN_VALUE);
+            if (currentFlags == Integer.MIN_VALUE) {
+                currentFlags = parseIntValue(account, "UserFlags", 0);
             }
-            if (ageVerified) {
-                nextFlags |= PROFILE_FLAG_AGE_VERIFIED;
+
+            var nextFlags = currentFlags;
+            if (update != null) {
+                nextFlags = applyOptionalFlag(nextFlags, PROFILE_FLAG_ALLOW_PUBLISH, update.allowPublish());
+                nextFlags = applyOptionalFlag(nextFlags, PROFILE_FLAG_MATURE_PUBLISH, update.maturePublish());
+                nextFlags = applyOptionalFlag(nextFlags, PROFILE_FLAG_IDENTIFIED, update.identified());
+                nextFlags = applyOptionalFlag(nextFlags, PROFILE_FLAG_TRANSACTED, update.transacted());
+                nextFlags = applyOptionalFlag(nextFlags, PROFILE_FLAG_AGE_VERIFIED, update.ageVerified());
+                if (update.accountLevel() != null) {
+                    var accountLevel = clampAccountLevel(update.accountLevel());
+                    nextFlags = (nextFlags & ~ACCOUNT_LEVEL_MASK) | ((accountLevel & 0x0F) << ACCOUNT_LEVEL_SHIFT);
+                }
             }
 
             if (nextFlags != currentFlags) {
@@ -257,6 +268,20 @@ public class RestOpenSimService implements OpenSimService {
                     "Failed to update OpenSimulator user flags via UserAccountService. " + e.getMessage(),
                     e);
         }
+    }
+
+    private static int applyOptionalFlag(int flags, int flagMask, Boolean enabled) {
+        if (enabled == null) {
+            return flags;
+        }
+        return enabled ? (flags | flagMask) : (flags & ~flagMask);
+    }
+
+    private static int clampAccountLevel(int accountLevel) {
+        if (accountLevel < 0 || accountLevel > 3) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "accountLevel must be in range 0..3.");
+        }
+        return accountLevel;
     }
 
     @Override

@@ -9,6 +9,15 @@ import uk.co.bithatch.opensim.jlib.OpensimRemoteAdminClient.Region;
 
 public interface OpenSimService {
 
+    record UserFlagsUpdate(
+            Boolean allowPublish,
+            Boolean maturePublish,
+            Boolean identified,
+            Boolean transacted,
+            Boolean ageVerified,
+            Integer accountLevel) {
+    }
+
     record RegionData(String name, String id, int x, int y, String position, String size, int port, boolean ready, String estate, List<String> flags) {
 
 		public RegionData withFlags(List<String> flags) {
@@ -51,7 +60,7 @@ public interface OpenSimService {
 
     void resetUserPassword(String first, String last, String password);
 
-  int updateUserFlags(String first, String last, boolean identified, boolean ageVerified);
+  int updateUserFlags(String first, String last, UserFlagsUpdate update);
 
 	boolean authenticate(String first, String last, char[] password);
 
