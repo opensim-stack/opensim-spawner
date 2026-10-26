@@ -45,6 +45,8 @@ public class UserController {
             @RequestParam String password,
             @RequestParam(defaultValue = "") String email,
             @RequestParam(defaultValue = "false") boolean botHandler,
+            @RequestParam(defaultValue = "false") boolean identified,
+            @RequestParam(defaultValue = "false") boolean ageVerified,
             @RequestParam(defaultValue = "") String region,
             @RequestParam(defaultValue = "-1") int x,
             @RequestParam(defaultValue = "-1") int y) {
@@ -54,6 +56,10 @@ public class UserController {
         if (botHandler) {
             botProvisioningService.addHandler("*", "*", first, last);
         }
+        var userFlags = 0;
+        if (identified || ageVerified) {
+            userFlags = openSimService.updateUserFlags(first, last, identified, ageVerified);
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("created", true);
@@ -61,6 +67,9 @@ public class UserController {
         response.put("last", last);
         response.put("email", email);
         response.put("botHandler", botHandler);
+        response.put("identified", identified);
+        response.put("ageVerified", ageVerified);
+        response.put("userFlags", userFlags);
         response.put("uuid", uuid);
         return response;
     }
@@ -152,6 +161,27 @@ public class UserController {
         response.put("ok", true);
         response.put("first", first);
         response.put("last", last);
+        return response;
+    }
+
+    @PatchMapping(path = "/{first}/{last}/flags", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> updateUserFlags(@PathVariable String first,
+            @PathVariable String last,
+            @RequestParam(defaultValue = "false") boolean identified,
+            @RequestParam(defaultValue = "false") boolean ageVerified) {
+        ensureGridLoginServiceAvailable();
+        var flags = openSimService.updateUserFlags(first, last, identified, ageVerified);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("ok", true);
+        response.put("first", first);
+        response.put("last", last);
+        response.put("identified", identified);
+        response.put("ageVerified", ageVerified);
+        response.put("userFlags", flags);
         return response;
     }
 

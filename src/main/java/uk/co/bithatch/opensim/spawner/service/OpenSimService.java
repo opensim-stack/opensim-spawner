@@ -51,6 +51,8 @@ public interface OpenSimService {
 
     void resetUserPassword(String first, String last, String password);
 
+  int updateUserFlags(String first, String last, boolean identified, boolean ageVerified);
+
 	boolean authenticate(String first, String last, char[] password);
 
     List<RegionData> showRegions(String simulatorName);

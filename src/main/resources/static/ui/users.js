@@ -13,6 +13,13 @@ const findLast = document.getElementById('find-last');
 const findResult = document.getElementById('find-result');
 const findResultContent = document.getElementById('find-result-content');
 
+const userFlagsSection = document.getElementById('user-flags-section');
+const userFlagsForm = document.getElementById('user-flags-form');
+const flagIdentified = document.getElementById('flag-identified');
+const flagAgeVerified = document.getElementById('flag-age-verified');
+const userFlagsError = document.getElementById('user-flags-error');
+const userFlagsSubmit = document.getElementById('user-flags-submit');
+
 const resetPasswordSection = document.getElementById('reset-password-section');
 const resetPasswordForm = document.getElementById('reset-password-form');
 const resetPassword = document.getElementById('reset-password');
@@ -27,6 +34,8 @@ let botNameSet = new Set();
 let handlerNameSet = new Set();
 const gridServiceUnavailableMessage = 'User management is disabled until a ROBUST or STANDALONE simulator is active.';
 const ACTIVE_USERS_COLUMN_COUNT = 7;
+const PROFILE_FLAG_IDENTIFIED = 1 << 2;
+const PROFILE_FLAG_AGE_VERIFIED = 1 << 5;
 
 const showInlineError = (el, message) => {
   if (!el) {
@@ -77,6 +86,7 @@ const applyGridServiceUiState = () => {
   setElementEnabled(refreshActiveUsersButton, enabled);
   setElementEnabled(showAllAgentsCheckbox, enabled);
   setFormEnabled(findUserForm, enabled);
+  setFormEnabled(userFlagsForm, enabled);
   setFormEnabled(resetPasswordForm, enabled);
   if (usersGridServiceWarning) {
     usersGridServiceWarning.classList.toggle('hidden', enabled);
@@ -267,8 +277,34 @@ const resetUserPassword = async (first, last, password) => {
   }
 };
 
+const updateUserFlags = async (first, last, identified, ageVerified) => {
+  const payload = new URLSearchParams();
+  payload.set('identified', identified ? 'true' : 'false');
+  payload.set('ageVerified', ageVerified ? 'true' : 'false');
+
+  const response = await fetchWithTimeout(`/api/user/${encodeURIComponent(first)}/${encodeURIComponent(last)}/flags`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: payload.toString()
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Update user flags failed (${response.status}).`);
+  }
+};
+
+const parseUserFlags = (account) => {
+  if (!account || typeof account !== 'object') {
+    return 0;
+  }
+  const raw = account.Flags ?? account.UserFlags ?? account.flags ?? account.userFlags;
+  const parsed = Number.parseInt(String(raw ?? '').trim(), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const renderFindResult = (result) => {
-  if (!findResult || !findResultContent || !resetPasswordSection) {
+  if (!findResult || !findResultContent || !resetPasswordSection || !userFlagsSection) {
     return;
   }
 
@@ -277,11 +313,15 @@ const renderFindResult = (result) => {
   const resultFirst = String(result?.first || '').trim();
   const resultLast = String(result?.last || '').trim();
   const isBot = isBotUser(resultFirst, resultLast);
+  const flags = parseUserFlags(account);
+  const isIdentified = (flags & PROFILE_FLAG_IDENTIFIED) !== 0;
+  const isAgeVerified = (flags & PROFILE_FLAG_AGE_VERIFIED) !== 0;
 
   findResult.classList.remove('hidden');
 
   if (!result?.found || entries.length === 0) {
     findResultContent.textContent = `No account found for ${result?.first || ''} ${result?.last || ''}.`.trim();
+    userFlagsSection.classList.add('hidden');
     resetPasswordSection.classList.add('hidden');
     return;
   }
@@ -309,9 +349,19 @@ const renderFindResult = (result) => {
     note.className = 'mt-4 text-sm text-amber-300';
     note.textContent = 'Password reset is unavailable for bot users.';
     findResultContent.appendChild(note);
+    userFlagsSection.classList.add('hidden');
     resetPasswordSection.classList.add('hidden');
     return;
   }
+
+  if (flagIdentified) {
+    flagIdentified.checked = isIdentified;
+  }
+  if (flagAgeVerified) {
+    flagAgeVerified.checked = isAgeVerified;
+  }
+  clearInlineError(userFlagsError);
+  userFlagsSection.classList.remove('hidden');
 
   resetPasswordSection.classList.remove('hidden');
 };
@@ -659,6 +709,46 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(toastContainer, resetPasswordError?.textContent || 'Reset password failed.', 'error');
     } finally {
       resetPasswordSubmit.disabled = false;
+    }
+  });
+
+  userFlagsForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearInlineError(userFlagsError);
+
+    if (!gridServiceAvailable) {
+      showInlineError(userFlagsError, gridServiceUnavailableMessage);
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const first = String(params.get('first') || '').trim();
+    const last = String(params.get('last') || '').trim();
+    if (!first || !last) {
+      showInlineError(userFlagsError, 'Find a user first before updating access flags.');
+      return;
+    }
+
+    const identified = !!flagIdentified?.checked;
+    const ageVerified = !!flagAgeVerified?.checked;
+
+    if (userFlagsSubmit) {
+      userFlagsSubmit.disabled = true;
+    }
+    try {
+      await withWorkingOverlay(
+        async () => updateUserFlags(first, last, identified, ageVerified),
+        `Updating access flags for ${first} ${last} ...`
+      );
+      await findAndRenderUser(first, last);
+      showToast(toastContainer, `Updated access flags for ${first} ${last}.`, 'success');
+    } catch (err) {
+      showInlineError(userFlagsError, err instanceof Error ? err.message : 'Update user flags failed.');
+      showToast(toastContainer, userFlagsError?.textContent || 'Update user flags failed.', 'error');
+    } finally {
+      if (userFlagsSubmit) {
+        userFlagsSubmit.disabled = false;
+      }
     }
   });
 });

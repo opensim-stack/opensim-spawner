@@ -41,6 +41,9 @@ public class RestOpenSimService implements OpenSimService {
     private static final long IMPORT_RETRY_DELAY_MS = 10000L;
     private static final Pattern ESTATE_LINE_PATTERN = Pattern
             .compile("^(?<name>.+?)\\s+(?<id>\\d+)\\s+(?<ownerFirst>\\S+)\\s+(?<ownerLast>\\S+)\\s*$");
+    private static final int PROFILE_FLAG_IDENTIFIED = 1 << 2;
+    private static final int PROFILE_FLAG_AGE_VERIFIED = 1 << 5;
+    private static final int PROFILE_FLAGS_ACCESS_MASK = PROFILE_FLAG_IDENTIFIED | PROFILE_FLAG_AGE_VERIFIED;
 
     private final SpawnerProperties properties;
     private final SimulatorStateRepository simStateRepository;
@@ -217,6 +220,35 @@ public class RestOpenSimService implements OpenSimService {
             LOG.info("Reset OpenSim password for {} {}.", first, last);
         } catch (RuntimeException e) {
             throw new ExternalDependencyException("Failed to reset OpenSimulator password via REST console. " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public int updateUserFlags(String first, String last, boolean identified, boolean ageVerified) {
+        try {
+            LOG.info("Updating OpenSim user flags for {} {} (identified={}, ageVerified={}).", first, last, identified,
+                    ageVerified);
+            var account = showAccount(first, last);
+            var principalId = resolvePrincipalId(account, first, last);
+            var currentFlags = parseIntValue(account, "Flags", 0);
+
+            var nextFlags = currentFlags & ~PROFILE_FLAGS_ACCESS_MASK;
+            if (identified) {
+                nextFlags |= PROFILE_FLAG_IDENTIFIED;
+            }
+            if (ageVerified) {
+                nextFlags |= PROFILE_FLAG_AGE_VERIFIED;
+            }
+
+            if (nextFlags != currentFlags) {
+                openRemoteAdmin().setUserFlags(principalId, nextFlags);
+                LOG.info("Updated OpenSim user flags for {} {} from {} to {}.", first, last, currentFlags, nextFlags);
+            }
+            return nextFlags;
+        } catch (RuntimeException e) {
+            throw new ExternalDependencyException(
+                    "Failed to update OpenSimulator user flags via UserAccountService. " + e.getMessage(),
+                    e);
         }
     }
 
@@ -764,6 +796,33 @@ public class RestOpenSimService implements OpenSimService {
         } catch (NumberFormatException ex) {
             return 0;
         }
+    }
+
+    private static int parseIntValue(Map<String, String> account, String key, int fallback) {
+        if (account == null || key == null) {
+            return fallback;
+        }
+        var value = account.get(key);
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException nfe) {
+            return fallback;
+        }
+    }
+
+    private static String resolvePrincipalId(Map<String, String> account, String first, String last) {
+        var principalId = nonBlankOrNull(account == null ? null : account.get("ID"));
+        if (principalId == null) {
+            principalId = nonBlankOrNull(account == null ? null : account.get("PrincipalID"));
+        }
+        if (principalId == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Account not found for " + first + " " + last + ".");
+        }
+        return principalId;
     }
 
     private static String defaultString(String value, String fallback) {

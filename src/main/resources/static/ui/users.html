@@ -115,6 +115,26 @@
             <h3 class="text-lg font-semibold text-white">Account Details</h3>
             <div id="find-result-content" class="mt-3 text-sm text-gray-200 space-y-2"></div>
 
+            <div id="user-flags-section" class="hidden mt-6 pt-5 border-t border-neon-primary/20">
+              <h4 class="text-base font-semibold text-white">Access Flags</h4>
+              <p class="mt-1 text-sm text-gray-400">Controls estate access checks like <em>Must be 18+</em>.</p>
+              <form id="user-flags-form" class="mt-3 space-y-4">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                  <input id="flag-identified" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+                  <span>Identified</span>
+                </label>
+                <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                  <input id="flag-age-verified" type="checkbox" class="h-4 w-4 rounded border-neon-primary/40 bg-dark-700 text-neon-primary focus:ring-neon-primary">
+                  <span>Age verified (18+)</span>
+                </label>
+                <p id="user-flags-error" class="hidden text-sm text-rose-300"></p>
+                <div class="flex justify-end">
+                  <button id="user-flags-submit" type="submit"
+                    class="px-4 py-2 rounded-lg bg-neon-primary/20 border border-neon-primary/40 text-neon-accent hover:bg-neon-primary/30 transition-colors">Save flags</button>
+                </div>
+              </form>
+            </div>
+
             <div id="reset-password-section" class="hidden mt-6 pt-5 border-t border-neon-primary/20">
               <h4 class="text-base font-semibold text-white">Reset Password</h4>
               <form id="reset-password-form" class="mt-3 space-y-4">
