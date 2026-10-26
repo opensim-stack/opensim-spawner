@@ -28,7 +28,9 @@
         "MCP_DIAGNOSTICS": "false",
         "ALLOW_IAR_IMPORT": "true",
         "ALLOW_RLV": "true",
-        "APPEARANCE_AUTO_REPAIR_ENABLED": "false"
+        "APPEARANCE_AUTO_REPAIR_ENABLED": "false",
+        "MCP_ALLOW_TOOL": "",
+        "MCP_DENY_TOOL": ""
     },
 	"tokens": [],
 	"exports": [
@@ -78,7 +80,17 @@
             "name": "APPEARANCE_AUTO_REPAIR_ENABLED",
             "type": "BOOLEAN",
             "description": "Whether to enable auto-repair (appearance problems when cross sims). Default is false."
-        }        
+        },
+        {
+            "name": "MCP_ALLOW_TOOL",
+            "type": "TEXT",
+            "description": "Comma separated list of all allowed MCP tools. When empty, all are allowed (unless there is a deny list)."
+        },
+        {
+            "name": "MCP_DENY_TOOL",
+            "type": "TEXT",
+            "description": "Comma separated list of all denied MCP tools. When empty, all are denied if there is an allow list, otherwise all are allowed."
+        }                
     ],
 	"extensions": {
 		"GOVERNOR": {
@@ -173,7 +185,9 @@
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
                         "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%",
-                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%"
+                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%",
+                        "MCP_ALLOW_TOOL": "%env.MCP_ALLOW_TOOL%",
+                        "MCP_DENY_TOOL": "%env.MCP_DENY_TOOL%"
 					},
                     "ports": {
                         "%env.METAVERSE_MCP_PORT%/tcp": "%env.METAVERSE_MCP_PORT%"
@@ -274,7 +288,9 @@
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
                         "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%",
-                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%"
+                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%",
+                        "MCP_ALLOW_TOOL": "%env.MCP_ALLOW_TOOL%",
+                        "MCP_DENY_TOOL": "%env.MCP_DENY_TOOL%"
 					},
                     "volumes": {
                         "%cfg.projectName%_opensim-workspace": "/workspace"
@@ -370,7 +386,9 @@
                         "ALLOW_RLV": "%env.ALLOW_RLV%",
                         "MCP_DIAGNOSTICS": "%env.MCP_DIAGNOSTICS%",
                         "APPEARANCE_AUTO_REPAIR_ENABLED": "%env.APPEARANCE_AUTO_REPAIR_ENABLED%",
-                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%"
+                        "WORKSPACE_DIR": "/workspace/bots/%bot.first%-%bot.last%",
+                        "MCP_ALLOW_TOOL": "%env.MCP_ALLOW_TOOL%",
+                        "MCP_DENY_TOOL": "%env.MCP_DENY_TOOL%"
 					},
 					"volumes": {
 						"%cfg.projectName%_opensim-config": "/config"
