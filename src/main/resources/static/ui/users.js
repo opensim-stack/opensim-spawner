@@ -349,7 +349,14 @@ const renderFindResult = (result) => {
     note.className = 'mt-4 text-sm text-amber-300';
     note.textContent = 'Password reset is unavailable for bot users.';
     findResultContent.appendChild(note);
-    userFlagsSection.classList.add('hidden');
+    if (flagIdentified) {
+      flagIdentified.checked = isIdentified;
+    }
+    if (flagAgeVerified) {
+      flagAgeVerified.checked = isAgeVerified;
+    }
+    clearInlineError(userFlagsError);
+    userFlagsSection.classList.remove('hidden');
     resetPasswordSection.classList.add('hidden');
     return;
   }

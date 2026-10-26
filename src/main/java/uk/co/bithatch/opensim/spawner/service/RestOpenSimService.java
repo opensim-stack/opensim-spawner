@@ -2,6 +2,11 @@ package uk.co.bithatch.opensim.spawner.service;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,7 +49,6 @@ public class RestOpenSimService implements OpenSimService {
     private static final int PROFILE_FLAG_IDENTIFIED = 1 << 2;
     private static final int PROFILE_FLAG_AGE_VERIFIED = 1 << 5;
     private static final int PROFILE_FLAGS_ACCESS_MASK = PROFILE_FLAG_IDENTIFIED | PROFILE_FLAG_AGE_VERIFIED;
-
     private final SpawnerProperties properties;
     private final SimulatorStateRepository simStateRepository;
     private final StackStateRepository gridStateRepository;
@@ -229,7 +233,10 @@ public class RestOpenSimService implements OpenSimService {
             LOG.info("Updating OpenSim user flags for {} {} (identified={}, ageVerified={}).", first, last, identified,
                     ageVerified);
             var account = showAccount(first, last);
-            var principalId = resolvePrincipalId(account, first, last);
+            var principalId = nonBlankOrNull(account == null ? null : account.get("ID"));
+            if (principalId == null) {
+                principalId = nonBlankOrNull(account == null ? null : account.get("PrincipalID"));
+            }
             var currentFlags = parseIntValue(account, "Flags", 0);
 
             var nextFlags = currentFlags & ~PROFILE_FLAGS_ACCESS_MASK;
@@ -241,7 +248,7 @@ public class RestOpenSimService implements OpenSimService {
             }
 
             if (nextFlags != currentFlags) {
-                openRemoteAdmin().setUserFlags(principalId, nextFlags);
+                updateUserFlagsInDatabase(principalId, first, last, nextFlags);
                 LOG.info("Updated OpenSim user flags for {} {} from {} to {}.", first, last, currentFlags, nextFlags);
             }
             return nextFlags;
@@ -813,16 +820,84 @@ public class RestOpenSimService implements OpenSimService {
         }
     }
 
-    private static String resolvePrincipalId(Map<String, String> account, String first, String last) {
-        var principalId = nonBlankOrNull(account == null ? null : account.get("ID"));
-        if (principalId == null) {
-            principalId = nonBlankOrNull(account == null ? null : account.get("PrincipalID"));
+    private void updateUserFlagsInDatabase(String principalId, String first, String last, int userFlags) {
+        var host = resolveDatabaseEnvironmentSetting("MARIADB_HOST");
+        var database = resolveDatabaseEnvironmentSetting("MARIADB_DATABASE");
+        var user = resolveDatabaseEnvironmentSetting("MARIADB_USER");
+        var password = resolveTokenDatabaseSetting("MARIADB_PASSWORD");
+
+        if (host == null || database == null || user == null || password == null) {
+            throw new IllegalStateException(
+                    "Missing MariaDB credentials. Expected MARIADB_HOST, MARIADB_DATABASE and MARIADB_USER in stack global values, and MARIADB_PASSWORD in stack tokens.");
         }
-        if (principalId == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Account not found for " + first + " " + last + ".");
+
+        var jdbcUrl = buildJdbcUrl(host, database);
+
+        try (var connection = java.sql.DriverManager.getConnection(jdbcUrl, user, password)) {
+            var updatedRows = executeUserFlagsUpdate(connection, principalId, first, last, userFlags);
+            if (updatedRows == 0) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Account not found for " + first + " " + last + ".");
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Database update failed: " + e.getMessage(), e);
         }
-        return principalId;
+    }
+
+    private static int executeUserFlagsUpdate(Connection connection,
+            String principalId,
+            String first,
+            String last,
+            int userFlags) throws SQLException {
+        String sql;
+        boolean usePrincipal = principalId != null && !principalId.isBlank();
+        if (usePrincipal) {
+            sql = "UPDATE UserAccounts SET UserFlags = ? WHERE PrincipalID = ?";
+        } else {
+            sql = "UPDATE UserAccounts SET UserFlags = ? WHERE FirstName = ? AND LastName = ?";
+        }
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, userFlags);
+            if (usePrincipal) {
+                statement.setString(2, principalId);
+            } else {
+                statement.setString(2, first);
+                statement.setString(3, last);
+            }
+            return statement.executeUpdate();
+        }
+    }
+
+    private String resolveDatabaseEnvironmentSetting(String key) {
+        var resolvedEnvironment = gridStateRepository.resolveEnvironment(null, null);
+        if (resolvedEnvironment == null) {
+            return null;
+        }
+        return nonBlankOrNull(resolvedEnvironment.get(key));
+    }
+
+    private String resolveTokenDatabaseSetting(String key) {
+        var stackState = gridStateRepository.get();
+        if (stackState == null || stackState.getTokens() == null) {
+            return null;
+        }
+        return nonBlankOrNull(stackState.getTokens().get(key));
+    }
+
+    private static String buildJdbcUrl(String host, String database) {
+        var normalizedHost = host.trim();
+        var normalizedDatabase = database.trim();
+        if (normalizedHost.startsWith("jdbc:mariadb://")) {
+            if (normalizedHost.endsWith("/" + normalizedDatabase) || normalizedHost.contains("/" + normalizedDatabase + "?")) {
+                return normalizedHost;
+            }
+            if (normalizedHost.endsWith("/")) {
+                return normalizedHost + normalizedDatabase;
+            }
+            return normalizedHost + "/" + normalizedDatabase;
+        }
+        return "jdbc:mariadb://" + normalizedHost + "/" + normalizedDatabase;
     }
 
     private static String defaultString(String value, String fallback) {
