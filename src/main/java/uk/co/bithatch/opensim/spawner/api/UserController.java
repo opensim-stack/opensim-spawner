@@ -215,6 +215,29 @@ public class UserController {
         return response;
     }
 
+    @PatchMapping(path = "/{first}/{last}/partner", consumes = {
+            MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            MediaType.MULTIPART_FORM_DATA_VALUE
+    }, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> setPartner(@PathVariable String first,
+            @PathVariable String last,
+            @RequestParam(required = false) String partnerFirst,
+            @RequestParam(required = false) String partnerLast) {
+        ensureGridLoginServiceAvailable();
+        openSimService.updateUserPartner(first, last, partnerFirst, partnerLast);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("ok", true);
+        response.put("first", first);
+        response.put("last", last);
+        response.put("partnerFirst", partnerFirst);
+        response.put("partnerLast", partnerLast);
+        response.put("partnerSet",
+                partnerFirst != null && !partnerFirst.isBlank() && partnerLast != null && !partnerLast.isBlank());
+        response.put("note", "When clearing partnership for both users, call this endpoint once per user.");
+        return response;
+    }
+
     private void ensureGridLoginServiceAvailable() {
         if (simulatorProvisioningService.hasActiveGridLoginService()) {
             return;

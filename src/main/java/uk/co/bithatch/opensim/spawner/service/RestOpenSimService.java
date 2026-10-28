@@ -6,7 +6,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -267,6 +266,70 @@ public class RestOpenSimService implements OpenSimService {
             throw new ExternalDependencyException(
                     "Failed to update OpenSimulator user flags via UserAccountService. " + e.getMessage(),
                     e);
+        }
+    }
+
+    @Override
+    public void updateUserPartner(String first, String last, String partnerFirst, String partnerLast) {
+        var normalizedFirst = normalizeRequired(first, "first is required.");
+        var normalizedLast = normalizeRequired(last, "last is required.");
+        var normalizedPartnerFirst = nonBlankOrNull(partnerFirst);
+        var normalizedPartnerLast = nonBlankOrNull(partnerLast);
+        
+        if(partnerFirst == null && partnerLast == null) {
+			LOG.info("Clearing OpenSim user partner for {} {}.", normalizedFirst, normalizedLast);
+		}
+        else {
+        	LOG.info("Updating OpenSim user partner for {} {} to {} {}.", normalizedFirst, normalizedLast, normalizedPartnerFirst, normalizedPartnerLast);
+        }
+        
+        var partnerProvided = normalizedPartnerFirst != null || normalizedPartnerLast != null;
+
+        if (partnerProvided && (normalizedPartnerFirst == null || normalizedPartnerLast == null)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "partnerFirst and partnerLast must both be provided when setting a partner.");
+        }
+
+        try (var connection = databaseConnection()) {
+            var userUuid = findUserUuid(connection, normalizedFirst, normalizedLast);
+            if (userUuid == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Account not found for " + normalizedFirst + " " + normalizedLast + ".");
+            }
+
+            if (!partnerProvided) {
+                var updatedRows = updateProfilePartner(connection, userUuid, null);
+                if (updatedRows == 0) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Profile not found for " + normalizedFirst + " " + normalizedLast + ".");
+                }
+                return;
+            }
+
+            var partnerUuid = findUserUuid(connection, normalizedPartnerFirst, normalizedPartnerLast);
+            if (partnerUuid == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Account not found for " + normalizedPartnerFirst + " " + normalizedPartnerLast + ".");
+            }
+
+            var originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                var firstRows = updateProfilePartner(connection, userUuid, partnerUuid);
+                var secondRows = updateProfilePartner(connection, partnerUuid, userUuid);
+                if (firstRows == 0 || secondRows == 0) {
+                    throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                            "Both local user profiles must exist before setting partnership.");
+                }
+                connection.commit();
+            } catch (RuntimeException | SQLException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(originalAutoCommit);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Database update failed: " + e.getMessage(), e);
         }
     }
 
@@ -844,8 +907,8 @@ public class RestOpenSimService implements OpenSimService {
             return fallback;
         }
     }
-
-    private void updateUserFlagsInDatabase(String principalId, String first, String last, int userFlags) {
+    
+    private Connection databaseConnection() throws SQLException {
         var host = resolveDatabaseEnvironmentSetting("MARIADB_HOST");
         var database = resolveDatabaseEnvironmentSetting("MARIADB_DATABASE");
         var user = resolveDatabaseEnvironmentSetting("MARIADB_USER");
@@ -858,7 +921,11 @@ public class RestOpenSimService implements OpenSimService {
 
         var jdbcUrl = buildJdbcUrl(host, database);
 
-        try (var connection = java.sql.DriverManager.getConnection(jdbcUrl, user, password)) {
+        return java.sql.DriverManager.getConnection(jdbcUrl, user, password);
+    }
+
+    private void updateUserFlagsInDatabase(String principalId, String first, String last, int userFlags) {
+        try (var connection = databaseConnection()) {
             var updatedRows = executeUserFlagsUpdate(connection, principalId, first, last, userFlags);
             if (updatedRows == 0) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND,
@@ -890,6 +957,33 @@ public class RestOpenSimService implements OpenSimService {
                 statement.setString(2, first);
                 statement.setString(3, last);
             }
+            return statement.executeUpdate();
+        }
+    }
+
+    private static String findUserUuid(Connection connection, String first, String last) throws SQLException {
+        var sql = "SELECT PrincipalID FROM UserAccounts WHERE FirstName = ? AND LastName = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, first);
+            statement.setString(2, last);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return null;
+                }
+                return nonBlankOrNull(resultSet.getString(1));
+            }
+        }
+    }
+
+    private static int updateProfilePartner(Connection connection, String userUuid, String partnerUuid) throws SQLException {
+        var sql = "UPDATE userprofile SET profilePartner = ? WHERE useruuid = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            if (partnerUuid == null) {
+                statement.setString(1, "00000000-0000-0000-0000-000000000000");
+            } else {
+                statement.setString(1, partnerUuid);
+            }
+            statement.setString(2, userUuid);
             return statement.executeUpdate();
         }
     }
