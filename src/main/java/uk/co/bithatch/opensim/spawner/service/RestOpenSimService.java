@@ -239,10 +239,7 @@ public class RestOpenSimService implements OpenSimService {
             if (principalId == null) {
                 principalId = nonBlankOrNull(account == null ? null : account.get("PrincipalID"));
             }
-            var currentFlags = parseIntValue(account, "Flags", Integer.MIN_VALUE);
-            if (currentFlags == Integer.MIN_VALUE) {
-                currentFlags = parseIntValue(account, "UserFlags", 0);
-            }
+            var currentFlags = resolveCurrentUserFlags(principalId, first, last);
 
             var nextFlags = currentFlags;
             if (update != null) {
@@ -893,18 +890,42 @@ public class RestOpenSimService implements OpenSimService {
         }
     }
 
-    private static int parseIntValue(Map<String, String> account, String key, int fallback) {
-        if (account == null || key == null) {
-            return fallback;
+    private int resolveCurrentUserFlags(String principalId, String first, String last) {
+        try (var connection = databaseConnection()) {
+            var value = readUserFlagsFromDatabase(connection, principalId, first, last);
+            if (value == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Account not found for " + first + " " + last + ".");
+            }
+            return value.intValue();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Database read failed: " + e.getMessage(), e);
         }
-        var value = account.get(key);
-        if (value == null || value.isBlank()) {
-            return fallback;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException nfe) {
-            return fallback;
+    }
+
+    private static Integer readUserFlagsFromDatabase(Connection connection,
+            String principalId,
+            String first,
+            String last) throws SQLException {
+        final boolean usePrincipal = principalId != null && !principalId.isBlank();
+        final String sql = usePrincipal
+                ? "SELECT UserFlags FROM UserAccounts WHERE PrincipalID = ?"
+                : "SELECT UserFlags FROM UserAccounts WHERE FirstName = ? AND LastName = ?";
+
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            if (usePrincipal) {
+                statement.setString(1, principalId);
+            } else {
+                statement.setString(1, first);
+                statement.setString(2, last);
+            }
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    return null;
+                }
+                return Integer.valueOf(resultSet.getInt(1));
+            }
         }
     }
     
